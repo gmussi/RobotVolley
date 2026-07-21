@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" aria-hidden="true">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff3c0"/>
+      <stop offset="1" stop-color="#f2b705"/>
+    </linearGradient>
+  </defs>
+  <text x="210" y="72" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
+        font-size="52" font-weight="700" fill="url(#gold)">ROBOT VOLLEY</text>
+  <circle cx="52" cy="60" r="18" fill="none" stroke="#ffd54a" stroke-width="3"/>
+  <circle cx="368" cy="60" r="18" fill="none" stroke="#ffd54a" stroke-width="3"/>
+</svg>

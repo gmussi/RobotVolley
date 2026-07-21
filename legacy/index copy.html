@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ROBOT VOLLEY — 1v1</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --p1: #ff5a5f;
+    --p1-dark: #b02a2f;
+    --p2: #29b6f6;
+    --p2-dark: #1565a8;
+    --net: #e0e0e0;
+    --ball: #ffd54a;
+    --text: #f5f7ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  #wrap {
+    position: relative;
+    width: min(96vw, 1000px);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.05);
+    background: #060912;
+    touch-action: none;
+  }
+  #hint {
+    margin-top: 14px;
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    font-size: 13px;
+    color: #9aa4c0;
+    flex-wrap: wrap;
+  }
+  #hint b { color: var(--text); }
+  .kbd {
+    display: inline-block;
+    background: #1a2138;
+    border: 1px solid #2c3557;
+    border-radius: 5px;
+    padding: 1px 7px;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    color: #cdd6f4;
+    margin: 0 1px;
+  }
+  .tag-p1 { color: var(--p1); }
+  .tag-p2 { color: var(--p2); }
+
+  #colorPanel {
+    margin-top: 10px;
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .colorGroup {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #9aa4c0;
+  }
+  .colorGroup label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+  }
+  .colorGroup input[type="color"] {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid #2c3557;
+    border-radius: 5px;
+    background: none;
+    cursor: pointer;
+  }
+
+  #legPanel {
+    margin-top: 10px;
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .legGroup {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #9aa4c0;
+  }
+  .legBtn {
+    font: inherit;
+    font-size: 12px;
+    color: #cdd6f4;
+    background: #1a2138;
+    border: 1px solid #2c3557;
+    border-radius: 999px;
+    padding: 4px 12px;
+    cursor: pointer;
+  }
+  .legBtn:hover { background: #232b4a; }
+  .legGroup.p1 .legBtn.active { background: var(--p1); border-color: var(--p1); color: #2a0e10; font-weight: bold; }
+  .legGroup.p2 .legBtn.active { background: var(--p2); border-color: var(--p2); color: #06232f; font-weight: bold; }
+</style>
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game" width="1000" height="600"></canvas>
+  </div>
+  <div id="hint">
+    <div><span class="tag-p1"><b>PLAYER 1</b></span> &nbsp; <span class="kbd">A</span><span class="kbd">D</span> move &nbsp; <span class="kbd">W</span> jump &nbsp; hold <span class="kbd">S</span> serve</div>
+    <div id="p2hint"><span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <span class="kbd">&larr;</span><span class="kbd">&rarr;</span> move &nbsp; <span class="kbd">&uarr;</span> jump &nbsp; hold <span class="kbd">&darr;</span> serve</div>
+    <div>Hold serve to charge force &nbsp;·&nbsp; <span class="kbd">Space</span> restart</div>
+  </div>
+
+  <div id="colorPanel">
+    <div class="colorGroup">
+      <span class="tag-p1"><b>P1</b></span>
+      <label>Head <input type="color" id="p1-head"></label>
+      <label>Torso <input type="color" id="p1-torso"></label>
+      <label>Arms <input type="color" id="p1-arms"></label>
+      <label>Legs <input type="color" id="p1-legs"></label>
+    </div>
+    <div class="colorGroup">
+      <span class="tag-p2"><b>P2</b></span>
+      <label>Head <input type="color" id="p2-head"></label>
+      <label>Torso <input type="color" id="p2-torso"></label>
+      <label>Arms <input type="color" id="p2-arms"></label>
+      <label>Legs <input type="color" id="p2-legs"></label>
+    </div>
+  </div>
+
+  <div id="legPanel">
+    <div class="legGroup p1" data-player="0">
+      <span class="tag-p1"><b>P1 Legs</b></span>
+      <button class="legBtn active" data-type="normal" title="Normal jump">Robot</button>
+      <button class="legBtn" data-type="power" title="Jump higher">Power</button>
+      <button class="legBtn" data-type="rocket" title="Many small jumps — tap repeatedly, like Flappy Bird">Rocket</button>
+    </div>
+    <div class="legGroup p2" data-player="1">
+      <span class="tag-p2"><b>P2 Legs</b></span>
+      <button class="legBtn active" data-type="normal" title="Normal jump">Robot</button>
+      <button class="legBtn" data-type="power" title="Jump higher">Power</button>
+      <button class="legBtn" data-type="rocket" title="Many small jumps — tap repeatedly, like Flappy Bird">Rocket</button>
+    </div>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width;   // 1000
+  const H = canvas.height;  // 600
+
+  // ---- World constants ----
+  const FLOOR_Y      = H - 40;       // top of the ground strip
+  const GRAVITY      = 2100;         // px/s^2 — robots feel weighty & snappy
+  const BALL_GRAVITY = 880;          // the ball is light & floaty (ICQ / slime volley feel)
+  const WIN_SCORE    = 5;
+
+  // Charge-up serve: hold the serve key to fill the ball, release to launch.
+  const SERVE_CHARGE_TIME  = 4;      // seconds a full charge (0→1) would take at the base fill rate
+  const SERVE_CHARGE_FLOOR = 0.25;   // first second is skipped: charging starts here, not at 0
+  const SERVE_MIN_SPEED   = 120;     // min force → ball crawls out
+  const SERVE_MAX_SPEED   = 1200;    // full force → maximum speed
+  const SERVE_DIR_X       = 0.421;   // launch direction (toward opponent)
+  const SERVE_DIR_Y       = -0.907;  // launch direction (upward)
+
+  // Ball / robot contact feel (ICQ / slime-volley style: touches control the
+  // ball, they don't supercharge it).
+  const GROUND_RESTITUTION = 0.72;   // grounded touch cushions & slows the ball
+  const AIR_RESTITUTION    = 1.02;   // a jump adds only a small pop
+  const HIT_SPEED_GAIN     = 200;    // max speed a single touch can ADD (px/s)
+  const BALL_MAX_SPEED     = 1150;   // overall speed ceiling
+
+  // Net (middle)
+  const NET = {
+    w: 14,
+    h: 170,
+    get x() { return W / 2 - this.w / 2; },
+    get top() { return FLOOR_Y - this.h; },
+  };
+
+  // ---- Robot definition ----
+  // A robot is a rounded box that moves along the floor and can jump. Its body
+  // is modeled as distinct parts (head, torso, arms, legs) with their own
+  // colors and world-space rects, recomputed every physics tick — so future
+  // work can hang per-part collision/physics off r.parts.<name> directly.
+  const ROBOT_W = 74;
+  const ROBOT_H = 116;
+  const MOVE_SPEED = 460;    // px/s horizontal target speed
+  const MOVE_ACCEL = 5200;   // how fast it reaches target speed
+  const JUMP_V     = 960;    // initial jump velocity ("Robot legs" — normal jump)
+  const AIR_ACCEL  = 3000;   // reduced air control
+  const ARM_W        = 12;   // arm width (used by updateRobotParts)
+  const ARM_OVERHANG = 4;    // each arm extends this far past the torso's left/right edge
+  const COURT_GAP     = 2;   // clear gap kept between a robot's outermost edge and the net
+  const HEAD_TOP_OFFSET = 2; // the head's top edge sits this far above r.y — also the ceiling clamp
+
+  // Leg types — each gives the jump a distinct feel. "normal" reuses JUMP_V.
+  const POWER_JUMP_V   = 1250;  // "Power legs" — one big jump, noticeably higher
+  const ROCKET_FLAP_V  = 620;   // "Rocket legs" — a small hop per tap, grounded or airborne
+  const ROCKET_MAX_FLAPS = 3;   // ...but only this many taps before touching the ground again
+
+  // Default per-part colors, keyed by side.
+  const DEFAULT_COLORS = {
+    p1: { head: "#ff5a5f", torso: "#ff5a5f", arms: "#b02a2f", legs: "#b02a2f" },
+    p2: { head: "#29b6f6", torso: "#29b6f6", arms: "#1565a8", legs: "#1565a8" },
+  };
+
+  // Lighten (positive percent) or darken (negative) a "#rrggbb" color.
+  function shadeColor(hex, percent) {
+    const num = parseInt(hex.slice(1), 16);
+    const amt = Math.round(2.55 * percent);
+    const r = Math.min(255, Math.max(0, (num >> 16) + amt));
+    const g = Math.min(255, Math.max(0, ((num >> 8) & 0xff) + amt));
+    const b = Math.min(255, Math.max(0, (num & 0xff) + amt));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function makeRobot(side) {
+    // side: -1 = left (P1), +1 = right (P2)
+    const startX = side < 0 ? W * 0.25 : W * 0.75;
+    const r = {
+      side,
+      x: startX - ROBOT_W / 2,
+      y: FLOOR_Y - ROBOT_H,
+      vx: 0,
+      vy: 0,
+      w: ROBOT_W,
+      h: ROBOT_H,
+      onGround: true,
+      facing: side < 0 ? 1 : -1,
+      // control intents, filled from input each frame
+      moveDir: 0,
+      jumpHeld: false,
+      jumpPrevHeld: false,   // last tick's jumpHeld, for edge (fresh-tap) detection
+      // "normal" (Robot legs), "power" (Power legs), or "rocket" (Rocket legs)
+      legType: "normal",
+      flapsUsed: 0,   // rocket-legs flaps used since last touching the ground
+      // visual
+      squash: 0,   // 0..1 landing squash
+      eyeBlink: 0,
+      flapFx: 0,   // seconds left on the rocket-legs thruster flicker
+      // per-part colors (user-selectable) and per-part world rects, the
+      // latter recomputed each physics tick by updateRobotParts()
+      colors: { ...(side < 0 ? DEFAULT_COLORS.p1 : DEFAULT_COLORS.p2) },
+      parts: {},
+    };
+    updateRobotParts(r);   // populate parts immediately so the first render (before any physics tick) has valid rects
+    return r;
+  }
+
+  // Compute each body part's current world-space rect from the robot's
+  // bounding box. Kept separate from drawing so any future per-part physics
+  // (e.g. "hitting the ball with the arms" vs the torso) can read r.parts
+  // without touching rendering code.
+  function updateRobotParts(r) {
+    const x = r.x, y = r.y, w = r.w, h = r.h;
+    const armDrop = r.onGround ? 0 : -8;
+    r.parts.head  = { x: x + w / 2 - 22, y: y - HEAD_TOP_OFFSET, w: 44,   h: 34 };
+    r.parts.torso = { x: x + 4,          y: y + 26,           w: w - 8,  h: h - 56 };
+    r.parts.armL  = { x: x - ARM_OVERHANG,             y: y + 30 + armDrop, w: ARM_W, h: 40 };
+    r.parts.armR  = { x: x + w - (ARM_W - ARM_OVERHANG), y: y + 30 + armDrop, w: ARM_W, h: 40 };
+    r.parts.legL  = { x: x + 10,         y: y + h - 34,       w: 20,     h: 34 };
+    r.parts.legR  = { x: x + w - 30,     y: y + h - 34,       w: 20,     h: 34 };
+    r.parts.footL = { x: x + 4,          y: y + h - 10,       w: 30,     h: 12 };
+    r.parts.footR = { x: x + w - 34,     y: y + h - 10,       w: 30,     h: 12 };
+  }
+
+  const robots = [makeRobot(-1), makeRobot(+1)];
+  const P1 = robots[0], P2 = robots[1];
+
+  // ---- Ball ----
+  const BALL_R = 22;
+  const ball = {
+    x: W * 0.25, y: 150, vx: 0, vy: 0, r: BALL_R,
+    spin: 0, live: false, lastHitBy: null,
+  };
+
+  const score = [0, 0];
+
+  // Game states: "menu", "serve", "play", "point", "over"
+  let state = "menu";
+  let gameMode = null;       // "1p" (vs CPU) or "2p"
+  let servingSide = -1;      // who serves next (-1 P1, +1 P2)
+  let messageTimer = 0;
+  let cpuServeTimer = 0;     // delay before the CPU auto-serves
+  let serveCharging = false; // is the server holding the serve key?
+  let serveCharge = 0;       // 0..1 charge level (how full the ball is)
+  let bannerText = "";
+  let winner = null;
+
+  // Menu option hitboxes (canvas coords), filled when the menu is drawn.
+  const menuOptions = [
+    { mode: "1p", label: "1 PLAYER",  sub: "vs CPU",        x: 0, y: 0, w: 0, h: 0 },
+    { mode: "2p", label: "2 PLAYERS", sub: "human vs human", x: 0, y: 0, w: 0, h: 0 },
+  ];
+
+  // ---- Input ----
+  const keys = new Set();
+  const CONTROL = {
+    // P1
+    KeyA: { player: 0, act: "left" },
+    KeyD: { player: 0, act: "right" },
+    KeyW: { player: 0, act: "jump" },
+    KeyS: { player: 0, act: "serve" },
+    // P2
+    ArrowLeft:  { player: 1, act: "left" },
+    ArrowRight: { player: 1, act: "right" },
+    ArrowUp:    { player: 1, act: "jump" },
+    ArrowDown:  { player: 1, act: "serve" },
+  };
+
+  window.addEventListener("keydown", (e) => {
+    if (e.code in CONTROL || e.code === "Space") e.preventDefault();
+    keys.add(e.code);
+    if (state === "menu") {
+      if (e.code === "Digit1" || e.code === "Numpad1") startGame("1p");
+      else if (e.code === "Digit2" || e.code === "Numpad2") startGame("2p");
+      return;
+    }
+    if (state === "serve") handleServeKeyDown(e.code);
+    if (e.code === "Space") onSpace();
+  });
+  window.addEventListener("keyup", (e) => {
+    keys.delete(e.code);
+    handleServeKeyUp(e.code);
+  });
+
+  // Map a mouse event to canvas (internal 1000x600) coordinates.
+  function eventToCanvas(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      mx: (e.clientX - rect.left) * (W / rect.width),
+      my: (e.clientY - rect.top) * (H / rect.height),
+    };
+  }
+
+  // Mouse-down: pick a menu option, or return to the menu after a match.
+  canvas.addEventListener("mousedown", (e) => {
+    const { mx, my } = eventToCanvas(e);
+    if (state === "menu") {
+      for (const o of menuOptions) {
+        if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) {
+          startGame(o.mode);
+          return;
+        }
+      }
+    } else if (state === "over") {
+      toMenu();
+    }
+  });
+
+  // The serving player charges by HOLDING their serve key (Player 1: S,
+  // Player 2: Down) and launches by releasing it. The CPU serves itself.
+  function isServerKey(code) {
+    const ctrl = CONTROL[code];
+    const serverPlayer = servingSide < 0 ? 0 : 1;
+    return ctrl && ctrl.act === "serve" && ctrl.player === serverPlayer;
+  }
+
+  function handleServeKeyDown(code) {
+    if (state !== "serve") return;
+    if (gameMode === "1p" && servingSide > 0) return;  // CPU's serve
+    if (isServerKey(code) && !serveCharging) {          // begin charging (ignore key repeat)
+      serveCharging = true;
+      serveCharge = SERVE_CHARGE_FLOOR;   // skip the first second — start already at 25%
+    }
+  }
+
+  function handleServeKeyUp(code) {
+    if (state !== "serve" || !serveCharging) return;
+    if (isServerKey(code)) serveBall(serveCharge);       // release → launch with charged force
+  }
+
+  function startGame(mode) {
+    gameMode = mode;
+    score[0] = 0; score[1] = 0;
+    winner = null;
+    servingSide = -1;
+    prepareServe();
+    updateHint();
+  }
+
+  function toMenu() {
+    state = "menu";
+    winner = null;
+    updateHint();
+  }
+
+  function onSpace() {
+    // Serving is done by clicking the robot; Space only returns from a finished match.
+    if (state === "over") toMenu();
+  }
+
+  // Reflect the current mode in the on-screen control hints.
+  function updateHint() {
+    const p2 = document.getElementById("p2hint");
+    if (!p2) return;
+    if (gameMode === "1p") {
+      p2.innerHTML = '<span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <b style="color:#29b6f6">CPU</b> &mdash; computer controlled';
+    } else {
+      p2.innerHTML = '<span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <span class="kbd">&larr;</span><span class="kbd">&rarr;</span> move &nbsp; <span class="kbd">&uarr;</span> jump &nbsp; hold <span class="kbd">&darr;</span> serve';
+    }
+  }
+
+  function readInput() {
+    if (state === "menu") {
+      for (const r of robots) { r.moveDir = 0; r.jumpHeld = false; }
+      return;
+    }
+    for (let i = 0; i < 2; i++) {
+      const r = robots[i];
+      // In single-player, the CPU drives player 2.
+      if (gameMode === "1p" && i === 1) { aiControl(r); continue; }
+      const L = keys.has(codeFor(i, "left"));
+      const R = keys.has(codeFor(i, "right"));
+      r.moveDir = (R ? 1 : 0) - (L ? 1 : 0);
+      r.jumpHeld = keys.has(codeFor(i, "jump"));
+    }
+  }
+  function codeFor(player, act) {
+    for (const [code, c] of Object.entries(CONTROL))
+      if (c.player === player && c.act === act) return code;
+    return null;
+  }
+
+  // ---- CPU opponent (drives the right-side robot) ----
+  // Simulate the ball forward to find where it will be at hitting height on the
+  // CPU's side, move under that point, and jump to meet a descending ball.
+  function predictBallX(hitY, maxSteps) {
+    let x = ball.x, y = ball.y, vx = ball.vx, vy = ball.vy;
+    const dt = 1 / 120;
+    for (let i = 0; i < maxSteps; i++) {
+      vy += BALL_GRAVITY * dt;
+      x += vx * dt; y += vy * dt;
+      if (x - ball.r < 0)  { x = ball.r;     vx = Math.abs(vx) * 0.95; }
+      if (x + ball.r > W)  { x = W - ball.r; vx = -Math.abs(vx) * 0.95; }
+      if (vy > 0 && y >= hitY) return x;
+    }
+    return x;
+  }
+
+  function aiControl(r) {
+    const center = r.x + r.w / 2;
+    const homeX = W * 0.72;
+    const courtMin = NET.x + NET.w + r.w / 2 + 4;
+    const courtMax = W - r.w / 2 - 6;
+
+    let targetX = homeX;
+    const ballHeadingHere = ball.live && (ball.vx > 0 || ball.x > W / 2 - 40);
+
+    if (ball.live && ballHeadingHere) {
+      // Aim to stand a touch behind the ball so the hit sends it back over.
+      let px = predictBallX(r.y + 12, 420);
+      px = Math.max(courtMin, Math.min(courtMax, px));
+      targetX = px + 6;   // slight bias to swat the ball back toward the net
+    }
+    targetX = Math.max(courtMin, Math.min(courtMax, targetX));
+
+    // Horizontal movement with a small dead zone so it doesn't jitter.
+    const diff = targetX - center;
+    r.moveDir = Math.abs(diff) < 10 ? 0 : Math.sign(diff);
+
+    // Jump to strike a ball that's close, on the CPU's side, and within reach.
+    const dx = Math.abs(ball.x - center);
+    const inReachV = ball.y < r.y + 24 && ball.y > r.y - 150;
+    const onMySide = ball.x > W / 2 - 30;
+    r.jumpHeld = ball.live && r.onGround && onMySide && dx < 66 &&
+                 inReachV && ball.vy > -40;
+  }
+
+  // ---- Setup helpers ----
+  function resetPositions() {
+    for (const r of robots) {
+      r.x = (r.side < 0 ? W * 0.25 : W * 0.75) - ROBOT_W / 2;
+      r.y = FLOOR_Y - ROBOT_H;
+      r.vx = 0; r.vy = 0; r.onGround = true; r.squash = 0; r.flapsUsed = 0;
+    }
+  }
+
+  function prepareServe() {
+    resetPositions();
+    ball.live = false;
+    ball.vx = 0; ball.vy = 0; ball.spin = 0;
+    ball.lastHitBy = null;
+    // Ball hovers just above the server's head (matches the serve-follow offset)
+    ball.x = servingSide < 0 ? W * 0.25 : W * 0.75;
+    ball.y = (FLOOR_Y - ROBOT_H) - 60;
+    state = "serve";
+    serveCharging = false;
+    serveCharge = 0;
+    // The CPU serves itself after a short beat.
+    cpuServeTimer = (gameMode === "1p" && servingSide > 0) ? 0.9 : 0;
+  }
+
+  function serveBall(charge) {
+    ball.live = true;
+    // Launch speed scales with charge: near-zero at empty, max when full.
+    const speed = SERVE_MIN_SPEED + (SERVE_MAX_SPEED - SERVE_MIN_SPEED) * charge;
+    ball.vx = speed * SERVE_DIR_X * -servingSide;  // toward the opponent
+    ball.vy = speed * SERVE_DIR_Y;                 // upward
+    ball.spin = 0;
+    serveCharging = false;
+    serveCharge = 0;
+    state = "play";
+  }
+
+  // ---- Physics ----
+  function updateRobot(r, dt) {
+    const accel = r.onGround ? MOVE_ACCEL : AIR_ACCEL;
+    const target = r.moveDir * MOVE_SPEED;
+    // approach target vx
+    if (r.vx < target) r.vx = Math.min(target, r.vx + accel * dt);
+    else if (r.vx > target) r.vx = Math.max(target, r.vx - accel * dt);
+    if (r.moveDir !== 0) r.facing = r.moveDir;
+
+    // jump — behavior depends on the equipped leg type
+    const jumpPressed = r.jumpHeld && !r.jumpPrevHeld;   // rising edge: a fresh tap
+    r.jumpPrevHeld = r.jumpHeld;
+    if (r.legType === "rocket") {
+      // Rocket legs: every fresh tap gives a small flap — grounded or
+      // airborne — up to ROCKET_MAX_FLAPS before touching the ground again.
+      // Holding does NOT spam flaps (only an actual release-then-press-again
+      // counts), so sustaining height takes real flappy-bird-style tapping.
+      if (jumpPressed && r.flapsUsed < ROCKET_MAX_FLAPS) {
+        r.vy = -ROCKET_FLAP_V;
+        r.onGround = false;
+        r.squash = 0;
+        r.flapFx = 0.18;
+        r.flapsUsed++;
+      }
+    } else if (r.jumpHeld && r.onGround) {
+      // Robot legs: normal single jump. Power legs: the same jump, just higher.
+      r.vy = -(r.legType === "power" ? POWER_JUMP_V : JUMP_V);
+      r.onGround = false;
+      r.squash = 0;
+    }
+
+    // gravity
+    r.vy += GRAVITY * dt;
+
+    r.x += r.vx * dt;
+    r.y += r.vy * dt;
+
+    // ceiling — the top of the head can't go above the arena's roof (y=0).
+    // Matters most for rocket legs, which can keep flapping upward forever
+    // otherwise; stopping vy here means gravity takes back over immediately.
+    if (r.y - HEAD_TOP_OFFSET < 0) {
+      r.y = HEAD_TOP_OFFSET;
+      if (r.vy < 0) r.vy = 0;
+    }
+
+    // floor
+    if (r.y + r.h >= FLOOR_Y) {
+      if (!r.onGround && r.vy > 300) r.squash = Math.min(1, r.vy / JUMP_V);
+      r.y = FLOOR_Y - r.h;
+      r.vy = 0;
+      r.onGround = true;
+      r.flapsUsed = 0;   // touching the ground refills the rocket-legs flaps
+    }
+
+    // Keep robot on its own half (net barrier) + arena walls. The bound on
+    // the net side must clear the robot's OUTERMOST edge — the arm, which
+    // overhangs the torso by ARM_OVERHANG — not just the bounding box, and
+    // must be measured against the robot's own width (r.w), not the net's.
+    const minX = r.side < 0 ? 6 : NET.x + NET.w + COURT_GAP + ARM_OVERHANG;
+    const maxX = r.side < 0 ? NET.x - COURT_GAP - ARM_OVERHANG - r.w : W - r.w - 6;
+    // Robots may reach over the net only above its top — but keep bodies out
+    // of each other's court on the ground plane. Clamp horizontally by court.
+    if (r.x < minX) { r.x = minX; if (r.vx < 0) r.vx = 0; }
+    if (r.x > maxX) { r.x = maxX; if (r.vx > 0) r.vx = 0; }
+
+    // squash relaxes
+    r.squash *= Math.pow(0.001, dt);
+    r.eyeBlink = Math.max(0, r.eyeBlink - dt);
+    r.flapFx = Math.max(0, r.flapFx - dt);
+
+    // Refresh each part's world rect for this frame (rendering + future
+    // per-part physics both read from here).
+    updateRobotParts(r);
+  }
+
+  // Circle (ball) vs axis-aligned rounded box (robot), with momentum transfer.
+  function collideBallRobot(r) {
+    const cx = ball.x, cy = ball.y;
+    const nearestX = Math.max(r.x, Math.min(cx, r.x + r.w));
+    const nearestY = Math.max(r.y, Math.min(cy, r.y + r.h));
+    let dx = cx - nearestX;
+    let dy = cy - nearestY;
+    let dist = Math.hypot(dx, dy);
+
+    if (dist > ball.r) return false;
+
+    // Resolve overlap
+    let nx, ny;
+    if (dist === 0) {
+      // ball center inside box — push out along smaller axis
+      const toLeft = cx - r.x, toRight = r.x + r.w - cx;
+      const toTop = cy - r.y, toBottom = r.y + r.h - cy;
+      const m = Math.min(toLeft, toRight, toTop, toBottom);
+      if (m === toTop) { nx = 0; ny = -1; }
+      else if (m === toBottom) { nx = 0; ny = 1; }
+      else if (m === toLeft) { nx = -1; ny = 0; }
+      else { nx = 1; ny = 0; }
+      dist = 0.01;
+    } else {
+      nx = dx / dist; ny = dy / dist;
+    }
+
+    // Position correction
+    const overlap = ball.r - dist;
+    ball.x += nx * overlap;
+    ball.y += ny * overlap;
+
+    // Relative velocity along normal
+    const rvx = ball.vx - r.vx;
+    const rvy = ball.vy - r.vy;
+    const velAlongNormal = rvx * nx + rvy * ny;
+    if (velAlongNormal > 0) {
+      // separating already; still stamp ownership on top contact
+      ball.lastHitBy = r.side;
+      return true;
+    }
+
+    // Speed coming in — used to meter how much a single touch may add.
+    const incomingSpeed = Math.hypot(ball.vx, ball.vy);
+
+    // A grounded touch cushions the ball (slows it, so you can redirect it);
+    // a jump gives it a small pop.
+    const restitution = r.onGround ? GROUND_RESTITUTION : AIR_RESTITUTION;
+    const j = -(1 + restitution) * velAlongNormal;
+    ball.vx += j * nx;
+    ball.vy += j * ny;
+
+    // Momentum transfer: robot's motion nudges the ball (the "redirect"),
+    // kept gentle so movement/jumps don't rocket it.
+    ball.vx += r.vx * 0.33;
+    ball.vy += r.vy * 0.28;
+
+    // Contact offset from the robot centre aims the ball — position is control.
+    if (ny < -0.4) {
+      const offset = (cx - (r.x + r.w / 2)) / (r.w / 2); // -1..1
+      ball.vx += offset * 150;
+      ball.spin = offset * 6 + r.vx * 0.008;
+    }
+
+    // Meter the result: a single touch may ADD at most HIT_SPEED_GAIN, so a
+    // slow ball speeds up in increments across a rally rather than snapping to
+    // full speed on one hit. Slowing (a cushion) is always allowed.
+    const newSpeed = Math.hypot(ball.vx, ball.vy);
+    const allowed = Math.min(newSpeed, incomingSpeed + HIT_SPEED_GAIN, BALL_MAX_SPEED);
+    if (newSpeed > allowed && newSpeed > 0) {
+      ball.vx *= allowed / newSpeed;
+      ball.vy *= allowed / newSpeed;
+    }
+
+    ball.lastHitBy = r.side;
+    r.eyeBlink = 0.12;
+    return true;
+  }
+
+  function updateBall(dt) {
+    if (!ball.live) return;
+
+    ball.vy += BALL_GRAVITY * dt;   // light, floaty ball
+    // light air drag / spin curve
+    ball.vx += ball.spin * 12 * dt;
+    ball.spin *= Math.pow(0.2, dt);
+
+    // remember where the ball was so we can catch fast passes through the post
+    const prevX = ball.x, prevY = ball.y;
+
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+
+    // walls — bouncy
+    if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx = Math.abs(ball.vx) * 0.95; }
+    if (ball.x + ball.r > W) { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx) * 0.95; }
+    // ceiling
+    if (ball.y - ball.r < 0) { ball.y = ball.r; ball.vy = Math.abs(ball.vy) * 0.92; }
+
+    // net collision (a solid post in the middle)
+    collideBallNet(prevX, prevY);
+
+    // robots
+    for (const r of robots) collideBallRobot(r);
+
+    // floor → point scored
+    if (ball.y + ball.r >= FLOOR_Y) {
+      ball.y = FLOOR_Y - ball.r;
+      // Which side did it land on?
+      const landedLeft = ball.x < W / 2;
+      // Left side floor → P2 scores; right side floor → P1 scores.
+      const scorer = landedLeft ? 1 : 0;
+      awardPoint(scorer);
+    }
+  }
+
+  const NET_BOUNCE = 0.7;
+
+  function collideBallNet(prevX, prevY) {
+    const netCX = W / 2;
+
+    // --- Continuous (swept) check: stop the ball tunneling through the thin
+    // post at speed. If the ball's surface is within the post's vertical span
+    // and its center crossed the center line this step, it hit the pillar. ---
+    const inPostHeight =
+      Math.min(ball.y, prevY) + ball.r > NET.top &&   // low enough to be blocked
+      Math.max(ball.y, prevY) - ball.r < FLOOR_Y;
+    if (inPostHeight) {
+      const prevSide = prevX < netCX ? -1 : 1;
+      const curSide  = ball.x < netCX ? -1 : 1;
+      if (prevSide !== curSide) {
+        if (prevSide < 0) {          // came from the left → keep it left
+          ball.x = NET.x - ball.r;
+          ball.vx = -Math.abs(ball.vx) * NET_BOUNCE;
+        } else {                     // came from the right → keep it right
+          ball.x = NET.x + NET.w + ball.r;
+          ball.vx = Math.abs(ball.vx) * NET_BOUNCE;
+        }
+        ball.spin *= 0.4;
+        return;
+      }
+    }
+
+    // --- Static overlap resolution: rounded post for slow contact & top cap. ---
+    const nx0 = NET.x, ny0 = NET.top, nx1 = NET.x + NET.w, ny1 = FLOOR_Y;
+    const nearestX = Math.max(nx0, Math.min(ball.x, nx1));
+    const nearestY = Math.max(ny0, Math.min(ball.y, ny1));
+    let dx = ball.x - nearestX, dy = ball.y - nearestY;
+    let dist = Math.hypot(dx, dy);
+    if (dist > ball.r) return;
+    let nX, nY;
+    if (dist === 0) { nX = ball.x < netCX ? -1 : 1; nY = 0; dist = 0.01; }
+    else { nX = dx / dist; nY = dy / dist; }
+    const overlap = ball.r - dist;
+    ball.x += nX * overlap;
+    ball.y += nY * overlap;
+    const vn = ball.vx * nX + ball.vy * nY;
+    if (vn < 0) {
+      ball.vx -= (1 + NET_BOUNCE) * vn * nX;
+      ball.vy -= (1 + NET_BOUNCE) * vn * nY;
+    }
+  }
+
+  function awardPoint(scorer) {
+    score[scorer]++;
+    ball.live = false;
+    if (score[scorer] >= WIN_SCORE) {
+      winner = scorer;
+      state = "over";
+      bannerText = `PLAYER ${scorer + 1} WINS!`;
+    } else {
+      bannerText = `POINT — PLAYER ${scorer + 1}`;
+      state = "point";
+      messageTimer = 1.3;
+      // loser serves next
+      servingSide = scorer === 0 ? 1 : -1;
+    }
+  }
+
+  // ---- Main loop ----
+  let last = performance.now();
+  let acc = 0;
+  const STEP = 1 / 120; // fixed physics step
+
+  function frame(now) {
+    let dt = (now - last) / 1000;
+    last = now;
+    if (dt > 0.1) dt = 0.1; // avoid spiral after tab switch
+
+    readInput();
+
+    if (state === "point") {
+      messageTimer -= dt;
+      if (messageTimer <= 0) prepareServe();
+    }
+
+    // Fill the ball while the server holds the key (caps at full after 4s).
+    if (state === "serve" && serveCharging) {
+      serveCharge = Math.min(1, serveCharge + dt / SERVE_CHARGE_TIME);
+    }
+
+    // CPU charges its serve up to a solid force over its wait, then launches.
+    if (state === "serve" && cpuServeTimer > 0) {
+      serveCharge = Math.min(0.75, serveCharge + dt * (0.75 / 0.9));
+      cpuServeTimer -= dt;
+      if (cpuServeTimer <= 0) serveBall(0.75);
+    }
+
+    // Always simulate robots so players can reposition, even pre-serve.
+    acc += dt;
+    while (acc >= STEP) {
+      for (const r of robots) updateRobot(r, STEP);
+      if (state === "play") updateBall(STEP);
+      else if (state === "serve") {
+        // ball hovers just above the server's head and tracks it — including
+        // up AND down as the robot jumps and lands.
+        const s = servingSide < 0 ? P1 : P2;
+        ball.x = s.x + s.w / 2;
+        ball.y = s.y - 60;
+      }
+      acc -= STEP;
+    }
+
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // ---- Rendering ----
+  function render() {
+    ctx.clearRect(0, 0, W, H);
+    drawArena();
+    drawNet();
+    drawRobot(P1);
+    drawRobot(P2);
+    if (state !== "menu") { drawBall(); drawHUD(); }
+    drawBanner();
+  }
+
+  function drawArena() {
+    // sky gradient
+    const g = ctx.createLinearGradient(0, 0, 0, FLOOR_Y);
+    g.addColorStop(0, "#0d1430");
+    g.addColorStop(1, "#151d3d");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, FLOOR_Y);
+
+    // court halves tint
+    ctx.fillStyle = "rgba(255,90,95,0.05)";
+    ctx.fillRect(0, 0, W / 2, FLOOR_Y);
+    ctx.fillStyle = "rgba(41,182,246,0.05)";
+    ctx.fillRect(W / 2, 0, W / 2, FLOOR_Y);
+
+    // decorative grid lines
+    ctx.strokeStyle = "rgba(255,255,255,0.03)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 50) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, FLOOR_Y); ctx.stroke();
+    }
+
+    // ground
+    const gg = ctx.createLinearGradient(0, FLOOR_Y, 0, H);
+    gg.addColorStop(0, "#2a2f45");
+    gg.addColorStop(1, "#171a29");
+    ctx.fillStyle = gg;
+    ctx.fillRect(0, FLOOR_Y, W, H - FLOOR_Y);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(0, FLOOR_Y, W, 3);
+  }
+
+  function drawNet() {
+    // post
+    const grd = ctx.createLinearGradient(NET.x, 0, NET.x + NET.w, 0);
+    grd.addColorStop(0, "#c8c8c8");
+    grd.addColorStop(0.5, "#ffffff");
+    grd.addColorStop(1, "#a0a0a0");
+    ctx.fillStyle = grd;
+    roundRect(NET.x, NET.top, NET.w, NET.h, 6);
+    ctx.fill();
+    // mesh
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.lineWidth = 1;
+    for (let y = NET.top + 8; y < FLOOR_Y; y += 12) {
+      ctx.beginPath(); ctx.moveTo(NET.x, y); ctx.lineTo(NET.x + NET.w, y); ctx.stroke();
+    }
+    // top cap
+    ctx.fillStyle = "#ffd54a";
+    roundRect(NET.x - 3, NET.top - 6, NET.w + 6, 8, 3);
+    ctx.fill();
+  }
+
+  // Draws the robot from its part rects (r.parts) and per-part colors
+  // (r.colors), both kept fresh by updateRobotParts(). A few small details
+  // (chest plate/stripe, feet, antenna tip) stay fixed accents rather than
+  // user-colorable parts, for visual cohesion regardless of chosen colors.
+  function drawRobot(r) {
+    const p = r.parts, col = r.colors;
+
+    ctx.save();
+    // squash/stretch transform around the feet
+    const sq = r.squash;
+    const cx = r.x + r.w / 2;
+    const feet = r.y + r.h;
+    ctx.translate(cx, feet);
+    ctx.scale(1 + sq * 0.18, 1 - sq * 0.18);
+    ctx.translate(-cx, -feet);
+
+    // shadow
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    ctx.beginPath();
+    const shW = r.w * (0.6 + 0.3 * (r.onGround ? 1 : 0.4));
+    ctx.ellipse(cx, FLOOR_Y + 6, shW, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // legs
+    ctx.fillStyle = col.legs;
+    roundRect(p.legL.x, p.legL.y, p.legL.w, p.legL.h, 5); ctx.fill();
+    roundRect(p.legR.x, p.legR.y, p.legR.w, p.legR.h, 5); ctx.fill();
+    // feet (fixed accent — reads as a boot regardless of leg color)
+    ctx.fillStyle = "#20242f";
+    roundRect(p.footL.x, p.footL.y, p.footL.w, p.footL.h, 4); ctx.fill();
+    roundRect(p.footR.x, p.footR.y, p.footR.w, p.footR.h, 4); ctx.fill();
+
+    // Rocket legs: a brief thruster flicker under each foot on every flap
+    if (r.legType === "rocket" && r.flapFx > 0) {
+      const t = r.flapFx / 0.18;   // 1 → just flapped, 0 → fading out
+      for (const foot of [p.footL, p.footR]) {
+        const fx = foot.x + foot.w / 2;
+        const fy = foot.y + foot.h;
+        const flameH = 14 * t, flameW = 10 * t;
+        ctx.globalAlpha = t;
+        ctx.fillStyle = "#ffb347";
+        ctx.beginPath();
+        ctx.moveTo(fx - flameW / 2, fy);
+        ctx.lineTo(fx + flameW / 2, fy);
+        ctx.lineTo(fx, fy + flameH);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#fff3c0";
+        ctx.beginPath();
+        ctx.moveTo(fx - flameW / 4, fy);
+        ctx.lineTo(fx + flameW / 4, fy);
+        ctx.lineTo(fx, fy + flameH * 0.55);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // torso
+    const bodyGrad = ctx.createLinearGradient(p.torso.x, p.torso.y, p.torso.x, p.torso.y + p.torso.h);
+    bodyGrad.addColorStop(0, shadeColor(col.torso, 25));
+    bodyGrad.addColorStop(1, col.torso);
+    ctx.fillStyle = bodyGrad;
+    roundRect(p.torso.x, p.torso.y, p.torso.w, p.torso.h, 12); ctx.fill();
+
+    // chest plate (fixed accent — a small "power core" detail)
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    roundRect(p.torso.x + 12, p.torso.y + 14, p.torso.w - 24, 30, 6); ctx.fill();
+    ctx.fillStyle = "#ffd54a";
+    ctx.fillRect(cx - 3, p.torso.y + 18, 6, 22);
+
+    // arms
+    ctx.fillStyle = col.arms;
+    roundRect(p.armL.x, p.armL.y, p.armL.w, p.armL.h, 5); ctx.fill();
+    roundRect(p.armR.x, p.armR.y, p.armR.w, p.armR.h, 5); ctx.fill();
+
+    // head
+    const headGrad = ctx.createLinearGradient(p.head.x, p.head.y, p.head.x, p.head.y + p.head.h);
+    headGrad.addColorStop(0, shadeColor(col.head, 25));
+    headGrad.addColorStop(1, col.head);
+    ctx.fillStyle = headGrad;
+    roundRect(p.head.x, p.head.y, p.head.w, p.head.h, 9); ctx.fill();
+    // visor — bright "glass" with a glow tinted by the head color
+    const eyeOpen = r.eyeBlink > 0 ? 0.3 : 1;
+    ctx.fillStyle = "#eaf6ff";
+    ctx.shadowColor = col.head;
+    ctx.shadowBlur = 14;
+    roundRect(p.head.x + 6, p.head.y + 10, p.head.w - 12, 12 * eyeOpen + 2, 4); ctx.fill();
+    ctx.shadowBlur = 0;
+    // antenna
+    ctx.strokeStyle = shadeColor(col.head, -35); ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(cx, p.head.y); ctx.lineTo(cx, p.head.y - 12); ctx.stroke();
+    ctx.fillStyle = "#ffd54a";
+    ctx.beginPath(); ctx.arc(cx, p.head.y - 14, 4, 0, Math.PI * 2); ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawBall() {
+    // Floor shadow (shared).
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.beginPath();
+    const sy = FLOOR_Y + 4;
+    const sw = ball.r * (1.1 - Math.min(0.6, (FLOOR_Y - ball.y) / 900));
+    ctx.ellipse(ball.x, sy, Math.max(6, sw), 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // During the serve the ball is an empty shell that fills with force.
+    // serveCharge itself starts at SERVE_CHARGE_FLOOR (the actual launch-speed
+    // math), but the fill shown to the player should still read as starting
+    // empty — so remap [FLOOR, 1] onto a visual [0, 1] just for rendering.
+    if (state === "serve") {
+      const visualFill = Math.max(0, Math.min(1,
+        (serveCharge - SERVE_CHARGE_FLOOR) / (1 - SERVE_CHARGE_FLOOR)));
+      drawChargingBall(visualFill);
+      return;
+    }
+
+    ctx.save();
+    ctx.translate(ball.x, ball.y);
+    const g = ctx.createRadialGradient(-8, -8, 4, 0, 0, ball.r);
+    g.addColorStop(0, "#fff3c0");
+    g.addColorStop(1, "#f2b705");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, ball.r, 0, Math.PI * 2); ctx.fill();
+    // seams
+    ctx.strokeStyle = "rgba(120,70,0,0.5)";
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, ball.r - 3, 0.4, 2.4); ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, ball.r - 3, 3.5, 5.6); ctx.stroke();
+    ctx.restore();
+  }
+
+  // Empty ball that fills bottom-up with `charge` (0..1); colour goes from
+  // pale gold (low force) to hot orange (full force).
+  function drawChargingBall(charge) {
+    const cx = ball.x, cy = ball.y, r = ball.r;
+    ctx.save();
+
+    // hollow shell background
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.fill();
+
+    // liquid fill, clipped to the circle, rising from the bottom
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+    const level = cy + r - charge * 2 * r;
+    const cg = Math.round(229 - 129 * charge);   // 229 → 100
+    const cb = Math.round(138 - 138 * charge);   // 138 → 0
+    ctx.fillStyle = `rgb(255,${cg},${cb})`;
+    ctx.fillRect(cx - r, level, 2 * r, (cy + r) - level);
+    // brighter crest on the liquid surface
+    if (charge > 0.02) {
+      ctx.fillStyle = "rgba(255,255,255,0.35)";
+      ctx.fillRect(cx - r, level, 2 * r, 2);
+    }
+    ctx.restore();
+
+    // outline — glows when fully charged
+    const full = charge >= 0.999;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = full ? "#ff6a1a" : "rgba(255,213,74,0.9)";
+    if (full) { ctx.shadowColor = "#ff6a1a"; ctx.shadowBlur = 16; }
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawHUD() {
+    // scoreboard
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // P1 score
+    ctx.fillStyle = "#ff5a5f";
+    ctx.font = "bold 46px 'Segoe UI', sans-serif";
+    ctx.fillText(score[0], W / 2 - 70, 46);
+    // P2 score
+    ctx.fillStyle = "#29b6f6";
+    ctx.fillText(score[1], W / 2 + 70, 46);
+    // divider
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.font = "bold 30px sans-serif";
+    ctx.fillText("—", W / 2, 46);
+
+    // target
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.font = "12px sans-serif";
+    ctx.fillText(`FIRST TO ${WIN_SCORE}`, W / 2, 74);
+
+    // labels
+    ctx.font = "bold 12px sans-serif";
+    ctx.fillStyle = "#ff5a5f";
+    ctx.fillText("P1", W / 2 - 70, 76);
+    ctx.fillStyle = "#29b6f6";
+    ctx.fillText(gameMode === "1p" ? "CPU" : "P2", W / 2 + 70, 76);
+  }
+
+  function drawBanner() {
+    if (state === "menu") { drawMenu(); return; }
+    if (state === "serve") {
+      const serverIsCpu = gameMode === "1p" && servingSide > 0;
+      const name = serverIsCpu ? "CPU" : `PLAYER ${servingSide < 0 ? 1 : 2}`;
+      centerText(`${name} TO SERVE`,
+                 servingSide < 0 ? "#ff5a5f" : "#29b6f6", 30, H * 0.32);
+      const key = servingSide < 0 ? "S" : "↓";
+      const servePrompt = serverIsCpu ? "serving…"
+        : `hold  ${key}  to charge · release to serve`;
+      centerText(servePrompt, "rgba(255,255,255,0.6)", 16, H * 0.32 + 34);
+    } else if (state === "point") {
+      centerText(bannerText, "#ffd54a", 34, H * 0.4);
+    } else if (state === "over") {
+      // dim
+      ctx.fillStyle = "rgba(6,9,18,0.7)";
+      ctx.fillRect(0, 0, W, H);
+      centerText(bannerText, winner === 0 ? "#ff5a5f" : "#29b6f6", 54, H * 0.42);
+      centerText(`${score[0]} — ${score[1]}`, "#fff", 34, H * 0.42 + 56);
+      centerText("press SPACE for the menu", "rgba(255,255,255,0.7)", 18, H * 0.42 + 100);
+    }
+  }
+
+  function drawMenu() {
+    // dim the arena behind the menu
+    ctx.fillStyle = "rgba(6,9,18,0.72)";
+    ctx.fillRect(0, 0, W, H);
+
+    centerText("ROBOT VOLLEY", "#ffd54a", 58, H * 0.24);
+    centerText("choose a mode", "rgba(255,255,255,0.6)", 18, H * 0.24 + 42);
+
+    const bw = 300, bh = 96, gap = 40;
+    const totalW = bw * 2 + gap;
+    const x0 = (W - totalW) / 2;
+    const y = H * 0.5;
+    const accents = ["#ff5a5f", "#29b6f6"];
+
+    menuOptions.forEach((o, i) => {
+      o.x = x0 + i * (bw + gap);
+      o.y = y;
+      o.w = bw;
+      o.h = bh;
+      // card
+      ctx.fillStyle = "rgba(255,255,255,0.05)";
+      roundRect(o.x, o.y, bw, bh, 14); ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = accents[i];
+      roundRect(o.x, o.y, bw, bh, 14); ctx.stroke();
+      // number key badge
+      ctx.fillStyle = accents[i];
+      ctx.font = "bold 34px 'Segoe UI', sans-serif";
+      ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      ctx.fillText(`${i + 1}`, o.x + 22, o.y + bh / 2);
+      // labels
+      ctx.fillStyle = "#f5f7ff";
+      ctx.font = "bold 24px 'Segoe UI', sans-serif";
+      ctx.fillText(o.label, o.x + 62, o.y + bh / 2 - 12);
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.font = "15px 'Segoe UI', sans-serif";
+      ctx.fillText(o.sub, o.x + 62, o.y + bh / 2 + 14);
+    });
+
+    centerText("press 1 or 2  ·  or click", "rgba(255,255,255,0.45)", 15, y + bh + 40);
+  }
+
+  function centerText(txt, color, size, y) {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = color;
+    ctx.font = `bold ${size}px 'Segoe UI', sans-serif`;
+    ctx.shadowColor = "rgba(0,0,0,0.6)";
+    ctx.shadowBlur = 8;
+    ctx.fillText(txt, W / 2, y);
+    ctx.shadowBlur = 0;
+  }
+
+  function roundRect(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // ---- Color picker wiring ----
+  // Each <input type="color"> mirrors robots[i].colors.<part>; picking a
+  // color updates the live robot immediately, no restart needed.
+  [P1, P2].forEach((r, i) => {
+    const prefix = i === 0 ? "p1" : "p2";
+    for (const part of ["head", "torso", "arms", "legs"]) {
+      const input = document.getElementById(`${prefix}-${part}`);
+      if (!input) continue;
+      input.value = r.colors[part];
+      input.addEventListener("input", () => { r.colors[part] = input.value; });
+    }
+  });
+
+  // ---- Leg-type picker wiring ----
+  // Clicking a button sets robots[i].legType immediately (live, mid-match
+  // too) and highlights the chosen button within that player's group.
+  document.querySelectorAll(".legGroup").forEach((group) => {
+    const r = robots[Number(group.dataset.player)];
+    group.querySelectorAll(".legBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        r.legType = btn.dataset.type;
+        group.querySelectorAll(".legBtn").forEach((b) => b.classList.toggle("active", b === btn));
+      });
+    });
+  });
+
+  // ---- Boot ----
+  resetPositions();     // robots idle at their spots behind the menu
+  state = "menu";
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

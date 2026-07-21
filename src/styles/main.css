@@ -1,0 +1,116 @@
+:root {
+  --bg: #0a0e1a;
+  --p1: #ff5a5f;
+  --p1-dark: #b02a2f;
+  --p2: #29b6f6;
+  --p2-dark: #1565a8;
+  --net: #e0e0e0;
+  --ball: #ffd54a;
+  --text: #f5f7ff;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+#wrap {
+  position: relative;
+  width: min(96vw, 1000px);
+}
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.05);
+  background: #060912;
+  touch-action: none;
+}
+#hint {
+  margin-top: 14px;
+  display: flex;
+  gap: 32px;
+  justify-content: center;
+  font-size: 13px;
+  color: #9aa4c0;
+  flex-wrap: wrap;
+}
+#hint b { color: var(--text); }
+.kbd {
+  display: inline-block;
+  background: #1a2138;
+  border: 1px solid #2c3557;
+  border-radius: 5px;
+  padding: 1px 7px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: #cdd6f4;
+  margin: 0 1px;
+}
+.tag-p1 { color: var(--p1); }
+.tag-p2 { color: var(--p2); }
+
+#colorPanel {
+  margin-top: 10px;
+  display: flex;
+  gap: 28px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.colorGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #9aa4c0;
+}
+.colorGroup label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.colorGroup input[type="color"] {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid #2c3557;
+  border-radius: 5px;
+  background: none;
+  cursor: pointer;
+}
+
+#legPanel {
+  margin-top: 10px;
+  display: flex;
+  gap: 28px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.legGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #9aa4c0;
+}
+.legBtn {
+  font: inherit;
+  font-size: 12px;
+  color: #cdd6f4;
+  background: #1a2138;
+  border: 1px solid #2c3557;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.legBtn:hover { background: #232b4a; }
+.legGroup.p1 .legBtn.active { background: var(--p1); border-color: var(--p1); color: #2a0e10; font-weight: bold; }
+.legGroup.p2 .legBtn.active { background: var(--p2); border-color: var(--p2); color: #06232f; font-weight: bold; }

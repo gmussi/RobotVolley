@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robot Volley</title>
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game" width="1000" height="600"></canvas>
+  </div>
+  <div id="hint">
+    <div><span class="tag-p1"><b>PLAYER 1</b></span> &nbsp; <span class="kbd">A</span><span class="kbd">D</span> move &nbsp; <span class="kbd">W</span> jump &nbsp; hold <span class="kbd">S</span> serve</div>
+    <div id="p2hint"><span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <span class="kbd">&larr;</span><span class="kbd">&rarr;</span> move &nbsp; <span class="kbd">&uarr;</span> jump &nbsp; hold <span class="kbd">&darr;</span> serve</div>
+    <div>Hold serve to charge force &nbsp;·&nbsp; <span class="kbd">Space</span> restart</div>
+  </div>
+  <div id="colorPanel">
+    <div class="colorGroup">
+      <span class="tag-p1"><b>P1</b></span>
+      <label>Head <input type="color" id="p1-head"></label>
+      <label>Torso <input type="color" id="p1-torso"></label>
+      <label>Arms <input type="color" id="p1-arms"></label>
+      <label>Legs <input type="color" id="p1-legs"></label>
+    </div>
+    <div class="colorGroup">
+      <span class="tag-p2"><b>P2</b></span>
+      <label>Head <input type="color" id="p2-head"></label>
+      <label>Torso <input type="color" id="p2-torso"></label>
+      <label>Arms <input type="color" id="p2-arms"></label>
+      <label>Legs <input type="color" id="p2-legs"></label>
+    </div>
+  </div>
+  <div id="legPanel">
+    <div class="legGroup p1" data-player="0">
+      <span class="tag-p1"><b>P1 Legs</b></span>
+      <button class="legBtn active" data-type="normal" title="Normal jump">Robot</button>
+      <button class="legBtn" data-type="power" title="Jump higher">Power</button>
+      <button class="legBtn" data-type="rocket" title="Many small jumps — tap repeatedly, like Flappy Bird">Rocket</button>
+    </div>
+    <div class="legGroup p2" data-player="1">
+      <span class="tag-p2"><b>P2 Legs</b></span>
+      <button class="legBtn active" data-type="normal" title="Normal jump">Robot</button>
+      <button class="legBtn" data-type="power" title="Jump higher">Power</button>
+      <button class="legBtn" data-type="rocket" title="Many small jumps — tap repeatedly, like Flappy Bird">Rocket</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
