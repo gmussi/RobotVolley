@@ -113,7 +113,7 @@ See [`tools/ART_PIPELINE.md`](./tools/ART_PIPELINE.md) for the Gemini art workfl
 ## Deploying
 
 Pushing to `main` runs tests, builds, and deploys to GitHub Pages automatically
-(see [`.github/workflows/deploy.yml`](./github/workflows/deploy.yml)). Enable
+(see [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml)). Enable
 Pages under **Settings → Pages → Build and deployment → GitHub Actions** once.
 
 Live site: **https://gmussi.github.io/RobotVolley/**
