@@ -110,6 +110,14 @@ wires engine and renderer together.
 
 See [`tools/ART_PIPELINE.md`](./tools/ART_PIPELINE.md) for the Gemini art workflow.
 
+## Deploying
+
+Pushing to `main` runs tests, builds, and deploys to GitHub Pages automatically
+(see [`.github/workflows/deploy.yml`](./github/workflows/deploy.yml)). Enable
+Pages under **Settings → Pages → Build and deployment → GitHub Actions** once.
+
+Live site: **https://gmussi.github.io/RobotVolley/**
+
 ### Art generation
 
 Add `GEMINI_API_KEY=...` to a `.env` file at the project root (gitignored):
