@@ -75,9 +75,9 @@ Before or during a match, customize each robot:
 | Option | Effect |
 |--------|--------|
 | **Head / Torso / Arms / Legs colors** | Per-part color pickers |
-| **Robot legs** | Normal jump |
-| **Power legs** | One higher jump |
-| **Rocket legs** | Up to 3 small flaps per ground touch (tap repeatedly, Flappy Bird style) |
+| **Robot legs** | Normal jump — blocky legs with knee joint |
+| **Power legs** | Higher jump — thick hydraulic legs with gold springs and wide boots |
+| **Rocket legs** | Up to 3 flaps per ground touch — slim struts with thruster nozzles and flame bursts |
 
 ## Development
 

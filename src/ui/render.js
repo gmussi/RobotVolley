@@ -77,6 +77,131 @@ function drawNet() {
   ctx.fill();
 }
 
+function drawSpringCoil(x, yTop, yBot, amp) {
+  ctx.strokeStyle = "rgba(255,213,74,0.75)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const coils = 4;
+  const step = (yBot - yTop) / (coils * 2);
+  ctx.moveTo(x, yTop);
+  for (let i = 0; i < coils * 2; i++) {
+    const cy = yTop + step * (i + 1);
+    ctx.lineTo(x + (i % 2 === 0 ? amp : -amp), cy);
+  }
+  ctx.lineTo(x, yBot);
+  ctx.stroke();
+}
+
+function drawRobotLegs(r, p, col) {
+  const legCol = col.legs;
+  const dark = shadeColor(legCol, -30);
+  const light = shadeColor(legCol, 18);
+
+  if (r.legType === "power") {
+    // Bulkier hydraulic legs with visible springs and wide stomper boots.
+    for (const leg of [p.legL, p.legR]) {
+      const cx = leg.x + leg.w / 2;
+      const grad = ctx.createLinearGradient(leg.x, leg.y, leg.x + leg.w, leg.y);
+      grad.addColorStop(0, dark);
+      grad.addColorStop(0.5, legCol);
+      grad.addColorStop(1, dark);
+      ctx.fillStyle = grad;
+      roundRect(leg.x - 3, leg.y, leg.w + 6, leg.h - 8, 6);
+      ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      roundRect(leg.x + 2, leg.y + 8, leg.w - 4, 10, 3);
+      ctx.fill();
+      drawSpringCoil(cx, leg.y + leg.h - 18, leg.y + leg.h - 4, 5);
+    }
+    for (const foot of [p.footL, p.footR]) {
+      ctx.fillStyle = "#20242f";
+      roundRect(foot.x - 4, foot.y - 2, foot.w + 8, foot.h + 4, 5);
+      ctx.fill();
+      ctx.fillStyle = "#ffd54a";
+      ctx.fillRect(foot.x + 2, foot.y + 3, foot.w - 4, 3);
+    }
+    return;
+  }
+
+  if (r.legType === "rocket") {
+    // Slim struts + permanent thruster nozzles under each foot.
+    for (const leg of [p.legL, p.legR]) {
+      ctx.fillStyle = legCol;
+      ctx.beginPath();
+      ctx.moveTo(leg.x + 4, leg.y);
+      ctx.lineTo(leg.x + leg.w - 4, leg.y);
+      ctx.lineTo(leg.x + leg.w - 1, leg.y + leg.h);
+      ctx.lineTo(leg.x + 1, leg.y + leg.h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = dark;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    for (const foot of [p.footL, p.footR]) {
+      const fx = foot.x + foot.w / 2;
+      const fy = foot.y + foot.h;
+      ctx.fillStyle = "#2a3038";
+      roundRect(foot.x - 2, foot.y - 4, foot.w + 4, foot.h + 2, 3);
+      ctx.fill();
+      ctx.fillStyle = "#444c58";
+      ctx.beginPath();
+      ctx.moveTo(fx - 10, fy - 2);
+      ctx.lineTo(fx + 10, fy - 2);
+      ctx.lineTo(fx + 7, fy + 2);
+      ctx.lineTo(fx - 7, fy + 2);
+      ctx.closePath();
+      ctx.fill();
+      const idle = r.onGround ? 0.45 : 0.25;
+      ctx.fillStyle = `rgba(255,140,40,${idle})`;
+      ctx.beginPath();
+      ctx.ellipse(fx, fy + 1, 5, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (r.flapFx > 0) {
+      const t = r.flapFx / 0.18;
+      for (const foot of [p.footL, p.footR]) {
+        const fx = foot.x + foot.w / 2;
+        const fy = foot.y + foot.h;
+        const flameH = 16 * t, flameW = 12 * t;
+        ctx.globalAlpha = t;
+        ctx.fillStyle = "#ffb347";
+        ctx.beginPath();
+        ctx.moveTo(fx - flameW / 2, fy + 2);
+        ctx.lineTo(fx + flameW / 2, fy + 2);
+        ctx.lineTo(fx, fy + 2 + flameH);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = "#fff3c0";
+        ctx.beginPath();
+        ctx.moveTo(fx - flameW / 4, fy + 2);
+        ctx.lineTo(fx + flameW / 4, fy + 2);
+        ctx.lineTo(fx, fy + 2 + flameH * 0.55);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+    return;
+  }
+
+  // Robot (normal) — classic block legs with a knee joint line.
+  for (const leg of [p.legL, p.legR]) {
+    ctx.fillStyle = legCol;
+    roundRect(leg.x, leg.y, leg.w, leg.h, 5);
+    ctx.fill();
+    ctx.fillStyle = light;
+    ctx.fillRect(leg.x + 3, leg.y + leg.h * 0.42, leg.w - 6, 2);
+    ctx.fillStyle = "rgba(0,0,0,0.15)";
+    ctx.fillRect(leg.x + 3, leg.y + 6, 3, leg.h - 12);
+  }
+  ctx.fillStyle = "#20242f";
+  roundRect(p.footL.x, p.footL.y, p.footL.w, p.footL.h, 4);
+  ctx.fill();
+  roundRect(p.footR.x, p.footR.y, p.footR.w, p.footR.h, 4);
+  ctx.fill();
+}
+
 function drawRobot(r) {
   const p = r.parts, col = r.colors;
   ctx.save();
@@ -93,37 +218,7 @@ function drawRobot(r) {
   ctx.ellipse(cx, FLOOR_Y + 6, shW, 8, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = col.legs;
-  roundRect(p.legL.x, p.legL.y, p.legL.w, p.legL.h, 5); ctx.fill();
-  roundRect(p.legR.x, p.legR.y, p.legR.w, p.legR.h, 5); ctx.fill();
-  ctx.fillStyle = "#20242f";
-  roundRect(p.footL.x, p.footL.y, p.footL.w, p.footL.h, 4); ctx.fill();
-  roundRect(p.footR.x, p.footR.y, p.footR.w, p.footR.h, 4); ctx.fill();
-
-  if (r.legType === "rocket" && r.flapFx > 0) {
-    const t = r.flapFx / 0.18;
-    for (const foot of [p.footL, p.footR]) {
-      const fx = foot.x + foot.w / 2;
-      const fy = foot.y + foot.h;
-      const flameH = 14 * t, flameW = 10 * t;
-      ctx.globalAlpha = t;
-      ctx.fillStyle = "#ffb347";
-      ctx.beginPath();
-      ctx.moveTo(fx - flameW / 2, fy);
-      ctx.lineTo(fx + flameW / 2, fy);
-      ctx.lineTo(fx, fy + flameH);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = "#fff3c0";
-      ctx.beginPath();
-      ctx.moveTo(fx - flameW / 4, fy);
-      ctx.lineTo(fx + flameW / 4, fy);
-      ctx.lineTo(fx, fy + flameH * 0.55);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-  }
+  drawRobotLegs(r, p, col);
 
   const bodyGrad = ctx.createLinearGradient(p.torso.x, p.torso.y, p.torso.x, p.torso.y + p.torso.h);
   bodyGrad.addColorStop(0, shadeColor(col.torso, 25));
