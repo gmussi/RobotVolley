@@ -6,6 +6,7 @@ import {
   lotteryResults, lotteryTimer,
   LOTTERY_SPIN_DURATION, LOTTERY_HOLD_DURATION, LOTTERY_TOTAL_DURATION,
 } from "../engine/game.js";
+import { colorsFromAccent, drawPartPreview } from "./robotDraw.js";
 
 const ITEM_H = 52;
 const PANEL_W = 196;
@@ -69,132 +70,6 @@ function drawWrappedCenterText(ctx, text, cx, y, maxWidth, color, font, lineHeig
   lines.forEach((ln, i) => ctx.fillText(ln, cx, startY + i * lineHeight));
 }
 
-export function drawPartIcon(ctx, slotKey, typeId, cx, cy, accent) {
-  ctx.save();
-  ctx.translate(cx, cy);
-
-  if (slotKey === "headType") {
-    if (typeId === "dome") {
-      ctx.fillStyle = accent;
-      ctx.beginPath();
-      ctx.ellipse(0, 4, 18, 12, 0, Math.PI, 0);
-      ctx.closePath();
-      ctx.fill();
-    } else if (typeId === "magnet") {
-      ctx.strokeStyle = "#e53935";
-      ctx.lineWidth = 5;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.arc(-8, 0, 8, Math.PI * 0.5, Math.PI * 1.5);
-      ctx.stroke();
-      ctx.strokeStyle = "#1e88e5";
-      ctx.beginPath();
-      ctx.arc(8, 0, 8, -Math.PI * 0.5, Math.PI * 0.5);
-      ctx.stroke();
-    } else if (typeId === "drill") {
-      ctx.fillStyle = accent;
-      roundRect(ctx, -14, -8, 18, 16, 4);
-      ctx.fill();
-      ctx.fillStyle = "#9aa3ad";
-      ctx.beginPath();
-      ctx.moveTo(4, -10);
-      ctx.lineTo(20, 0);
-      ctx.lineTo(4, 10);
-      ctx.closePath();
-      ctx.fill();
-    } else if (typeId === "satellite") {
-      ctx.fillStyle = accent;
-      roundRect(ctx, -14, -2, 28, 18, 5);
-      ctx.fill();
-      ctx.fillStyle = "#d8dee8";
-      ctx.beginPath();
-      ctx.ellipse(0, -10, 16, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = accent;
-      roundRect(ctx, -16, -10, 32, 22, 6);
-      ctx.fill();
-      ctx.fillStyle = "#ffd54a";
-      ctx.fillRect(-8, -2, 16, 4);
-    }
-  } else if (slotKey === "torsoType") {
-    if (typeId === "heavy") {
-      ctx.fillStyle = accent;
-      roundRect(ctx, -18, -12, 36, 28, 6);
-      ctx.fill();
-      ctx.strokeStyle = "#1a1e28";
-      ctx.lineWidth = 3;
-      roundRect(ctx, -18, -12, 36, 28, 6);
-      ctx.stroke();
-    } else if (typeId === "light") {
-      ctx.strokeStyle = "#b8c0c8";
-      ctx.lineWidth = 2;
-      roundRect(ctx, -16, -10, 32, 24, 5);
-      ctx.stroke();
-      ctx.strokeStyle = accent;
-      ctx.beginPath();
-      ctx.moveTo(0, -8);
-      ctx.lineTo(0, 10);
-      ctx.stroke();
-    } else if (typeId === "lowCoG") {
-      ctx.fillStyle = accent;
-      roundRect(ctx, -16, -8, 32, 22, 5);
-      ctx.fill();
-      ctx.fillStyle = "#7a8490";
-      ctx.beginPath();
-      ctx.arc(0, 10, 7, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.fillStyle = accent;
-      roundRect(ctx, -16, -12, 32, 26, 8);
-      ctx.fill();
-      ctx.fillStyle = "#ffd54a";
-      ctx.fillRect(-2, -4, 4, 12);
-    }
-  } else {
-    const legDraw = (lx) => {
-      if (typeId === "power") {
-        ctx.fillStyle = accent;
-        roundRect(ctx, lx - 7, -6, 14, 22, 4);
-        ctx.fill();
-        ctx.strokeStyle = "#666";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let i = 0; i < 4; i++) {
-          const y = 10 + i * 3;
-          ctx.moveTo(lx - 4, y);
-          ctx.lineTo(lx + 4, y + 2);
-        }
-        ctx.stroke();
-      } else if (typeId === "rocket") {
-        ctx.fillStyle = accent;
-        ctx.beginPath();
-        ctx.moveTo(lx - 5, -6);
-        ctx.lineTo(lx + 5, -6);
-        ctx.lineTo(lx + 3, 16);
-        ctx.lineTo(lx - 3, 16);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = "rgba(255,140,40,0.85)";
-        ctx.beginPath();
-        ctx.ellipse(lx, 18, 4, 3, 0, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        ctx.fillStyle = accent;
-        roundRect(ctx, lx - 6, -4, 12, 20, 4);
-        ctx.fill();
-      }
-    };
-    legDraw(-9);
-    legDraw(9);
-    ctx.fillStyle = "#20242f";
-    roundRect(ctx, -16, 16, 32, 6, 3);
-    ctx.fill();
-  }
-
-  ctx.restore();
-}
-
 function drawReelItem(ctx, result, option, x, y, w, h, accent, highlighted) {
   roundRect(ctx, x + 6, y + 4, w - 12, h - 8, 8);
   ctx.fillStyle = highlighted ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.05)";
@@ -205,7 +80,15 @@ function drawReelItem(ctx, result, option, x, y, w, h, accent, highlighted) {
     ctx.stroke();
   }
 
-  drawPartIcon(ctx, result.slotKey, option.id, x + w / 2, y + h * 0.38, accent);
+  drawPartPreview(
+    ctx,
+    result.slotKey,
+    option.id,
+    x + w / 2,
+    y + h * 0.38,
+    h * 0.52,
+    colorsFromAccent(accent),
+  );
   ctx.fillStyle = highlighted ? "#fff" : "rgba(255,255,255,0.82)";
   ctx.font = `${highlighted ? "bold " : ""}13px 'Segoe UI', sans-serif`;
   ctx.textAlign = "center";
