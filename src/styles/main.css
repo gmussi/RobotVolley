@@ -17,21 +17,71 @@ html, body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+}
+#stage {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
   align-items: center;
   justify-content: center;
 }
 #wrap {
   position: relative;
-  width: min(96vw, 1000px);
+  line-height: 0;
 }
 canvas {
   display: block;
-  width: 100%;
-  height: auto;
   border-radius: 14px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.05);
   background: #060912;
   touch-action: none;
+}
+#fsBtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(10, 14, 26, 0.75);
+  color: #cdd6f4;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s, border-color 0.15s;
+}
+#fsBtn:hover {
+  background: rgba(26, 33, 56, 0.9);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+body.fullscreen #hint,
+body.fullscreen #colorPanel,
+body.fullscreen #legPanel,
+body.fullscreen #headPanel,
+body.fullscreen #torsoPanel {
+  display: none;
+}
+body.fullscreen #stage {
+  flex: 1;
+  height: 100%;
+}
+body.fullscreen canvas {
+  border-radius: 0;
+  box-shadow: none;
+}
+#hint,
+#colorPanel,
+#legPanel,
+#headPanel,
+#torsoPanel {
+  flex-shrink: 0;
 }
 #hint {
   margin-top: 14px;

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   W, H, FLOOR_Y, WIN_SCORE, BALL_R, NET, ROBOT_W,
 } from "../src/data/constants.js";
@@ -6,7 +6,9 @@ import {
   ball, score, makeRobot, updateRobotParts, predictBallX,
   serveBall, awardPoint, resetPositions, robots,
   collideBallRobot, resolveBallRobotContact, getHeadSpec, getTorsoSpec,
-  updateBall, updateRobot, PHYSICS_STEP,
+  updateBall, updateRobot, PHYSICS_STEP, state,
+  planPartLottery, commitPartLottery, prepareServe, startGame, lotteryResults, lotteryTick,
+  tickServe, LOTTERY_TOTAL_DURATION,
 } from "../src/engine/game.js";
 import { HEAD_TYPES } from "../src/data/heads.js";
 import { TORSO_TYPES } from "../src/data/torsos.js";
@@ -224,5 +226,55 @@ describe("head collisions", () => {
     }
     expect(ball.magnetHold).toBeNull();
     expect(ball.vy).toBeLessThan(0);
+  });
+});
+
+describe("part lottery", () => {
+  it("plans a different part option per robot without applying immediately", () => {
+    const left = robots[0];
+    const right = robots[1];
+    left.headType = "standard";
+    left.torsoType = "standard";
+    left.legType = "normal";
+    right.headType = "standard";
+    right.torsoType = "standard";
+    right.legType = "normal";
+
+    const random = vi.spyOn(Math, "random")
+      .mockReturnValueOnce(0) // head slot for P1
+      .mockReturnValueOnce(0.99) // pick last head option
+      .mockReturnValueOnce(2 / 3) // leg slot for P2
+      .mockReturnValueOnce(0.99) // pick last leg option
+      .mockReturnValueOnce(0.5) // reel cycles P1
+      .mockReturnValueOnce(0.5); // reel cycles P2
+
+    planPartLottery();
+
+    expect(left.headType).toBe("standard");
+    expect(right.legType).toBe("normal");
+    expect(lotteryResults[0].slotName).toBe("head");
+    expect(lotteryResults[0].newType).not.toBe("standard");
+    expect(lotteryResults[1].slotName).toBe("feet");
+    expect(lotteryResults[1].newType).not.toBe("normal");
+
+    commitPartLottery();
+    expect(left.headType).not.toBe("standard");
+    expect(right.legType).not.toBe("normal");
+
+    random.mockRestore();
+  });
+
+  it("skips lottery on the opening rally", () => {
+    startGame("2p");
+    expect(state).toBe("serve");
+  });
+
+  it("runs lottery before serve from the second rally onward", () => {
+    startGame("2p");
+    expect(state).toBe("serve");
+    prepareServe();
+    expect(state).toBe("lottery");
+    tickServe(LOTTERY_TOTAL_DURATION);
+    expect(state).toBe("serve");
   });
 });

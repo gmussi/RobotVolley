@@ -3,12 +3,14 @@
 export const HEAD_TYPES = {
   standard: {
     label: "Standard",
+    description: "Balanced bounce",
     w: 44,
     h: 34,
     dishAbove: 0,
   },
   dome: {
     label: "Dome",
+    description: "High pop, less control",
     w: 52,
     h: 28,
     dishAbove: 0,
@@ -18,6 +20,7 @@ export const HEAD_TYPES = {
   },
   magnet: {
     label: "Magnet",
+    description: "Sticky carry then sling",
     w: 44,
     h: 34,
     dishAbove: 0,
@@ -28,6 +31,7 @@ export const HEAD_TYPES = {
   },
   drill: {
     label: "Drill",
+    description: "Dash shove bonus",
     w: 44,
     h: 34,
     dishAbove: 0,
@@ -40,6 +44,7 @@ export const HEAD_TYPES = {
   },
   satellite: {
     label: "Satellite",
+    description: "Tall reach, soft chest",
     w: 44,
     h: 34,
     dishAbove: 22,

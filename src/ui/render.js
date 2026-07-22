@@ -9,13 +9,18 @@ import {
   bannerText, winner, menuOptions, P1, P2,
   shadeColor,
 } from "../engine/game.js";
+import { drawLotteryAnimation } from "./lottery.js";
 import { HEAD_TYPES } from "../data/heads.js";
-import { arenaBgImage, logoImage } from "./art.js";
+import { arenaBgImage, stadiumBg, stadiumLayersReady, logoImage } from "./art.js";
 
 let ctx;
 
 export function initRender(canvas) {
   ctx = canvas.getContext("2d");
+}
+
+export function applyDpr(dpr) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 export function render() {
@@ -25,10 +30,26 @@ export function render() {
   drawRobot(P1);
   drawRobot(P2);
   if (state !== "menu") { drawBall(); drawBallTracker(); drawHUD(); }
-  drawBanner();
+  if (state === "lottery") {
+    ctx.fillStyle = "rgba(6,9,18,0.62)";
+    ctx.fillRect(0, 0, W, H);
+    drawLotteryAnimation(ctx);
+  } else {
+    drawBanner();
+  }
 }
 
 function drawArena() {
+  if (stadiumLayersReady()) {
+    drawStadiumArena();
+    return;
+  }
+
+  if (stadiumBg.master.complete && stadiumBg.master.naturalWidth) {
+    ctx.drawImage(stadiumBg.master, 0, 0, W, H);
+    return;
+  }
+
   if (arenaBgImage.complete && arenaBgImage.naturalWidth) {
     ctx.drawImage(arenaBgImage, 0, 0, W, H);
     return;
@@ -58,6 +79,21 @@ function drawArena() {
   ctx.fillRect(0, FLOOR_Y, W, H - FLOOR_Y);
   ctx.fillStyle = "rgba(255,255,255,0.08)";
   ctx.fillRect(0, FLOOR_Y, W, 3);
+}
+
+function drawStadiumArena() {
+  const t = performance.now() * 0.001;
+  const { sky, stadium, court } = stadiumBg;
+
+  ctx.globalAlpha = 0.96 + 0.04 * Math.sin(t * 0.8);
+  ctx.drawImage(sky, 0, 0, W, H);
+
+  ctx.globalAlpha = 0.97 + 0.03 * Math.sin(t * 2.5);
+  ctx.drawImage(stadium, 0, 0, W, H);
+
+  ctx.globalAlpha = 1;
+  ctx.drawImage(court, 0, 0, W, H);
+  ctx.globalAlpha = 1;
 }
 
 function drawNet() {
@@ -972,10 +1008,3 @@ function roundRect(x, y, w, h, r) {
   ctx.closePath();
 }
 
-export function eventToCanvas(canvas, e) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    mx: (e.clientX - rect.left) * (W / rect.width),
-    my: (e.clientY - rect.top) * (H / rect.height),
-  };
-}

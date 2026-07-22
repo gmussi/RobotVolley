@@ -12,8 +12,8 @@ import {
   POWER_JUMP_V, ROCKET_FLAP_V, ROCKET_MAX_FLAPS, BALL_R, NET_BOUNCE,
   PHYSICS_STEP, DEFAULT_COLORS,
 } from "../data/constants.js";
-import { HEAD_TYPES } from "../data/heads.js";
-import { TORSO_TYPES } from "../data/torsos.js";
+import { HEAD_TYPES, HEAD_TYPE_IDS } from "../data/heads.js";
+import { TORSO_TYPES, TORSO_TYPE_IDS } from "../data/torsos.js";
 import { codeFor } from "../data/controls.js";
 
 export { W, H, FLOOR_Y, PHYSICS_STEP };
@@ -34,6 +34,99 @@ export let serveCharging = false;
 export let serveCharge = 0;
 export let bannerText = "";
 export let winner = null;
+export let lotteryResults = [null, null];
+export let lotteryTimer = 0;
+export let lotteryTick = 0;
+let rallyIndex = 0;
+
+export const LOTTERY_SPIN_DURATION = 3;
+export const LOTTERY_HOLD_DURATION = 1;
+export const LOTTERY_TOTAL_DURATION = LOTTERY_SPIN_DURATION + LOTTERY_HOLD_DURATION;
+
+const LEG_TYPES = {
+  normal: { label: "Robot", description: "Normal jump" },
+  power: { label: "Power", description: "Jump higher" },
+  rocket: { label: "Rocket", description: "Many small jumps — tap repeatedly, like Flappy Bird" },
+};
+const LEG_TYPE_IDS = Object.keys(LEG_TYPES);
+
+const PART_SLOTS = [
+  { key: "headType", ids: HEAD_TYPE_IDS, labels: HEAD_TYPES },
+  { key: "torsoType", ids: TORSO_TYPE_IDS, labels: TORSO_TYPES },
+  { key: "legType", ids: LEG_TYPE_IDS, labels: LEG_TYPES },
+];
+
+function pickRandomOther(ids, current) {
+  const others = ids.filter((id) => id !== current);
+  const pool = others.length ? others : ids;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function partSlotName(key) {
+  if (key === "headType") return "head";
+  if (key === "torsoType") return "torso";
+  return "feet";
+}
+
+function partTypeLabel(slot, typeId) {
+  const info = slot.labels[typeId];
+  return typeof info === "string" ? info : info?.label ?? typeId;
+}
+
+function partTypeDescription(slot, typeId) {
+  const info = slot.labels[typeId];
+  return typeof info === "string" ? "" : info?.description ?? "";
+}
+
+export function planPartLottery() {
+  lotteryResults = robots.map((r) => {
+    const slot = PART_SLOTS[Math.floor(Math.random() * PART_SLOTS.length)];
+    const oldType = r[slot.key];
+    const newType = pickRandomOther(slot.ids, oldType);
+    return {
+      slotKey: slot.key,
+      slotName: partSlotName(slot.key),
+      oldType,
+      newType,
+      oldLabel: partTypeLabel(slot, oldType),
+      newLabel: partTypeLabel(slot, newType),
+      newDescription: partTypeDescription(slot, newType),
+      options: slot.ids.map((id) => ({
+        id,
+        label: partTypeLabel(slot, id),
+      })),
+      reelCycles: 4 + Math.random() * 3,
+    };
+  });
+}
+
+export function commitPartLottery() {
+  for (let i = 0; i < robots.length; i++) {
+    const pick = lotteryResults[i];
+    if (!pick) continue;
+    robots[i][pick.slotKey] = pick.newType;
+    updateRobotParts(robots[i]);
+  }
+  lotteryTick++;
+}
+
+function setupServePhase() {
+  ball.live = false;
+  ball.vx = 0; ball.vy = 0; ball.spin = 0;
+  ball.lastHitBy = null;
+  ball.magnetHold = null;
+  ball.x = servingSide < 0 ? W * 0.25 : W * 0.75;
+  ball.y = (FLOOR_Y - ROBOT_H) - 60;
+  state = "serve";
+  serveCharging = false;
+  serveCharge = 0;
+  cpuServeTimer = (gameMode === "1p" && servingSide > 0) ? 0.9 : 0;
+}
+
+function enterServePhase() {
+  commitPartLottery();
+  setupServePhase();
+}
 
 export const menuOptions = [
   { mode: "1p", label: "1 PLAYER", sub: "vs CPU", x: 0, y: 0, w: 0, h: 0 },
@@ -129,16 +222,14 @@ export function resetPositions() {
 
 export function prepareServe() {
   resetPositions();
-  ball.live = false;
-  ball.vx = 0; ball.vy = 0; ball.spin = 0;
-  ball.lastHitBy = null;
-  ball.magnetHold = null;
-  ball.x = servingSide < 0 ? W * 0.25 : W * 0.75;
-  ball.y = (FLOOR_Y - ROBOT_H) - 60;
-  state = "serve";
-  serveCharging = false;
-  serveCharge = 0;
-  cpuServeTimer = (gameMode === "1p" && servingSide > 0) ? 0.9 : 0;
+  if (rallyIndex === 0) {
+    rallyIndex++;
+    setupServePhase();
+    return;
+  }
+  planPartLottery();
+  lotteryTimer = LOTTERY_TOTAL_DURATION;
+  state = "lottery";
 }
 
 export function serveBall(charge) {
@@ -156,6 +247,7 @@ export function startGame(mode) {
   gameMode = mode;
   score[0] = 0; score[1] = 0;
   winner = null;
+  rallyIndex = 0;
   servingSide = Math.random() < 0.5 ? -1 : 1;
   prepareServe();
 }
@@ -566,7 +658,7 @@ export function aiControl(r) {
 }
 
 export function readInput(keys, controlMap) {
-  if (state === "menu") {
+  if (state === "menu" || state === "lottery") {
     for (const r of robots) { r.moveDir = 0; r.jumpHeld = false; }
     return;
   }
@@ -584,6 +676,10 @@ export function tickServe(dt) {
   if (state === "point") {
     messageTimer -= dt;
     if (messageTimer <= 0) prepareServe();
+  }
+  if (state === "lottery") {
+    lotteryTimer -= dt;
+    if (lotteryTimer <= 0) enterServePhase();
   }
   if (state === "serve" && serveCharging) {
     serveCharge = Math.min(1, serveCharge + dt / SERVE_CHARGE_TIME);

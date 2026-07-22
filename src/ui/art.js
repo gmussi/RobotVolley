@@ -18,5 +18,22 @@ function loadImage(url) {
   return img;
 }
 
+export const stadiumBg = {
+  sky: loadImage(pickUrl(bgWebps, "stadium-sky")),
+  stadium: loadImage(pickUrl(bgWebps, "stadium-stadium")),
+  court: loadImage(pickUrl(bgWebps, "stadium-court")),
+  master: loadImage(pickUrl(bgWebps, "stadium-master")),
+};
+
+function imageReady(img) {
+  return img?.complete && img.naturalWidth > 0;
+}
+
+export function stadiumLayersReady() {
+  return imageReady(stadiumBg.sky)
+    && imageReady(stadiumBg.stadium)
+    && imageReady(stadiumBg.court);
+}
+
 export const arenaBgImage = loadImage(pickUrl(bgWebps, "arena"));
 export const logoImage = loadImage(pickUrl(logoWebps, "logo"));

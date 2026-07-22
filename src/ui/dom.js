@@ -46,6 +46,26 @@ export function wireDomControls() {
   });
 }
 
+export function syncRobotPartsToDom() {
+  document.querySelectorAll(".legGroup").forEach((group) => {
+    const r = robots[Number(group.dataset.player)];
+    group.querySelectorAll(".legBtn").forEach((btn) =>
+      btn.classList.toggle("active", btn.dataset.type === r.legType));
+  });
+
+  document.querySelectorAll(".headGroup").forEach((group) => {
+    const r = robots[Number(group.dataset.player)];
+    group.querySelectorAll(".headBtn").forEach((btn) =>
+      btn.classList.toggle("active", btn.dataset.type === r.headType));
+  });
+
+  document.querySelectorAll(".torsoGroup").forEach((group) => {
+    const r = robots[Number(group.dataset.player)];
+    group.querySelectorAll(".torsoBtn").forEach((btn) =>
+      btn.classList.toggle("active", btn.dataset.type === r.torsoType));
+  });
+}
+
 export function updateHint() {
   const p2 = document.getElementById("p2hint");
   if (!p2) return;

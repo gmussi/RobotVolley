@@ -16,10 +16,12 @@ const BASE = {
 export const TORSO_TYPES = {
   standard: {
     label: "Standard",
+    description: "Balanced mobility",
     ...BASE,
   },
   heavy: {
     label: "Heavy",
+    description: "Tanky on ground, sluggish in air",
     ...BASE,
     jumpMul: 0.85,
     moveSpeedMul: 0.92,
@@ -29,6 +31,7 @@ export const TORSO_TYPES = {
   },
   light: {
     label: "Light",
+    description: "Floaty and agile in air",
     ...BASE,
     jumpMul: 1.10,
     moveSpeedMul: 1.05,
@@ -39,6 +42,7 @@ export const TORSO_TYPES = {
   },
   lowCoG: {
     label: "Low CoG",
+    description: "Stable, lower center with spinning counterweight",
     ...BASE,
     jumpMul: 0.95,
     moveSpeedMul: 0.95,

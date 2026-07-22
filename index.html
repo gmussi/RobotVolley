@@ -6,8 +6,15 @@
   <title>Robot Volley</title>
 </head>
 <body>
-  <div id="wrap">
-    <canvas id="game" width="1000" height="600"></canvas>
+  <div id="stage">
+    <div id="wrap">
+      <canvas id="game"></canvas>
+      <button id="fsBtn" type="button" aria-label="Toggle fullscreen" aria-pressed="false" title="Fullscreen">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="currentColor" d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+        </svg>
+      </button>
+    </div>
   </div>
   <div id="hint">
     <div><span class="tag-p1"><b>PLAYER 1</b></span> &nbsp; <span class="kbd">A</span><span class="kbd">D</span> move &nbsp; <span class="kbd">W</span> jump &nbsp; hold <span class="kbd">S</span> serve</div>

@@ -4,16 +4,20 @@
 import "./styles/main.css";
 import { CONTROL } from "./data/controls.js";
 import {
-  W, PHYSICS_STEP, state, menuOptions,
+  W, PHYSICS_STEP, state, menuOptions, lotteryTick,
   startGame, toMenu, resetPositions,
   handleServeKeyDown, handleServeKeyUp,
   readInput, tickServe, tickPhysics,
 } from "./engine/game.js";
-import { initRender, render, eventToCanvas } from "./ui/render.js";
-import { wireDomControls, updateHint } from "./ui/dom.js";
+import { initRender, render } from "./ui/render.js";
+import { initViewport, eventToCanvas } from "./ui/viewport.js";
+import { wireDomControls, updateHint, syncRobotPartsToDom } from "./ui/dom.js";
 
 const canvas = document.getElementById("game");
+const stage = document.getElementById("stage");
+const fsBtn = document.getElementById("fsBtn");
 initRender(canvas);
+initViewport(canvas, stage, fsBtn);
 
 const keys = new Set();
 
@@ -51,7 +55,9 @@ canvas.addEventListener("mousedown", (e) => {
 
 wireDomControls();
 resetPositions();
+syncRobotPartsToDom();
 
+let lastLotteryTick = 0;
 let last = performance.now();
 let acc = 0;
 
@@ -62,6 +68,10 @@ function frame(now) {
 
   readInput(keys, CONTROL);
   tickServe(dt);
+  if (lotteryTick !== lastLotteryTick) {
+    lastLotteryTick = lotteryTick;
+    syncRobotPartsToDom();
+  }
 
   acc += dt;
   while (acc >= PHYSICS_STEP) {
