@@ -210,6 +210,20 @@ export const robots = [makeRobot(-1), makeRobot(+1)];
 export const P1 = robots[0];
 export const P2 = robots[1];
 
+export function resetRobots() {
+  for (const r of robots) {
+    r.legType = "normal";
+    r.headType = "standard";
+    r.torsoType = "standard";
+    r.flapsUsed = 0;
+    r.magnetFx = 0;
+    updateRobotParts(r);
+  }
+  lotteryResults = [null, null];
+  lotteryTimer = 0;
+  lotteryTick++;
+}
+
 // ---- Game flow ----
 export function resetPositions() {
   for (const r of robots) {
@@ -248,6 +262,7 @@ export function startGame(mode) {
   score[0] = 0; score[1] = 0;
   winner = null;
   rallyIndex = 0;
+  resetRobots();
   servingSide = Math.random() < 0.5 ? -1 : 1;
   prepareServe();
 }

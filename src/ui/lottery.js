@@ -69,7 +69,7 @@ function drawWrappedCenterText(ctx, text, cx, y, maxWidth, color, font, lineHeig
   lines.forEach((ln, i) => ctx.fillText(ln, cx, startY + i * lineHeight));
 }
 
-function drawPartIcon(ctx, slotKey, typeId, cx, cy, accent) {
+export function drawPartIcon(ctx, slotKey, typeId, cx, cy, accent) {
   ctx.save();
   ctx.translate(cx, cy);
 

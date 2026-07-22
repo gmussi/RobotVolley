@@ -9,7 +9,7 @@ import {
   handleServeKeyDown, handleServeKeyUp,
   readInput, tickServe, tickPhysics,
 } from "./engine/game.js";
-import { initRender, render } from "./ui/render.js";
+import { initRender, render, setRenderRemainder } from "./ui/render.js";
 import { initViewport, eventToCanvas } from "./ui/viewport.js";
 import { wireDomControls, updateHint, syncRobotPartsToDom } from "./ui/dom.js";
 
@@ -79,6 +79,7 @@ function frame(now) {
     acc -= PHYSICS_STEP;
   }
 
+  setRenderRemainder(acc);
   render();
   requestAnimationFrame(frame);
 }

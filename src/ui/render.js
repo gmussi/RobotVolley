@@ -9,14 +9,19 @@ import {
   bannerText, winner, menuOptions, P1, P2,
   shadeColor,
 } from "../engine/game.js";
-import { drawLotteryAnimation } from "./lottery.js";
+import { drawLotteryAnimation, drawPartIcon } from "./lottery.js";
 import { HEAD_TYPES } from "../data/heads.js";
 import { arenaBgImage, stadiumBg, stadiumLayersReady, logoImage } from "./art.js";
 
 let ctx;
+let renderRemainder = 0;
 
 export function initRender(canvas) {
   ctx = canvas.getContext("2d");
+}
+
+export function setRenderRemainder(remainder) {
+  renderRemainder = remainder;
 }
 
 export function applyDpr(dpr) {
@@ -879,6 +884,9 @@ function drawBallTracker() {
   const ghostR = ball.r * 0.65;
   const ix = Math.max(ghostR + 4, Math.min(W - ghostR - 4, ball.x));
   const indicatorY = 92;
+  const interpY = ball.y + ball.vy * renderRemainder;
+  const above = Math.max(0, ball.r - interpY);
+  const label = above.toFixed(1);
 
   ctx.save();
   ctx.beginPath();
@@ -888,6 +896,16 @@ function drawBallTracker() {
   ctx.strokeStyle = "rgba(255, 213, 74, 0.55)";
   ctx.lineWidth = 2;
   ctx.stroke();
+
+  const fontSize = label.length > 4 ? 7 : label.length > 3 ? 8 : 9;
+  ctx.font = `bold ${fontSize}px 'Segoe UI', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = "rgba(0,0,0,0.65)";
+  ctx.strokeText(label, ix, indicatorY);
+  ctx.fillStyle = "#ffd54a";
+  ctx.fillText(label, ix, indicatorY);
 
   const arrowBase = indicatorY - ghostR - 4;
   ctx.fillStyle = "rgba(255, 213, 74, 0.85)";
@@ -901,24 +919,98 @@ function drawBallTracker() {
 }
 
 function drawHUD() {
+  const HUD_H = 76;
+  const cy = 38;
+  const ICON_SLOT = 42;
+  const ICON_GAP = 5;
+  const ICON_SCALE = 0.72;
+
+  ctx.fillStyle = "rgba(6,9,18,0.62)";
+  ctx.fillRect(0, 0, W, HUD_H);
+
+  drawRobotPiecesHUD(P1, -1, cy, ICON_SLOT, ICON_GAP, ICON_SCALE);
+  drawRobotPiecesHUD(P2, +1, cy, ICON_SLOT, ICON_GAP, ICON_SCALE);
+
+  const boxW = 196;
+  const boxH = 54;
+  const boxX = W / 2 - boxW / 2;
+  const boxY = cy - boxH / 2;
+  roundRect(boxX, boxY, boxW, boxH, 10);
+  ctx.fillStyle = "rgba(0,0,0,0.88)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.38)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillStyle = "#ff5a5f";
-  ctx.font = "bold 46px 'Segoe UI', sans-serif";
-  ctx.fillText(score[0], W / 2 - 70, 46);
+  ctx.font = "bold 40px 'Segoe UI', sans-serif";
+  ctx.fillText(score[0], W / 2 - 44, cy - 4);
   ctx.fillStyle = "#29b6f6";
-  ctx.fillText(score[1], W / 2 + 70, 46);
-  ctx.fillStyle = "rgba(255,255,255,0.4)";
-  ctx.font = "bold 30px sans-serif";
-  ctx.fillText("—", W / 2, 46);
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.font = "12px sans-serif";
-  ctx.fillText(`FIRST TO ${WIN_SCORE}`, W / 2, 74);
-  ctx.font = "bold 12px sans-serif";
-  ctx.fillStyle = "#ff5a5f";
-  ctx.fillText("P1", W / 2 - 70, 76);
-  ctx.fillStyle = "#29b6f6";
-  ctx.fillText(gameMode === "1p" ? "CPU" : "P2", W / 2 + 70, 76);
+  ctx.fillText(score[1], W / 2 + 44, cy - 4);
+  ctx.fillStyle = "rgba(255,255,255,0.42)";
+  ctx.font = "bold 26px sans-serif";
+  ctx.fillText("—", W / 2, cy - 4);
+  ctx.fillStyle = "rgba(255,255,255,0.38)";
+  ctx.font = "10px sans-serif";
+  ctx.fillText(`FIRST TO ${WIN_SCORE}`, W / 2, cy + 16);
+}
+
+function drawRobotPiecesHUD(robot, side, cy, slotSize, gap, scale) {
+  const accent = side < 0 ? "#ff5a5f" : "#29b6f6";
+  const slots = [
+    { key: "headType", typeId: robot.headType },
+    { key: "torsoType", typeId: robot.torsoType },
+    { key: "arms", color: robot.colors.arms },
+    { key: "legType", typeId: robot.legType },
+  ];
+  const count = slots.length;
+  const rowW = count * slotSize + (count - 1) * gap;
+  const margin = 14;
+  const startX = side < 0 ? margin : W - margin - rowW;
+
+  slots.forEach((slot, i) => {
+    const x = startX + i * (slotSize + gap);
+    drawHudPieceSlot(slot, x, cy, slotSize, accent, scale);
+  });
+
+  ctx.textAlign = side < 0 ? "left" : "right";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = accent;
+  ctx.font = "bold 11px 'Segoe UI', sans-serif";
+  const label = side < 0 ? "P1" : (gameMode === "1p" ? "CPU" : "P2");
+  const labelX = side < 0 ? margin : W - margin;
+  ctx.fillText(label, labelX, cy + slotSize / 2 + 10);
+}
+
+function drawHudPieceSlot(slot, x, cy, size, accent, scale) {
+  const y = cy - size / 2;
+  roundRect(x, y, size, size, 8);
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.14)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  const cx = x + size / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+  if (slot.key === "arms") {
+    drawHudArmIcon(slot.color);
+  } else {
+    drawPartIcon(ctx, slot.key, slot.typeId, 0, 0, accent);
+  }
+  ctx.restore();
+}
+
+function drawHudArmIcon(color) {
+  ctx.fillStyle = color;
+  roundRect(-14, -5, 9, 18, 3);
+  ctx.fill();
+  roundRect(5, -5, 9, 18, 3);
+  ctx.fill();
 }
 
 function drawBanner() {

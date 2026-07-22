@@ -277,4 +277,25 @@ describe("part lottery", () => {
     tickServe(LOTTERY_TOTAL_DURATION);
     expect(state).toBe("serve");
   });
+
+  it("resets robot parts when a new game starts", () => {
+    const [left, right] = robots;
+    left.headType = "drill";
+    left.torsoType = "heavy";
+    left.legType = "rocket";
+    right.headType = "magnet";
+    right.torsoType = "light";
+    right.legType = "power";
+    updateRobotParts(left);
+    updateRobotParts(right);
+
+    startGame("2p");
+
+    expect(left.headType).toBe("standard");
+    expect(left.torsoType).toBe("standard");
+    expect(left.legType).toBe("normal");
+    expect(right.headType).toBe("standard");
+    expect(right.torsoType).toBe("standard");
+    expect(right.legType).toBe("normal");
+  });
 });
