@@ -13,6 +13,7 @@ import {
   PHYSICS_STEP, DEFAULT_COLORS,
 } from "../data/constants.js";
 import { HEAD_TYPES } from "../data/heads.js";
+import { TORSO_TYPES } from "../data/torsos.js";
 import { codeFor } from "../data/controls.js";
 
 export { W, H, FLOOR_Y, PHYSICS_STEP };
@@ -52,18 +53,28 @@ export function getHeadSpec(r) {
   return HEAD_TYPES[r.headType] ?? HEAD_TYPES.standard;
 }
 
+export function getTorsoSpec(r) {
+  return TORSO_TYPES[r.torsoType] ?? TORSO_TYPES.standard;
+}
+
 export function updateRobotParts(r) {
   const { x, y, w, h } = r;
   const armDrop = r.onGround ? 0 : -8;
-  const spec = getHeadSpec(r);
+  const headSpec = getHeadSpec(r);
+  const torsoSpec = getTorsoSpec(r);
   const cx = x + w / 2;
   r.parts.head = {
-    x: cx - spec.w / 2,
-    y: y - HEAD_TOP_OFFSET - spec.dishAbove,
-    w: spec.w,
-    h: spec.h + spec.dishAbove,
+    x: cx - headSpec.w / 2,
+    y: y - HEAD_TOP_OFFSET - headSpec.dishAbove,
+    w: headSpec.w,
+    h: headSpec.h + headSpec.dishAbove,
   };
-  r.parts.torso = { x: x + 4, y: y + 26, w: w - 8, h: h - 56 };
+  r.parts.torso = {
+    x: x + 4 + torsoSpec.torsoXOff,
+    y: y + 26 + torsoSpec.torsoYOff,
+    w: w - 8 + torsoSpec.torsoWExtra,
+    h: h - 56 + torsoSpec.torsoHExtra,
+  };
   r.parts.armL = { x: x - ARM_OVERHANG, y: y + 30 + armDrop, w: 12, h: 40 };
   r.parts.armR = { x: x + w - (12 - ARM_OVERHANG), y: y + 30 + armDrop, w: 12, h: 40 };
   r.parts.legL = { x: x + 10, y: y + h - 34, w: 20, h: 34 };
@@ -87,12 +98,14 @@ export function makeRobot(side) {
     jumpPrevHeld: false,
     legType: "normal",
     headType: "standard",
+    torsoType: "standard",
     flapsUsed: 0,
     squash: 0,
     eyeBlink: 0,
     flapFx: 0,
     magnetFx: 0,
     drillAngle: 0,
+    cogAngle: 0,
     colors: { ...(side < 0 ? DEFAULT_COLORS.p1 : DEFAULT_COLORS.p2) },
     parts: {},
   };
@@ -191,8 +204,10 @@ export function handleServeKeyUp(code, controlMap) {
 
 // ---- Robot physics ----
 export function updateRobot(r, dt) {
-  const accel = r.onGround ? MOVE_ACCEL : AIR_ACCEL;
-  const target = r.moveDir * MOVE_SPEED;
+  const torso = getTorsoSpec(r);
+  const accelMul = r.onGround ? torso.groundAccelMul : torso.airAccelMul;
+  const accel = (r.onGround ? MOVE_ACCEL : AIR_ACCEL) * accelMul;
+  const target = r.moveDir * MOVE_SPEED * torso.moveSpeedMul;
   if (r.vx < target) r.vx = Math.min(target, r.vx + accel * dt);
   else if (r.vx > target) r.vx = Math.max(target, r.vx - accel * dt);
   if (r.moveDir !== 0) r.facing = r.moveDir;
@@ -209,12 +224,14 @@ export function updateRobot(r, dt) {
       r.flapsUsed++;
     }
   } else if (r.jumpHeld && r.onGround) {
-    r.vy = -(r.legType === "power" ? POWER_JUMP_V : JUMP_V);
+    const baseJump = r.legType === "power" ? POWER_JUMP_V : JUMP_V;
+    r.vy = -baseJump * torso.jumpMul;
     r.onGround = false;
     r.squash = 0;
   }
 
-  r.vy += GRAVITY * dt;
+  const gravityMul = r.onGround ? 1 : torso.airGravityMul;
+  r.vy += GRAVITY * gravityMul * dt;
   r.x += r.vx * dt;
   r.y += r.vy * dt;
 
@@ -224,7 +241,9 @@ export function updateRobot(r, dt) {
   }
 
   if (r.y + r.h >= FLOOR_Y) {
-    if (!r.onGround && r.vy > 300) r.squash = Math.min(1, r.vy / JUMP_V);
+    if (!r.onGround && r.vy > 300) {
+      r.squash = Math.min(1, (r.vy / JUMP_V) * torso.squashMul);
+    }
     r.y = FLOOR_Y - r.h;
     r.vy = 0;
     r.onGround = true;
@@ -241,6 +260,7 @@ export function updateRobot(r, dt) {
   r.flapFx = Math.max(0, r.flapFx - dt);
   r.magnetFx = Math.max(0, r.magnetFx - dt);
   if (r.headType === "drill") r.drillAngle += dt * 22;
+  if (r.torsoType === "lowCoG") r.cogAngle += dt * 3;
   updateRobotParts(r);
 }
 

@@ -33,6 +33,17 @@ export function wireDomControls() {
       });
     });
   });
+
+  document.querySelectorAll(".torsoGroup").forEach((group) => {
+    const r = robots[Number(group.dataset.player)];
+    group.querySelectorAll(".torsoBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        r.torsoType = btn.dataset.type;
+        group.querySelectorAll(".torsoBtn").forEach((b) =>
+          b.classList.toggle("active", b === btn));
+      });
+    });
+  });
 }
 
 export function updateHint() {

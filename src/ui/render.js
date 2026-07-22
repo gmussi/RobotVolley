@@ -203,6 +203,184 @@ function drawRobotLegs(r, p, col) {
   ctx.fill();
 }
 
+function drawStandardTorsoShell(p, col) {
+  const bodyGrad = ctx.createLinearGradient(p.torso.x, p.torso.y, p.torso.x, p.torso.y + p.torso.h);
+  bodyGrad.addColorStop(0, shadeColor(col.torso, 25));
+  bodyGrad.addColorStop(1, col.torso);
+  ctx.fillStyle = bodyGrad;
+  roundRect(p.torso.x, p.torso.y, p.torso.w, p.torso.h, 12);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(0,0,0,0.18)";
+  roundRect(p.torso.x + 12, p.torso.y + 14, p.torso.w - 24, 30, 6);
+  ctx.fill();
+}
+
+function drawStandardTorso(p, col, cx) {
+  drawStandardTorsoShell(p, col);
+  ctx.fillStyle = "#ffd54a";
+  ctx.fillRect(cx - 3, p.torso.y + 18, 6, 22);
+}
+
+function drawCog(cx, cy, radius, angle, teeth = 8) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+
+  ctx.fillStyle = "#7a8490";
+  ctx.beginPath();
+  for (let i = 0; i < teeth; i++) {
+    const a0 = (i / teeth) * Math.PI * 2;
+    const a1 = ((i + 0.35) / teeth) * Math.PI * 2;
+    const a2 = ((i + 0.65) / teeth) * Math.PI * 2;
+    const a3 = ((i + 1) / teeth) * Math.PI * 2;
+    const inner = radius * 0.62;
+    const outer = radius;
+    if (i === 0) ctx.moveTo(Math.cos(a0) * inner, Math.sin(a0) * inner);
+    ctx.lineTo(Math.cos(a1) * outer, Math.sin(a1) * outer);
+    ctx.lineTo(Math.cos(a2) * outer, Math.sin(a2) * outer);
+    ctx.lineTo(Math.cos(a3) * inner, Math.sin(a3) * inner);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#a8b0ba";
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.28, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawHeavyTorso(p, col, cx) {
+  const t = p.torso;
+  const bodyGrad = ctx.createLinearGradient(t.x, t.y, t.x, t.y + t.h);
+  bodyGrad.addColorStop(0, shadeColor(col.torso, 15));
+  bodyGrad.addColorStop(1, shadeColor(col.torso, -15));
+  ctx.fillStyle = bodyGrad;
+  roundRect(t.x, t.y, t.w, t.h, 10);
+  ctx.fill();
+
+  ctx.strokeStyle = "#1a1e28";
+  ctx.lineWidth = 3;
+  roundRect(t.x + 2, t.y + 2, t.w - 4, t.h - 4, 8);
+  ctx.stroke();
+
+  ctx.fillStyle = "#2a3038";
+  const bandH = 6;
+  for (const by of [t.y + 16, t.y + t.h * 0.45, t.y + t.h - 22]) {
+    roundRect(t.x + 6, by, t.w - 12, bandH, 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "#444c58";
+  for (const [bx, by] of [
+    [t.x + 8, t.y + 8],
+    [t.x + t.w - 14, t.y + 8],
+    [t.x + 8, t.y + t.h - 14],
+    [t.x + t.w - 14, t.y + t.h - 14],
+  ]) {
+    ctx.beginPath();
+    ctx.arc(bx, by, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "#1e222c";
+  roundRect(cx - 10, t.y + 20, 20, t.h - 36, 4);
+  ctx.fill();
+}
+
+function drawLightTorso(p, col, cx) {
+  const t = p.torso;
+  const pad = 5;
+  const ix = t.x + pad;
+  const iy = t.y + pad;
+  const iw = t.w - pad * 2;
+  const ih = t.h - pad * 2;
+
+  ctx.fillStyle = "rgba(6,10,18,0.72)";
+  roundRect(ix, iy, iw, ih, 9);
+  ctx.fill();
+
+  const beamFace = "#b8c0c8";
+  const beamEdge = "#6d7680";
+  const beamShadow = "#434a54";
+  const joint = "#9aa3ad";
+
+  ctx.strokeStyle = beamEdge;
+  ctx.lineWidth = 2;
+  roundRect(t.x + 2, t.y + 2, t.w - 4, t.h - 4, 11);
+  ctx.stroke();
+
+  function beamRect(x, y, w, h) {
+    ctx.fillStyle = beamShadow;
+    ctx.fillRect(x + 1, y + 1, w, h);
+    ctx.fillStyle = beamFace;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = beamEdge;
+    if (w >= h) ctx.fillRect(x, y, w, 1);
+    else ctx.fillRect(x, y, 1, h);
+  }
+
+  const postW = 5;
+  const left = ix + 2;
+  const right = ix + iw - postW - 2;
+  const top = iy + 3;
+  const bottom = iy + ih - 8;
+  const midY = iy + ih * 0.48;
+
+  beamRect(left, top, postW, bottom - top);
+  beamRect(right, top, postW, bottom - top);
+  beamRect(left, top, right - left + postW, 4);
+  beamRect(left, midY - 2, right - left + postW, 4);
+  beamRect(left, bottom - 4, right - left + postW, 4);
+
+  ctx.strokeStyle = beamEdge;
+  ctx.lineWidth = 3;
+  ctx.lineCap = "square";
+  ctx.beginPath();
+  ctx.moveTo(left + postW + 2, top + 6);
+  ctx.lineTo(right - 2, bottom - 8);
+  ctx.moveTo(right + postW - 2, top + 6);
+  ctx.lineTo(left + 2, bottom - 8);
+  ctx.stroke();
+
+  ctx.strokeStyle = shadeColor(col.torso, -10);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx, top + 8);
+  ctx.lineTo(cx, bottom - 10);
+  ctx.stroke();
+
+  for (const [jx, jy] of [
+    [left, top], [right, top], [left, midY - 2], [right, midY - 2],
+    [left, bottom - 4], [right, bottom - 4], [cx - 2, midY - 2],
+  ]) {
+    ctx.fillStyle = joint;
+    ctx.beginPath();
+    ctx.arc(jx + (jx === cx - 2 ? 2 : postW / 2), jy + 2, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawLowCoGTorso(r, p, col, cx) {
+  drawStandardTorsoShell(p, col);
+  drawCog(cx, p.torso.y + 29, 11, r.cogAngle);
+}
+
+function drawRobotTorso(r, p, col, cx) {
+  switch (r.torsoType) {
+    case "heavy": drawHeavyTorso(p, col, cx); break;
+    case "light": drawLightTorso(p, col, cx); break;
+    case "lowCoG": drawLowCoGTorso(r, p, col, cx); break;
+    default: drawStandardTorso(p, col, cx); break;
+  }
+}
+
 function drawRobot(r) {
   const p = r.parts, col = r.colors;
   ctx.save();
@@ -221,16 +399,7 @@ function drawRobot(r) {
 
   drawRobotLegs(r, p, col);
 
-  const bodyGrad = ctx.createLinearGradient(p.torso.x, p.torso.y, p.torso.x, p.torso.y + p.torso.h);
-  bodyGrad.addColorStop(0, shadeColor(col.torso, 25));
-  bodyGrad.addColorStop(1, col.torso);
-  ctx.fillStyle = bodyGrad;
-  roundRect(p.torso.x, p.torso.y, p.torso.w, p.torso.h, 12); ctx.fill();
-
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  roundRect(p.torso.x + 12, p.torso.y + 14, p.torso.w - 24, 30, 6); ctx.fill();
-  ctx.fillStyle = "#ffd54a";
-  ctx.fillRect(cx - 3, p.torso.y + 18, 6, 22);
+  drawRobotTorso(r, p, col, cx);
 
   ctx.fillStyle = col.arms;
   roundRect(p.armL.x, p.armL.y, p.armL.w, p.armL.h, 5); ctx.fill();

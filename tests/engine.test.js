@@ -5,10 +5,11 @@ import {
 import {
   ball, score, makeRobot, updateRobotParts, predictBallX,
   serveBall, awardPoint, resetPositions, robots,
-  collideBallRobot, resolveBallRobotContact, getHeadSpec,
-  updateBall, PHYSICS_STEP,
+  collideBallRobot, resolveBallRobotContact, getHeadSpec, getTorsoSpec,
+  updateBall, updateRobot, PHYSICS_STEP,
 } from "../src/engine/game.js";
 import { HEAD_TYPES } from "../src/data/heads.js";
+import { TORSO_TYPES } from "../src/data/torsos.js";
 
 describe("constants", () => {
   it("arena dimensions are fixed", () => {
@@ -62,6 +63,47 @@ describe("robots", () => {
     const r = makeRobot(+1);
     expect(r.headType).toBe("standard");
     expect(getHeadSpec(r).w).toBe(44);
+  });
+
+  it("defaults to standard torso type", () => {
+    const r = makeRobot(+1);
+    expect(r.torsoType).toBe("standard");
+    expect(getTorsoSpec(r).jumpMul).toBe(1);
+  });
+
+  it("getTorsoSpec falls back to standard for unknown type", () => {
+    const r = makeRobot(-1);
+    r.torsoType = "unknown";
+    expect(getTorsoSpec(r)).toBe(TORSO_TYPES.standard);
+  });
+
+  it("lowCoG torso sits lower than standard", () => {
+    const standard = makeRobot(-1);
+    standard.torsoType = "standard";
+    updateRobotParts(standard);
+
+    const low = makeRobot(-1);
+    low.torsoType = "lowCoG";
+    updateRobotParts(low);
+
+    expect(low.parts.torso.w).toBe(standard.parts.torso.w);
+    expect(low.parts.torso.y).toBeGreaterThan(standard.parts.torso.y);
+  });
+
+  it("heavy torso reduces jump velocity", () => {
+    const heavy = makeRobot(-1);
+    heavy.torsoType = "heavy";
+    heavy.jumpHeld = true;
+    heavy.jumpPrevHeld = false;
+    updateRobot(heavy, PHYSICS_STEP);
+
+    const light = makeRobot(-1);
+    light.torsoType = "light";
+    light.jumpHeld = true;
+    light.jumpPrevHeld = false;
+    updateRobot(light, PHYSICS_STEP);
+
+    expect(Math.abs(light.vy)).toBeGreaterThan(Math.abs(heavy.vy));
   });
 });
 
