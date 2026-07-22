@@ -9,6 +9,7 @@ import {
   bannerText, winner, menuOptions, P1, P2,
   shadeColor,
 } from "../engine/game.js";
+import { HEAD_TYPES } from "../data/heads.js";
 import { arenaBgImage, logoImage } from "./art.js";
 
 let ctx;
@@ -235,22 +236,376 @@ function drawRobot(r) {
   roundRect(p.armL.x, p.armL.y, p.armL.w, p.armL.h, 5); ctx.fill();
   roundRect(p.armR.x, p.armR.y, p.armR.w, p.armR.h, 5); ctx.fill();
 
-  const headGrad = ctx.createLinearGradient(p.head.x, p.head.y, p.head.x, p.head.y + p.head.h);
+  drawRobotHead(r, p, col, cx);
+  ctx.restore();
+}
+
+function drawRobotHead(r, p, col, cx) {
+  const head = p.head;
+  const spec = HEAD_TYPES[r.headType] ?? HEAD_TYPES.standard;
+  const eyeOpen = r.eyeBlink > 0 ? 0.3 : 1;
+  const headGrad = ctx.createLinearGradient(head.x, head.y, head.x, head.y + head.h);
   headGrad.addColorStop(0, shadeColor(col.head, 25));
   headGrad.addColorStop(1, col.head);
+
+  if (r.headType === "dome") {
+    ctx.fillStyle = headGrad;
+    ctx.beginPath();
+    ctx.ellipse(head.x + head.w / 2, head.y + head.h - 2, head.w / 2, head.h / 2 + 2, 0, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#eaf6ff";
+    ctx.shadowColor = col.head;
+    ctx.shadowBlur = 12;
+    roundRect(head.x + 8, head.y + head.h * 0.35, head.w - 16, 10 * eyeOpen + 2, 4);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    return;
+  }
+
+  if (r.headType === "magnet") {
+    drawCartoonMagnetHead(r, head, col, cx);
+    return;
+  }
+
+  if (r.headType === "drill") {
+    drawDrillHead(r, head, col, cx);
+    return;
+  }
+
+  if (r.headType === "satellite") {
+    drawSatelliteDishHead(r, head, col, cx);
+    return;
+  }
+
+  // Standard
   ctx.fillStyle = headGrad;
-  roundRect(p.head.x, p.head.y, p.head.w, p.head.h, 9); ctx.fill();
-  const eyeOpen = r.eyeBlink > 0 ? 0.3 : 1;
+  roundRect(head.x, head.y, head.w, head.h, 9);
+  ctx.fill();
   ctx.fillStyle = "#eaf6ff";
   ctx.shadowColor = col.head;
   ctx.shadowBlur = 14;
-  roundRect(p.head.x + 6, p.head.y + 10, p.head.w - 12, 12 * eyeOpen + 2, 4); ctx.fill();
+  roundRect(head.x + 6, head.y + 10, head.w - 12, 12 * eyeOpen + 2, 4);
+  ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = shadeColor(col.head, -35); ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(cx, p.head.y); ctx.lineTo(cx, p.head.y - 12); ctx.stroke();
+  ctx.strokeStyle = shadeColor(col.head, -35);
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx, head.y);
+  ctx.lineTo(cx, head.y - 12);
+  ctx.stroke();
   ctx.fillStyle = "#ffd54a";
-  ctx.beginPath(); ctx.arc(cx, p.head.y - 14, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, head.y - 14, 4, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawDrillHead(r, head, col, cx) {
+  const housing = col.head;
+  const housingDark = shadeColor(housing, -28);
+  const housingLight = shadeColor(housing, 18);
+  const metal = "#8a929e";
+  const metalDark = "#555d6a";
+  const bitCol = "#c8cdd6";
+
+  const centerY = head.y + head.h * 0.52;
+  const bodyW = 28;
+  const bodyH = 22;
+  const face = r.facing;
+  const dashing = Math.abs(r.vx) > HEAD_TYPES.drill.dashMinVx;
+  const bitLen = dashing ? 22 : 16;
+
+  ctx.save();
+  ctx.translate(cx, centerY);
+  ctx.scale(face, 1);
+
+  // Pistol grip into torso
+  ctx.fillStyle = housingDark;
+  roundRect(-5, 4, 10, 14, 3);
+  ctx.fill();
+  ctx.fillStyle = housing;
+  roundRect(-4, 5, 8, 12, 2);
+  ctx.fill();
+
+  // Main housing
+  const bodyGrad = ctx.createLinearGradient(-bodyW / 2, -bodyH / 2, bodyW / 2, bodyH / 2);
+  bodyGrad.addColorStop(0, housingLight);
+  bodyGrad.addColorStop(0.5, housing);
+  bodyGrad.addColorStop(1, housingDark);
+  ctx.fillStyle = bodyGrad;
+  roundRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH, 6);
+  ctx.fill();
+  ctx.strokeStyle = housingDark;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Top vent slots
+  ctx.fillStyle = "rgba(0,0,0,0.2)";
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(-8 + i * 5, -7, 3, 5);
+  }
+
+  // Trigger
+  ctx.fillStyle = metalDark;
+  roundRect(2, 2, 6, 8, 2);
+  ctx.fill();
+
+  // Chuck collar
+  ctx.fillStyle = metal;
+  roundRect(bodyW / 2 - 4, -6, 10, 12, 2);
+  ctx.fill();
+  ctx.fillStyle = metalDark;
+  ctx.fillRect(bodyW / 2 + 2, -4, 3, 8);
+
+  // Spinning drill bit
+  const chuckX = bodyW / 2 + 6;
+  ctx.save();
+  ctx.translate(chuckX, 0);
+  ctx.rotate(r.drillAngle);
+
+  // Fluted bit shaft
+  ctx.strokeStyle = bitCol;
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  for (let i = 0; i < 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, -4);
+    ctx.lineTo(bitLen, 0);
+    ctx.lineTo(0, 4);
+    ctx.stroke();
+    ctx.rotate(Math.PI / 2);
+  }
+
+  // Bit tip
+  ctx.fillStyle = "#eef1f5";
+  ctx.beginPath();
+  ctx.moveTo(bitLen - 2, -3);
+  ctx.lineTo(bitLen + 5, 0);
+  ctx.lineTo(bitLen - 2, 3);
+  ctx.closePath();
+  ctx.fill();
+
+  // Motion blur ring while spinning
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(2, 0, bitLen * 0.45, 0, Math.PI * 2);
+  ctx.stroke();
+
   ctx.restore();
+
+  // Spark flecks when dashing
+  if (dashing) {
+    ctx.fillStyle = "rgba(255,200,80,0.7)";
+    for (let i = 0; i < 3; i++) {
+      const a = r.drillAngle * 2 + i * 2.1;
+      ctx.beginPath();
+      ctx.arc(chuckX + bitLen + 4, Math.sin(a) * 5, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (r.eyeBlink > 0) {
+    ctx.strokeStyle = "rgba(255,220,120,0.6)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(chuckX + 4, -6);
+    ctx.lineTo(chuckX + bitLen + 6, 0);
+    ctx.lineTo(chuckX + 4, 6);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawSatelliteDishHead(r, head, col, cx) {
+  const dishCol = col.head;
+  const dishDark = shadeColor(dishCol, -30);
+  const dishLight = shadeColor(dishCol, 22);
+  const metal = "#7a8494";
+  const metalDark = "#505868";
+
+  const mountY = head.y + head.h - 5;
+  const rimY = head.y + head.h * 0.42;
+  const dishRx = head.w * 0.46;
+  const depth = 16 + HEAD_TYPES.satellite.dishAbove * 0.35;
+
+  // Mast arm into the torso
+  ctx.strokeStyle = metalDark;
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx, mountY + 2);
+  ctx.lineTo(cx, rimY + 4);
+  ctx.stroke();
+  ctx.strokeStyle = metal;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx, mountY);
+  ctx.lineTo(cx, rimY + 2);
+  ctx.stroke();
+
+  // Back support strut
+  ctx.strokeStyle = metalDark;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - 6, rimY + 2);
+  ctx.lineTo(cx - dishRx + 6, rimY - 2);
+  ctx.stroke();
+
+  // Parabolic dish bowl
+  ctx.beginPath();
+  ctx.moveTo(cx - dishRx, rimY);
+  ctx.quadraticCurveTo(cx, rimY - depth, cx + dishRx, rimY);
+  ctx.lineTo(cx + dishRx - 3, rimY + 4);
+  ctx.quadraticCurveTo(cx, rimY - depth + 8, cx - dishRx + 3, rimY + 4);
+  ctx.closePath();
+  const bowlGrad = ctx.createLinearGradient(cx, rimY - depth, cx, rimY + 4);
+  bowlGrad.addColorStop(0, dishLight);
+  bowlGrad.addColorStop(0.45, dishCol);
+  bowlGrad.addColorStop(1, dishDark);
+  ctx.fillStyle = bowlGrad;
+  ctx.fill();
+  ctx.strokeStyle = dishDark;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Rim highlight
+  ctx.strokeStyle = "rgba(255,255,255,0.35)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - dishRx + 4, rimY + 1);
+  ctx.quadraticCurveTo(cx, rimY - depth + 2, cx + dishRx - 4, rimY + 1);
+  ctx.stroke();
+
+  // Concentric signal rings on the dish
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.lineWidth = 1;
+  for (let i = 1; i <= 3; i++) {
+    const t = i / 4;
+    ctx.beginPath();
+    ctx.moveTo(cx - dishRx * t, rimY + 1);
+    ctx.quadraticCurveTo(cx, rimY - depth * t, cx + dishRx * t, rimY + 1);
+    ctx.stroke();
+  }
+
+  // LNB feed arm + receiver box
+  const armLen = 14;
+  const lnbX = cx + r.facing * armLen;
+  const lnbY = rimY - depth * 0.45;
+  ctx.strokeStyle = metal;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx + r.facing * 4, rimY - depth * 0.35);
+  ctx.lineTo(lnbX, lnbY);
+  ctx.stroke();
+  ctx.fillStyle = "#3a4048";
+  roundRect(lnbX - 4, lnbY - 3, 8, 6, 2);
+  ctx.fill();
+  ctx.fillStyle = "#66ff88";
+  ctx.beginPath();
+  ctx.arc(lnbX + r.facing * 3, lnbY, 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Signal ping on ball hit
+  if (r.eyeBlink > 0) {
+    const t = r.eyeBlink / 0.12;
+    ctx.strokeStyle = `rgba(102,255,136,${0.35 + t * 0.45})`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 2; i++) {
+      ctx.beginPath();
+      ctx.arc(lnbX + r.facing * 6, lnbY - 2, 6 + i * 8, -0.8, 0.8);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawCartoonMagnetHead(r, head, col, cx) {
+  const magnetRed = col.head;
+  const magnetDark = shadeColor(magnetRed, -28);
+  const magnetLight = shadeColor(magnetRed, 18);
+  const poleTip = "#dde2eb";
+  const poleTipDark = "#8b95a8";
+
+  const topY = head.y + 1;
+  const bottomY = head.y + head.h - 4;
+  const poleW = 12;
+  const gap = 10;
+  const leftX = cx - gap / 2 - poleW;
+  const rightX = cx + gap / 2;
+  const prongH = bottomY - topY - 10;
+
+  // Neck stem
+  ctx.fillStyle = magnetDark;
+  roundRect(cx - 3, bottomY - 4, 6, 7, 2);
+  ctx.fill();
+
+  // Bottom curve of the U
+  ctx.strokeStyle = magnetRed;
+  ctx.lineWidth = poleW - 1;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(leftX + poleW / 2, bottomY - 8);
+  ctx.quadraticCurveTo(cx, bottomY + 5, rightX + poleW / 2, bottomY - 8);
+  ctx.stroke();
+
+  // Left prong
+  const leftGrad = ctx.createLinearGradient(leftX, topY, leftX + poleW, bottomY);
+  leftGrad.addColorStop(0, magnetLight);
+  leftGrad.addColorStop(1, magnetDark);
+  ctx.fillStyle = leftGrad;
+  roundRect(leftX, topY + 9, poleW, prongH, 4);
+  ctx.fill();
+  ctx.fillStyle = poleTip;
+  roundRect(leftX + 1, topY, poleW - 2, 12, 3);
+  ctx.fill();
+  ctx.fillStyle = poleTipDark;
+  ctx.fillRect(leftX + 2, topY + 2, poleW - 4, 2);
+
+  // Right prong
+  const rightGrad = ctx.createLinearGradient(rightX, topY, rightX + poleW, bottomY);
+  rightGrad.addColorStop(0, magnetLight);
+  rightGrad.addColorStop(1, magnetDark);
+  ctx.fillStyle = rightGrad;
+  roundRect(rightX, topY + 9, poleW, prongH, 4);
+  ctx.fill();
+  ctx.fillStyle = poleTip;
+  roundRect(rightX + 1, topY, poleW - 2, 12, 3);
+  ctx.fill();
+  ctx.fillStyle = poleTipDark;
+  ctx.fillRect(rightX + 2, topY + 2, poleW - 4, 2);
+
+  // Highlight on prongs
+  ctx.fillStyle = "rgba(255,255,255,0.18)";
+  ctx.fillRect(leftX + 3, topY + 12, 2, prongH - 8);
+  ctx.fillRect(rightX + 3, topY + 12, 2, prongH - 8);
+
+  const carrying = r.magnetFx > 0 || (ball.magnetHold && ball.magnetHold.side === r.side);
+  if (carrying) {
+    const t = r.magnetFx > 0 ? Math.min(1, r.magnetFx / HEAD_TYPES.magnet.carryTime) : 0.5;
+    const pulse = 0.45 + t * 0.55;
+    ctx.strokeStyle = `rgba(120,220,255,${pulse})`;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.arc(cx, topY + 2, 7 + i * 7, Math.PI * 1.12, Math.PI * 1.88);
+      ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(120,220,255,${0.12 + t * 0.18})`;
+    ctx.beginPath();
+    ctx.moveTo(leftX + poleW / 2, topY + 1);
+    ctx.lineTo(rightX + poleW / 2, topY + 1);
+    ctx.lineTo(cx, topY - 12 - t * 5);
+    ctx.closePath();
+    ctx.fill();
+  } else if (r.eyeBlink > 0) {
+    ctx.strokeStyle = "rgba(255,255,160,0.75)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(leftX + poleW / 2, topY + 2);
+    ctx.lineTo(cx, topY - 9);
+    ctx.lineTo(rightX + poleW / 2, topY + 2);
+    ctx.stroke();
+  }
 }
 
 function drawBall() {

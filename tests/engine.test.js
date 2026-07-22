@@ -5,7 +5,10 @@ import {
 import {
   ball, score, makeRobot, updateRobotParts, predictBallX,
   serveBall, awardPoint, resetPositions, robots,
+  collideBallRobot, resolveBallRobotContact, getHeadSpec,
+  updateBall, PHYSICS_STEP,
 } from "../src/engine/game.js";
+import { HEAD_TYPES } from "../src/data/heads.js";
 
 describe("constants", () => {
   it("arena dimensions are fixed", () => {
@@ -33,6 +36,32 @@ describe("robots", () => {
     updateRobotParts(r);
     expect(r.parts.head).toBeDefined();
     expect(r.parts.torso.w).toBeGreaterThan(0);
+  });
+
+  it("sizes dome head wider than standard", () => {
+    const r = makeRobot(-1);
+    r.headType = "dome";
+    updateRobotParts(r);
+    expect(r.parts.head.w).toBe(HEAD_TYPES.dome.w);
+    expect(r.parts.head.w).toBeGreaterThan(HEAD_TYPES.standard.w);
+  });
+
+  it("extends satellite head upward for dish reach", () => {
+    const r = makeRobot(-1);
+    r.headType = "standard";
+    updateRobotParts(r);
+    const standardTop = r.parts.head.y;
+
+    r.headType = "satellite";
+    updateRobotParts(r);
+    expect(r.parts.head.y).toBeLessThan(standardTop);
+    expect(r.parts.head.h).toBe(HEAD_TYPES.satellite.h + HEAD_TYPES.satellite.dishAbove);
+  });
+
+  it("defaults to standard head type", () => {
+    const r = makeRobot(+1);
+    expect(r.headType).toBe("standard");
+    expect(getHeadSpec(r).w).toBe(44);
   });
 });
 
@@ -73,5 +102,85 @@ describe("court layout", () => {
     resetPositions();
     expect(robots[0].x + ROBOT_W / 2).toBeLessThan(W / 2);
     expect(robots[1].x + ROBOT_W / 2).toBeGreaterThan(W / 2);
+  });
+});
+
+describe("head collisions", () => {
+  function placeBallOnHead(r) {
+    updateRobotParts(r);
+    ball.live = true;
+    ball.magnetHold = null;
+    ball.spin = 0;
+    ball.x = r.parts.head.x + r.parts.head.w / 2;
+    ball.y = r.parts.head.y - ball.r + 3;
+    ball.vx = 20;
+    ball.vy = 180;
+    r.vx = 0;
+    r.vy = 0;
+    r.onGround = true;
+  }
+
+  it("magnet head captures the ball on head contact", () => {
+    const r = makeRobot(-1);
+    r.headType = "magnet";
+    placeBallOnHead(r);
+    const hit = collideBallRobot(r);
+    expect(hit).toBe(true);
+    expect(ball.magnetHold).toEqual({ side: -1, timer: HEAD_TYPES.magnet.carryTime });
+  });
+
+  it("dome head bounces higher than standard on top fall", () => {
+    const dome = makeRobot(-1);
+    dome.headType = "dome";
+    placeBallOnHead(dome);
+    collideBallRobot(dome);
+    const domeVy = ball.vy;
+
+    const standard = makeRobot(-1);
+    standard.headType = "standard";
+    placeBallOnHead(standard);
+    collideBallRobot(standard);
+    expect(Math.abs(domeVy)).toBeGreaterThan(Math.abs(ball.vy));
+  });
+
+  it("drill head shoves harder when dashing", () => {
+    const r = makeRobot(-1);
+    r.headType = "drill";
+    placeBallOnHead(r);
+    r.vx = 0;
+    collideBallRobot(r);
+    const idleVx = ball.vx;
+
+    placeBallOnHead(r);
+    r.vx = 300;
+    r.facing = 1;
+    collideBallRobot(r);
+    expect(ball.vx).toBeGreaterThan(idleVx + 200);
+  });
+
+  it("satellite resolves torso separately from head", () => {
+    const r = makeRobot(-1);
+    r.headType = "satellite";
+    updateRobotParts(r);
+    ball.x = r.parts.torso.x + r.parts.torso.w / 2;
+    ball.y = r.parts.torso.y + r.parts.torso.h / 2;
+    ball.vx = 0;
+    ball.vy = -120;
+    const contact = resolveBallRobotContact(r);
+    expect(contact?.part).toBe("torso");
+  });
+
+  it("releases magnet hold after carry timer", () => {
+    const r = makeRobot(-1);
+    r.headType = "magnet";
+    placeBallOnHead(r);
+    collideBallRobot(r);
+    ball.live = true;
+    updateBall(PHYSICS_STEP);
+    for (let i = 0; i < Math.ceil(HEAD_TYPES.magnet.carryTime / PHYSICS_STEP) + 2; i++) {
+      updateBall(PHYSICS_STEP);
+    }
+    expect(ball.magnetHold).toBeNull();
+    expect(ball.vy).toBeLessThan(0);
   });
 });

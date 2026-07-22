@@ -12,6 +12,7 @@ import {
   POWER_JUMP_V, ROCKET_FLAP_V, ROCKET_MAX_FLAPS, BALL_R, NET_BOUNCE,
   PHYSICS_STEP, DEFAULT_COLORS,
 } from "../data/constants.js";
+import { HEAD_TYPES } from "../data/heads.js";
 import { codeFor } from "../data/controls.js";
 
 export { W, H, FLOOR_Y, PHYSICS_STEP };
@@ -20,7 +21,7 @@ export { W, H, FLOOR_Y, PHYSICS_STEP };
 export const score = [0, 0];
 export const ball = {
   x: W * 0.25, y: 150, vx: 0, vy: 0, r: BALL_R,
-  spin: 0, live: false, lastHitBy: null,
+  spin: 0, live: false, lastHitBy: null, magnetHold: null,
 };
 
 export let state = "menu";
@@ -47,10 +48,21 @@ export function shadeColor(hex, percent) {
   return `rgb(${r},${g},${b})`;
 }
 
+export function getHeadSpec(r) {
+  return HEAD_TYPES[r.headType] ?? HEAD_TYPES.standard;
+}
+
 export function updateRobotParts(r) {
   const { x, y, w, h } = r;
   const armDrop = r.onGround ? 0 : -8;
-  r.parts.head = { x: x + w / 2 - 22, y: y - HEAD_TOP_OFFSET, w: 44, h: 34 };
+  const spec = getHeadSpec(r);
+  const cx = x + w / 2;
+  r.parts.head = {
+    x: cx - spec.w / 2,
+    y: y - HEAD_TOP_OFFSET - spec.dishAbove,
+    w: spec.w,
+    h: spec.h + spec.dishAbove,
+  };
   r.parts.torso = { x: x + 4, y: y + 26, w: w - 8, h: h - 56 };
   r.parts.armL = { x: x - ARM_OVERHANG, y: y + 30 + armDrop, w: 12, h: 40 };
   r.parts.armR = { x: x + w - (12 - ARM_OVERHANG), y: y + 30 + armDrop, w: 12, h: 40 };
@@ -74,10 +86,13 @@ export function makeRobot(side) {
     jumpHeld: false,
     jumpPrevHeld: false,
     legType: "normal",
+    headType: "standard",
     flapsUsed: 0,
     squash: 0,
     eyeBlink: 0,
     flapFx: 0,
+    magnetFx: 0,
+    drillAngle: 0,
     colors: { ...(side < 0 ? DEFAULT_COLORS.p1 : DEFAULT_COLORS.p2) },
     parts: {},
   };
@@ -95,6 +110,7 @@ export function resetPositions() {
     r.x = (r.side < 0 ? W * 0.25 : W * 0.75) - ROBOT_W / 2;
     r.y = FLOOR_Y - ROBOT_H;
     r.vx = 0; r.vy = 0; r.onGround = true; r.squash = 0; r.flapsUsed = 0;
+    r.magnetFx = 0;
   }
 }
 
@@ -103,6 +119,7 @@ export function prepareServe() {
   ball.live = false;
   ball.vx = 0; ball.vy = 0; ball.spin = 0;
   ball.lastHitBy = null;
+  ball.magnetHold = null;
   ball.x = servingSide < 0 ? W * 0.25 : W * 0.75;
   ball.y = (FLOOR_Y - ROBOT_H) - 60;
   state = "serve";
@@ -138,6 +155,7 @@ export function toMenu() {
 export function awardPoint(scorer) {
   score[scorer]++;
   ball.live = false;
+  ball.magnetHold = null;
   if (score[scorer] >= WIN_SCORE) {
     winner = scorer;
     state = "over";
@@ -200,8 +218,8 @@ export function updateRobot(r, dt) {
   r.x += r.vx * dt;
   r.y += r.vy * dt;
 
-  if (r.y - HEAD_TOP_OFFSET < 0) {
-    r.y = HEAD_TOP_OFFSET;
+  if (r.y - (HEAD_TOP_OFFSET + getHeadSpec(r).dishAbove) < 0) {
+    r.y = HEAD_TOP_OFFSET + getHeadSpec(r).dishAbove;
     if (r.vy < 0) r.vy = 0;
   }
 
@@ -221,23 +239,23 @@ export function updateRobot(r, dt) {
   r.squash *= Math.pow(0.001, dt);
   r.eyeBlink = Math.max(0, r.eyeBlink - dt);
   r.flapFx = Math.max(0, r.flapFx - dt);
+  r.magnetFx = Math.max(0, r.magnetFx - dt);
+  if (r.headType === "drill") r.drillAngle += dt * 22;
   updateRobotParts(r);
 }
 
-// ---- Ball collisions ----
-function collideBallRobot(r) {
-  const cx = ball.x, cy = ball.y;
-  const nearestX = Math.max(r.x, Math.min(cx, r.x + r.w));
-  const nearestY = Math.max(r.y, Math.min(cy, r.y + r.h));
+function circleRectContact(cx, cy, cr, rect) {
+  const nearestX = Math.max(rect.x, Math.min(cx, rect.x + rect.w));
+  const nearestY = Math.max(rect.y, Math.min(cy, rect.y + rect.h));
   let dx = cx - nearestX;
   let dy = cy - nearestY;
   let dist = Math.hypot(dx, dy);
-  if (dist > ball.r) return false;
+  if (dist > cr) return null;
 
   let nx, ny;
   if (dist === 0) {
-    const toLeft = cx - r.x, toRight = r.x + r.w - cx;
-    const toTop = cy - r.y, toBottom = r.y + r.h - cy;
+    const toLeft = cx - rect.x, toRight = rect.x + rect.w - cx;
+    const toTop = cy - rect.y, toBottom = rect.y + rect.h - cy;
     const m = Math.min(toLeft, toRight, toTop, toBottom);
     if (m === toTop) { nx = 0; ny = -1; }
     else if (m === toBottom) { nx = 0; ny = 1; }
@@ -247,6 +265,84 @@ function collideBallRobot(r) {
   } else {
     nx = dx / dist; ny = dy / dist;
   }
+  return { nx, ny, dist };
+}
+
+function getDrillExtendRect(r, head) {
+  const spec = HEAD_TYPES.drill;
+  if (r.headType !== "drill" || Math.abs(r.vx) < spec.dashMinVx) return null;
+  const h = spec.extendH;
+  const w = spec.extendW + spec.extendOffset;
+  const y = head.y + (head.h - h) / 2;
+  if (r.facing > 0) return { x: head.x + head.w - 4, y, w, h };
+  return { x: head.x - w + 4, y, w, h };
+}
+
+export function resolveBallRobotContact(r) {
+  const cx = ball.x, cy = ball.y, cr = ball.r;
+  const head = r.parts.head;
+  const headRects = [head];
+  const drillRect = getDrillExtendRect(r, head);
+  if (drillRect) headRects.push(drillRect);
+
+  for (const rect of headRects) {
+    const c = circleRectContact(cx, cy, cr, rect);
+    if (c) return { ...c, part: "head" };
+  }
+
+  const tc = circleRectContact(cx, cy, cr, r.parts.torso);
+  if (tc) return { ...tc, part: "torso" };
+
+  const bc = circleRectContact(cx, cy, cr, { x: r.x, y: r.y, w: r.w, h: r.h });
+  if (bc) return { ...bc, part: "body" };
+  return null;
+}
+
+function releaseMagnetHold(r) {
+  const spec = HEAD_TYPES.magnet;
+  ball.vy = spec.releaseVy;
+  ball.vx = r.vx * spec.releaseVxMul + r.facing * spec.releaseFacingBoost;
+  ball.spin = r.facing * 4;
+  ball.magnetHold = null;
+  r.magnetFx = 0;
+}
+
+function tickMagnetHold(dt) {
+  const holder = robots.find((ro) => ro.side === ball.magnetHold.side);
+  if (!holder) {
+    ball.magnetHold = null;
+    return;
+  }
+
+  const head = holder.parts.head;
+  ball.x = head.x + head.w / 2;
+  ball.y = head.y - ball.r;
+  ball.vx = holder.vx;
+  ball.vy = holder.vy;
+  ball.magnetHold.timer -= dt;
+  holder.magnetFx = Math.max(0, ball.magnetHold.timer);
+
+  for (const r of robots) {
+    if (r.side === holder.side) continue;
+    if (collideBallRobot(r, { skipMagnet: true })) {
+      ball.magnetHold = null;
+      holder.magnetFx = 0;
+      return;
+    }
+  }
+
+  if (ball.magnetHold.timer <= 0) releaseMagnetHold(holder);
+}
+
+// ---- Ball collisions ----
+export function collideBallRobot(r, opts = {}) {
+  if (ball.magnetHold?.side === r.side && !opts.skipMagnet) return false;
+
+  const contact = resolveBallRobotContact(r);
+  if (!contact) return false;
+
+  const { nx, ny, dist, part } = contact;
+  const cx = ball.x;
 
   const overlap = ball.r - dist;
   ball.x += nx * overlap;
@@ -260,13 +356,29 @@ function collideBallRobot(r) {
     return true;
   }
 
+  if (part === "head" && r.headType === "magnet" && !ball.magnetHold && !opts.skipMagnet) {
+    const spec = HEAD_TYPES.magnet;
+    ball.magnetHold = { side: r.side, timer: spec.carryTime };
+    r.magnetFx = spec.carryTime;
+    ball.lastHitBy = r.side;
+    r.eyeBlink = 0.12;
+    return true;
+  }
+
   const incomingSpeed = Math.hypot(ball.vx, ball.vy);
   const preVy = ball.vy;
-  const topFall = ny < -0.4 && preVy > TOP_FALL_MIN_VY;
+  const isHeadHit = part === "head";
+  const topFall = isHeadHit && ny < -0.4 && preVy > TOP_FALL_MIN_VY;
 
   let restitution = r.onGround ? GROUND_RESTITUTION : AIR_RESTITUTION;
   if (topFall) {
     restitution = r.onGround ? TOP_FALL_RESTITUTION_GROUND : TOP_FALL_RESTITUTION_AIR;
+  }
+  if (isHeadHit && r.headType === "dome" && topFall) {
+    restitution += HEAD_TYPES.dome.restitutionBonus;
+  }
+  if (part === "torso" && r.headType === "satellite") {
+    restitution *= HEAD_TYPES.satellite.torsoRestitutionMul;
   }
 
   const j = -(1 + restitution) * velAlongNormal;
@@ -275,24 +387,29 @@ function collideBallRobot(r) {
   ball.vx += r.vx * 0.33;
   ball.vy += r.vy * 0.28;
 
-  if (ny < -0.4) {
+  let minBounceVy = TOP_HEAD_MIN_BOUNCE_VY;
+  if (isHeadHit && r.headType === "dome") minBounceVy = HEAD_TYPES.dome.minBounceVy;
+
+  if (isHeadHit) {
     const offset = (cx - (r.x + r.w / 2)) / (r.w / 2);
     ball.spin = offset * 6 + r.vx * 0.008;
 
     if (topFall) {
-      // Lateral redirect from where the ball landed + robot movement only.
-      // No automatic forward/back shove when standing still.
-      ball.vx += offset * 90;
+      const lateralBase = r.headType === "dome" ? 60 : 90;
+      ball.vx += offset * lateralBase;
       if (Math.abs(r.vx) > 50) ball.vx += r.vx * 0.55;
 
-      const minUp = TOP_HEAD_MIN_BOUNCE_VY;
-      const maxUp = Math.max(minUp, preVy * (r.onGround
+      const maxUp = Math.max(minBounceVy, preVy * (r.onGround
         ? TOP_HEAD_MAX_UP_FRAC_GROUND : TOP_HEAD_MAX_UP_FRAC_AIR));
-      if (ball.vy > -minUp) ball.vy = -minUp;
+      if (ball.vy > -minBounceVy) ball.vy = -minBounceVy;
       else if (ball.vy < -maxUp) ball.vy = -maxUp;
     } else {
       ball.vx += offset * 150;
     }
+  }
+
+  if (isHeadHit && r.headType === "drill" && Math.abs(r.vx) > HEAD_TYPES.drill.shoveMinVx) {
+    ball.vx += r.facing * HEAD_TYPES.drill.shoveBoost;
   }
 
   const newSpeed = Math.hypot(ball.vx, ball.vy);
@@ -302,10 +419,8 @@ function collideBallRobot(r) {
     ball.vy *= allowed / newSpeed;
   }
 
-  // Head hits must always pop the ball up enough to keep the rally alive —
-  // applied after the speed cap so a low incoming speed can't zero it out.
-  if (ny < -0.4 && r.onGround && ball.vy > -TOP_HEAD_MIN_BOUNCE_VY) {
-    ball.vy = -TOP_HEAD_MIN_BOUNCE_VY;
+  if (isHeadHit && r.onGround && ball.vy > -minBounceVy) {
+    ball.vy = -minBounceVy;
   }
 
   ball.lastHitBy = r.side;
@@ -355,6 +470,19 @@ function collideBallNet(prevX, prevY) {
 
 export function updateBall(dt) {
   if (!ball.live) return;
+
+  if (ball.magnetHold) {
+    tickMagnetHold(dt);
+    if (ball.magnetHold) {
+      if (ball.y + ball.r >= FLOOR_Y) {
+        ball.y = FLOOR_Y - ball.r;
+        ball.magnetHold = null;
+        const landedLeft = ball.x < W / 2;
+        awardPoint(landedLeft ? 1 : 0);
+      }
+      return;
+    }
+  }
 
   ball.vy += BALL_GRAVITY * dt;
   ball.vx += ball.spin * 12 * dt;

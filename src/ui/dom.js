@@ -22,6 +22,17 @@ export function wireDomControls() {
       });
     });
   });
+
+  document.querySelectorAll(".headGroup").forEach((group) => {
+    const r = robots[Number(group.dataset.player)];
+    group.querySelectorAll(".headBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        r.headType = btn.dataset.type;
+        group.querySelectorAll(".headBtn").forEach((b) =>
+          b.classList.toggle("active", b === btn));
+      });
+    });
+  });
 }
 
 export function updateHint() {
