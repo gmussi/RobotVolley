@@ -44,6 +44,17 @@ export function wireDomControls() {
       });
     });
   });
+
+  document.querySelectorAll(".armGroup").forEach((group) => {
+    const r = robots[Number(group.dataset.player)];
+    group.querySelectorAll(".armBtn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        r.armType = btn.dataset.type;
+        group.querySelectorAll(".armBtn").forEach((b) =>
+          b.classList.toggle("active", b === btn));
+      });
+    });
+  });
 }
 
 export function syncRobotPartsToDom() {
@@ -64,6 +75,12 @@ export function syncRobotPartsToDom() {
     group.querySelectorAll(".torsoBtn").forEach((btn) =>
       btn.classList.toggle("active", btn.dataset.type === r.torsoType));
   });
+
+  document.querySelectorAll(".armGroup").forEach((group) => {
+    const r = robots[Number(group.dataset.player)];
+    group.querySelectorAll(".armBtn").forEach((btn) =>
+      btn.classList.toggle("active", btn.dataset.type === r.armType));
+  });
 }
 
 export function updateHint() {
@@ -72,6 +89,6 @@ export function updateHint() {
   if (gameMode === "1p") {
     p2.innerHTML = '<span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <b style="color:#29b6f6">CPU</b> &mdash; computer controlled';
   } else {
-    p2.innerHTML = '<span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <span class="kbd">&larr;</span><span class="kbd">&rarr;</span> move &nbsp; <span class="kbd">&uarr;</span> jump &nbsp; hold <span class="kbd">&darr;</span> serve';
+    p2.innerHTML = '<span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <span class="kbd">&larr;</span><span class="kbd">&rarr;</span> move &nbsp; <span class="kbd">&uarr;</span> jump &nbsp; hold <span class="kbd">&darr;</span> serve &nbsp; <span class="kbd">/</span> attack';
   }
 }

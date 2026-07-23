@@ -1,17 +1,18 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  W, H, FLOOR_Y, WIN_SCORE, BALL_R, NET, ROBOT_W,
+  W, H, FLOOR_Y, WIN_SCORE, BALL_R, NET, ROBOT_W, BALL_MAX_SPEED,
 } from "../src/data/constants.js";
 import {
   ball, score, makeRobot, updateRobotParts, predictBallX,
   serveBall, awardPoint, resetPositions, robots,
-  collideBallRobot, resolveBallRobotContact, getHeadSpec, getTorsoSpec,
-  updateBall, updateRobot, PHYSICS_STEP, state,
+  collideBallRobot, resolveBallRobotContact, getHeadSpec, getTorsoSpec, getArmSpec,
+  updateBall, updateRobot, updateAttack, collideBallAttack, PHYSICS_STEP, state,
   planPartLottery, commitPartLottery, prepareServe, startGame, lotteryResults, lotteryTick,
   tickServe, LOTTERY_TOTAL_DURATION,
 } from "../src/engine/game.js";
 import { HEAD_TYPES } from "../src/data/heads.js";
 import { TORSO_TYPES } from "../src/data/torsos.js";
+import { ARM_TYPES } from "../src/data/arms.js";
 
 describe("constants", () => {
   it("arena dimensions are fixed", () => {
@@ -240,13 +241,15 @@ describe("part lottery", () => {
     right.torsoType = "standard";
     right.legType = "normal";
 
+    // Calls per robot, in order: slot pick, option pick, reel cycles.
+    // With 4 part slots, slot index = floor(random * 4): 0 -> head, 0.5 -> legs.
     const random = vi.spyOn(Math, "random")
-      .mockReturnValueOnce(0) // head slot for P1
-      .mockReturnValueOnce(0.99) // pick last head option
-      .mockReturnValueOnce(2 / 3) // leg slot for P2
-      .mockReturnValueOnce(0.99) // pick last leg option
-      .mockReturnValueOnce(0.5) // reel cycles P1
-      .mockReturnValueOnce(0.5); // reel cycles P2
+      .mockReturnValueOnce(0) // P1 head slot
+      .mockReturnValueOnce(0.99) // P1 pick last head option
+      .mockReturnValueOnce(0.5) // P1 reel cycles
+      .mockReturnValueOnce(0.5) // P2 leg slot
+      .mockReturnValueOnce(0.99) // P2 pick last leg option
+      .mockReturnValueOnce(0.5); // P2 reel cycles
 
     planPartLottery();
 
@@ -297,5 +300,122 @@ describe("part lottery", () => {
     expect(right.headType).toBe("standard");
     expect(right.torsoType).toBe("standard");
     expect(right.legType).toBe("normal");
+  });
+});
+
+describe("arm attacks", () => {
+  it("defaults to the hand arm and resolves its spec", () => {
+    const r = makeRobot(-1);
+    expect(r.armType).toBe("hand");
+    expect(getArmSpec(r).kind).toBe("orb");
+  });
+
+  it("getArmSpec falls back to hand for unknown type", () => {
+    const r = makeRobot(-1);
+    r.armType = "nope";
+    expect(getArmSpec(r)).toBe(ARM_TYPES.hand);
+  });
+
+  it("hand orb smash launches along the orb→ball normal, above the cap", () => {
+    const r = robots[0]; // side -1, enemy to the right
+    r.armType = "hand";
+    // Orb below-left of the ball → ball flies up and toward the enemy (+x, -y).
+    r.attack = {
+      kind: "orb", spec: ARM_TYPES.hand, t: 0, hitR: ARM_TYPES.hand.hitR,
+      connected: false, x: 490, y: 310,
+    };
+    ball.live = true; ball.smashBy = null; ball.magnetHold = null;
+    ball.x = 500; ball.y = 300; ball.vx = 0; ball.vy = 0;
+    collideBallAttack(r);
+    expect(ball.smashBy).toBe(r.side);
+    expect(ball.vx).toBeGreaterThan(0); // toward the enemy (right)
+    expect(ball.vy).toBeLessThan(0);    // upward — ball was above the orb
+    expect(Math.hypot(ball.vx, ball.vy)).toBeGreaterThan(BALL_MAX_SPEED);
+  });
+
+  it("smash never sends the ball back over the smasher's own side", () => {
+    const r = robots[0]; // enemy to the right
+    r.armType = "hand";
+    // Orb in front of (right of) the ball → raw normal points left; must flip.
+    r.attack = {
+      kind: "orb", spec: ARM_TYPES.hand, t: 0, hitR: ARM_TYPES.hand.hitR,
+      connected: false, x: 510, y: 300,
+    };
+    ball.live = true; ball.smashBy = null; ball.magnetHold = null;
+    ball.x = 500; ball.y = 300; ball.vx = 0; ball.vy = 0;
+    collideBallAttack(r);
+    expect(ball.vx).toBeGreaterThan(0); // flipped toward the enemy
+  });
+
+  it("axe throw deflects the ball within the normal cap and stays cold", () => {
+    const r = robots[0];
+    r.armType = "axe";
+    r.attack = {
+      kind: "projectile", spec: ARM_TYPES.axe, t: 0, hitR: ARM_TYPES.axe.hitR,
+      connected: false, x: 500, y: 300, vx: 400, vy: 0, spin: 0,
+    };
+    ball.live = true; ball.smashBy = null; ball.magnetHold = null;
+    ball.x = 505; ball.y = 300; ball.vx = -120; ball.vy = 0;
+    collideBallAttack(r);
+    expect(ball.smashBy).toBeNull();
+    expect(r.attack).toBeNull(); // projectile despawns on hit
+    expect(ball.vx).toBeGreaterThan(0); // redirected toward the axe's travel
+    expect(Math.hypot(ball.vx, ball.vy)).toBeLessThanOrEqual(BALL_MAX_SPEED + 1);
+  });
+
+  it("axe projectile arcs downward while the ninja star flies straight", () => {
+    const r = robots[0];
+    r.attackHeld = false; r.attackPrevHeld = true;
+    r.attack = {
+      kind: "projectile", spec: ARM_TYPES.axe, t: 0, hitR: 20,
+      connected: false, x: 300, y: 200, vx: 300, vy: -300, spin: 0,
+    };
+    for (let i = 0; i < 10; i++) updateAttack(r, PHYSICS_STEP);
+    expect(r.attack.vy).toBeGreaterThan(-300); // gravity pulled it down
+
+    r.attack = {
+      kind: "projectile", spec: ARM_TYPES.ninjaStar, t: 0, hitR: 15,
+      connected: false, x: 300, y: 200, vx: 500, vy: 0, spin: 0,
+    };
+    for (let i = 0; i < 10; i++) updateAttack(r, PHYSICS_STEP);
+    expect(r.attack.vy).toBeCloseTo(0, 5); // no gravity
+  });
+
+  it("despawns a projectile that leaves the arena", () => {
+    const r = robots[0];
+    r.attackHeld = false; r.attackPrevHeld = true;
+    r.attack = {
+      kind: "projectile", spec: ARM_TYPES.ninjaStar, t: 0, hitR: 15,
+      connected: false, x: W - 10, y: 200, vx: 8000, vy: 0, spin: 0,
+    };
+    updateAttack(r, PHYSICS_STEP);
+    expect(r.attack).toBeNull();
+  });
+
+  it("cooldown blocks an immediate re-trigger", () => {
+    startGame("2p");
+    serveBall(0.5); // state = play
+    const r = robots[0];
+    r.armType = "hand";
+    r.attack = null;
+    r.attackCooldown = 1;
+    r.attackHeld = true; r.attackPrevHeld = false;
+    updateAttack(r, PHYSICS_STEP);
+    expect(r.attack).toBeNull();
+  });
+
+  it("an opponent touch resets a hot ball back under the cap", () => {
+    const p2 = robots[1];
+    updateRobotParts(p2);
+    ball.live = true;
+    ball.smashBy = robots[0].side; // smashed by P1
+    ball.magnetHold = null;
+    ball.x = p2.x - ball.r + 6;
+    ball.y = p2.y + p2.h / 2;
+    ball.vx = 1400; ball.vy = 0; // above the cap, driving into P2
+    p2.vx = 0; p2.vy = 0;
+    collideBallRobot(p2);
+    expect(ball.smashBy).toBeNull();
+    expect(Math.hypot(ball.vx, ball.vy)).toBeLessThanOrEqual(BALL_MAX_SPEED + 1);
   });
 });
