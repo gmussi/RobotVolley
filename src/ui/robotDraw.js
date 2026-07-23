@@ -7,6 +7,7 @@ import { HEAD_TYPES } from "../data/heads.js";
 import { COLORS, GLOW, PART_ACCENTS } from "../data/theme.js";
 
 let ctx;
+let litePreview = false;
 
 function useCtx(targetCtx, fn) {
   const prev = ctx;
@@ -53,12 +54,13 @@ function drawTeamGlow(r, cx, cy) {
 
 function strokeNeonRect(x, y, w, h, rad, color) {
   ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
-  ctx.globalAlpha = 0.7;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 5;
   roundRect(x, y, w, h, rad);
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.22;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.globalAlpha = 0.82;
+  ctx.lineWidth = 1.5;
   ctx.stroke();
   ctx.restore();
 }
@@ -71,6 +73,95 @@ function fillMetallicRect(x, y, w, h, rad, base, dark, light) {
   ctx.fillStyle = grad;
   roundRect(x, y, w, h, rad);
   ctx.fill();
+}
+
+function drawPart(x, y, w, h, rad, fillCol, r, accent) {
+  const a = accent || teamColor(r);
+  if (litePreview) {
+    ctx.fillStyle = fillCol;
+    roundRect(x, y, w, h, rad);
+    ctx.fill();
+    strokeNeonRect(x, y, w, h, rad, a);
+    return;
+  }
+  const dark = shadeColor(fillCol, -34);
+  const light = shadeColor(fillCol, 24);
+  fillMetallicRect(x, y, w, h, rad, fillCol, dark, light);
+  strokeNeonRect(x, y, w, h, rad, a);
+  ctx.fillStyle = "rgba(255,255,255,0.08)";
+  ctx.fillRect(x + 3, y + 4, Math.max(2, w - 6), 2);
+}
+
+function drawAthleticBoot(foot, accent) {
+  const x = foot.x - 3;
+  const y = foot.y - 2;
+  const w = foot.w + 6;
+  const h = foot.h + 4;
+  if (litePreview) {
+    ctx.fillStyle = "#252a36";
+    roundRect(x, y, w, h, 5);
+    ctx.fill();
+    strokeNeonRect(x, y, w, h, 5, accent);
+    return;
+  }
+  fillMetallicRect(x, y, w, h, 5, "#252a36", "#141820", "#3a4254");
+  strokeNeonRect(x, y, w, h, 5, accent);
+  ctx.fillStyle = accent;
+  ctx.globalAlpha = 0.85;
+  ctx.fillRect(x + 4, y + h - 4, w - 8, 2);
+  ctx.globalAlpha = 1;
+}
+
+function drawChestCore(cx, torso, accent) {
+  if (litePreview) return;
+  ctx.save();
+  ctx.shadowColor = accent;
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = accent;
+  ctx.globalAlpha = 0.9;
+  roundRect(cx - 5, torso.y + 14, 10, torso.h - 28, 3);
+  ctx.fill();
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  roundRect(cx - 2, torso.y + 18, 4, torso.h - 36, 1);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawHeadAccentRing(cx, cy, rx, ry, accent) {
+  if (!accent) return;
+  ctx.save();
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  if (!litePreview) {
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 12;
+  }
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawNeonVisor(x, y, w, h, eyeOpen, accent) {
+  ctx.save();
+  ctx.fillStyle = "#eaf6ff";
+  if (!litePreview) {
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 14;
+  }
+  roundRect(x, y, w, h * eyeOpen + 2, 4);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  if (litePreview) {
+    ctx.restore();
+    return;
+  }
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.fillRect(x + 2, y + 1, w - 4, 2);
+  ctx.restore();
 }
 
 function unionRects(...rects) {
@@ -171,6 +262,15 @@ function drawPreviewPart(r, slotKey) {
   else if (slotKey === "armType" || slotKey === "arms") drawRobotArms(r, p, col);
 }
 
+function drawPreviewPartLite(r, slotKey) {
+  litePreview = true;
+  try {
+    drawPreviewPart(r, slotKey);
+  } finally {
+    litePreview = false;
+  }
+}
+
 export function colorsFromAccent(accent) {
   return {
     head: accent,
@@ -180,7 +280,7 @@ export function colorsFromAccent(accent) {
   };
 }
 
-export function drawPartPreview(targetCtx, slotKey, typeId, cx, cy, maxSize, colors) {
+export function drawPartPreview(targetCtx, slotKey, typeId, cx, cy, maxSize, colors, opts = {}) {
   useCtx(targetCtx, () => {
     const r = buildPreviewRobot(slotKey, typeId, colors);
     const view = partViewBounds(r, slotKey);
@@ -189,7 +289,8 @@ export function drawPartPreview(targetCtx, slotKey, typeId, cx, cy, maxSize, col
     ctx.translate(cx, cy);
     ctx.scale(scale, scale);
     ctx.translate(-(view.x + view.w / 2), -(view.y + view.h / 2));
-    drawPreviewPart(r, slotKey);
+    if (opts.lite) drawPreviewPartLite(r, slotKey);
+    else drawPreviewPart(r, slotKey);
     ctx.restore();
   });
 }
@@ -218,52 +319,40 @@ function drawRobotLegs(r, p, col) {
   const light = shadeColor(legCol, 18);
 
   if (r.legType === "power") {
-    // Bulkier hydraulic legs with visible springs and wide stomper boots.
     for (const leg of [p.legL, p.legR]) {
       const cx = leg.x + leg.w / 2;
-      const grad = ctx.createLinearGradient(leg.x, leg.y, leg.x + leg.w, leg.y);
-      grad.addColorStop(0, dark);
-      grad.addColorStop(0.5, legCol);
-      grad.addColorStop(1, dark);
-      ctx.fillStyle = grad;
-      roundRect(leg.x - 3, leg.y, leg.w + 6, leg.h - 8, 6);
-      ctx.fill();
+      drawPart(leg.x - 4, leg.y, leg.w + 8, leg.h - 6, 7, legCol, r);
       ctx.fillStyle = "rgba(0,0,0,0.22)";
       roundRect(leg.x + 2, leg.y + 8, leg.w - 4, 10, 3);
       ctx.fill();
       drawSpringCoil(cx, leg.y + leg.h - 18, leg.y + leg.h - 4, 5);
     }
     for (const foot of [p.footL, p.footR]) {
-      ctx.fillStyle = "#20242f";
-      roundRect(foot.x - 4, foot.y - 2, foot.w + 8, foot.h + 4, 5);
-      ctx.fill();
-      ctx.fillStyle = "#ffd54a";
-      ctx.fillRect(foot.x + 2, foot.y + 3, foot.w - 4, 3);
+      drawAthleticBoot(foot, COLORS.accent);
     }
     return;
   }
 
   if (r.legType === "rocket") {
-    // Slim struts + permanent thruster nozzles under each foot.
     for (const leg of [p.legL, p.legR]) {
-      ctx.fillStyle = legCol;
       ctx.beginPath();
-      ctx.moveTo(leg.x + 4, leg.y);
-      ctx.lineTo(leg.x + leg.w - 4, leg.y);
-      ctx.lineTo(leg.x + leg.w - 1, leg.y + leg.h);
-      ctx.lineTo(leg.x + 1, leg.y + leg.h);
+      ctx.moveTo(leg.x + 6, leg.y);
+      ctx.lineTo(leg.x + leg.w - 6, leg.y);
+      ctx.lineTo(leg.x + leg.w - 2, leg.y + leg.h);
+      ctx.lineTo(leg.x + 2, leg.y + leg.h);
       ctx.closePath();
+      const lg = ctx.createLinearGradient(leg.x, leg.y, leg.x + leg.w, leg.y + leg.h);
+      lg.addColorStop(0, light);
+      lg.addColorStop(0.5, legCol);
+      lg.addColorStop(1, dark);
+      ctx.fillStyle = lg;
       ctx.fill();
-      ctx.strokeStyle = dark;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      strokeNeonRect(leg.x, leg.y, leg.w, leg.h, 4, teamColor(r));
     }
     for (const foot of [p.footL, p.footR]) {
       const fx = foot.x + foot.w / 2;
       const fy = foot.y + foot.h;
-      ctx.fillStyle = "#2a3038";
-      roundRect(foot.x - 2, foot.y - 4, foot.w + 4, foot.h + 2, 3);
-      ctx.fill();
+      drawAthleticBoot(foot, "#ff8c28");
       ctx.fillStyle = "#444c58";
       ctx.beginPath();
       ctx.moveTo(fx - 10, fy - 2);
@@ -272,11 +361,14 @@ function drawRobotLegs(r, p, col) {
       ctx.lineTo(fx - 7, fy + 2);
       ctx.closePath();
       ctx.fill();
-      const idle = r.onGround ? 0.45 : 0.25;
+      const idle = r.onGround ? 0.55 : 0.3;
       ctx.fillStyle = `rgba(255,140,40,${idle})`;
+      ctx.shadowColor = "#ff8c28";
+      ctx.shadowBlur = 8;
       ctx.beginPath();
       ctx.ellipse(fx, fy + 1, 5, 3, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowBlur = 0;
     }
     if (r.flapFx > 0) {
       const t = r.flapFx / 0.18;
@@ -305,39 +397,25 @@ function drawRobotLegs(r, p, col) {
     return;
   }
 
-  // Robot (normal) — athletic tapered legs with metallic fill.
   for (const leg of [p.legL, p.legR]) {
-    const dark = shadeColor(legCol, -30);
-    const light = shadeColor(legCol, 18);
-    fillMetallicRect(leg.x, leg.y, leg.w, leg.h, 5, legCol, dark, light);
-    strokeNeonRect(leg.x, leg.y, leg.w, leg.h, 5, teamColor(r));
-    ctx.fillStyle = "rgba(0,0,0,0.12)";
-    ctx.fillRect(leg.x + 3, leg.y + 6, 3, leg.h - 12);
+    drawPart(leg.x, leg.y, leg.w, leg.h, 6, legCol, r);
+    ctx.fillStyle = "rgba(0,0,0,0.14)";
+    ctx.fillRect(leg.x + 4, leg.y + leg.h * 0.38, leg.w - 8, 2);
   }
-  ctx.fillStyle = "#20242f";
-  roundRect(p.footL.x, p.footL.y, p.footL.w, p.footL.h, 4);
-  ctx.fill();
-  roundRect(p.footR.x, p.footR.y, p.footR.w, p.footR.h, 4);
+  drawAthleticBoot(p.footL, teamColor(r));
+  drawAthleticBoot(p.footR, teamColor(r));
+}
+
+function drawStandardTorsoShell(p, col, r) {
+  drawPart(p.torso.x, p.torso.y, p.torso.w, p.torso.h, 14, col.torso, r);
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  roundRect(p.torso.x + 10, p.torso.y + 16, p.torso.w - 20, 28, 6);
   ctx.fill();
 }
 
-function drawStandardTorsoShell(p, col) {
-  const bodyGrad = ctx.createLinearGradient(p.torso.x, p.torso.y, p.torso.x, p.torso.y + p.torso.h);
-  bodyGrad.addColorStop(0, shadeColor(col.torso, 25));
-  bodyGrad.addColorStop(1, col.torso);
-  ctx.fillStyle = bodyGrad;
-  roundRect(p.torso.x, p.torso.y, p.torso.w, p.torso.h, 12);
-  ctx.fill();
-
-  ctx.fillStyle = "rgba(0,0,0,0.18)";
-  roundRect(p.torso.x + 12, p.torso.y + 14, p.torso.w - 24, 30, 6);
-  ctx.fill();
-}
-
-function drawStandardTorso(p, col, cx) {
-  drawStandardTorsoShell(p, col);
-  ctx.fillStyle = "#ffd54a";
-  ctx.fillRect(cx - 3, p.torso.y + 18, 6, 22);
+function drawStandardTorso(p, col, cx, r) {
+  drawStandardTorsoShell(p, col, r);
+  drawChestCore(cx, p.torso, teamColor(r));
 }
 
 function drawCog(cx, cy, radius, angle, teeth = 8) {
@@ -374,42 +452,22 @@ function drawCog(cx, cy, radius, angle, teeth = 8) {
   ctx.restore();
 }
 
-function drawHeavyTorso(p, col, cx) {
+function drawHeavyTorso(p, col, cx, r) {
   const t = p.torso;
-  const bodyGrad = ctx.createLinearGradient(t.x, t.y, t.x, t.y + t.h);
-  bodyGrad.addColorStop(0, shadeColor(col.torso, 15));
-  bodyGrad.addColorStop(1, shadeColor(col.torso, -15));
-  ctx.fillStyle = bodyGrad;
-  roundRect(t.x, t.y, t.w, t.h, 10);
-  ctx.fill();
+  drawPart(t.x, t.y, t.w, t.h, 10, col.torso, r);
 
-  ctx.strokeStyle = "#1a1e28";
-  ctx.lineWidth = 3;
-  roundRect(t.x + 2, t.y + 2, t.w - 4, t.h - 4, 8);
+  ctx.strokeStyle = shadeColor(col.torso, -40);
+  ctx.lineWidth = 2;
+  roundRect(t.x + 3, t.y + 3, t.w - 6, t.h - 6, 8);
   ctx.stroke();
 
   ctx.fillStyle = "#2a3038";
-  const bandH = 6;
+  const bandH = 5;
   for (const by of [t.y + 16, t.y + t.h * 0.45, t.y + t.h - 22]) {
     roundRect(t.x + 6, by, t.w - 12, bandH, 2);
     ctx.fill();
   }
-
-  ctx.fillStyle = "#444c58";
-  for (const [bx, by] of [
-    [t.x + 8, t.y + 8],
-    [t.x + t.w - 14, t.y + 8],
-    [t.x + 8, t.y + t.h - 14],
-    [t.x + t.w - 14, t.y + t.h - 14],
-  ]) {
-    ctx.beginPath();
-    ctx.arc(bx, by, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.fillStyle = "#1e222c";
-  roundRect(cx - 10, t.y + 20, 20, t.h - 36, 4);
-  ctx.fill();
+  drawChestCore(cx, t, teamColor(r));
 }
 
 function drawLightTorso(p, col, cx) {
@@ -486,16 +544,16 @@ function drawLightTorso(p, col, cx) {
 }
 
 function drawLowCoGTorso(r, p, col, cx) {
-  drawStandardTorsoShell(p, col);
+  drawStandardTorsoShell(p, col, r);
   drawCog(cx, p.torso.y + 29, 11, r.cogAngle);
 }
 
 function drawRobotTorso(r, p, col, cx) {
   switch (r.torsoType) {
-    case "heavy": drawHeavyTorso(p, col, cx); break;
+    case "heavy": drawHeavyTorso(p, col, cx, r); break;
     case "light": drawLightTorso(p, col, cx); break;
     case "lowCoG": drawLowCoGTorso(r, p, col, cx); break;
-    default: drawStandardTorso(p, col, cx); break;
+    default: drawStandardTorso(p, col, cx, r); break;
   }
 }
 
@@ -529,18 +587,11 @@ function drawRobot(r, floorY) {
 
 function drawRobotArms(r, p, col) {
   const armCol = col.arms;
-  const dark = shadeColor(armCol, -28);
+  const accent = teamColor(r);
   for (const arm of [p.armL, p.armR]) {
-    const grad = ctx.createLinearGradient(arm.x, arm.y, arm.x + arm.w, arm.y);
-    grad.addColorStop(0, dark);
-    grad.addColorStop(0.5, armCol);
-    grad.addColorStop(1, dark);
-    ctx.fillStyle = grad;
-    roundRect(arm.x, arm.y, arm.w, arm.h, 5);
-    ctx.fill();
+    drawPart(arm.x, arm.y, arm.w, arm.h, 6, armCol, r, accent);
   }
 
-  // Weapon emblem sits in the enemy-facing hand (hidden while a projectile is airborne).
   const enemyDir = -r.side;
   const frontArm = enemyDir > 0 ? p.armR : p.armL;
   const hx = frontArm.x + frontArm.w / 2;
@@ -591,40 +642,37 @@ function drawArmEmblem(type, hx, hy, dir, armCol) {
     ctx.fill();
     ctx.restore();
   } else {
-    // hand: a metal fist with a faint energy orb hint
     ctx.fillStyle = shadeColor(armCol, 22);
+    ctx.shadowColor = "#5ac8ff";
+    ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.arc(hx, hy - 4, 6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "rgba(120,220,255,0.5)";
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(120,220,255,0.85)";
+    ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(hx, hy - 12, 5, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.shadowBlur = 0;
   }
   ctx.restore();
 }
 
 function drawRobotHead(r, p, col, cx) {
   const head = p.head;
-  const spec = HEAD_TYPES[r.headType] ?? HEAD_TYPES.standard;
   const eyeOpen = r.eyeBlink > 0 ? 0.3 : 1;
-  const headGrad = ctx.createLinearGradient(head.x, head.y, head.x, head.y + head.h);
-  headGrad.addColorStop(0, shadeColor(col.head, 25));
-  headGrad.addColorStop(1, col.head);
+  const accent = headAccent(r);
 
   if (r.headType === "dome") {
-    ctx.fillStyle = headGrad;
     ctx.beginPath();
     ctx.ellipse(head.x + head.w / 2, head.y + head.h - 2, head.w / 2, head.h / 2 + 2, 0, Math.PI, 0);
-    ctx.closePath();
+    const dg = ctx.createLinearGradient(head.x, head.y, head.x, head.y + head.h);
+    dg.addColorStop(0, shadeColor(col.head, 28));
+    dg.addColorStop(1, col.head);
+    ctx.fillStyle = dg;
     ctx.fill();
-    ctx.fillStyle = "#eaf6ff";
-    ctx.shadowColor = col.head;
-    ctx.shadowBlur = 12;
-    roundRect(head.x + 8, head.y + head.h * 0.35, head.w - 16, 10 * eyeOpen + 2, 4);
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    drawHeadAccentRing(cx, head.y + head.h * 0.55, head.w * 0.52, head.h * 0.48, accent);
+    drawNeonVisor(head.x + 8, head.y + head.h * 0.35, head.w - 16, 10, eyeOpen, accent);
     return;
   }
 
@@ -644,25 +692,25 @@ function drawRobotHead(r, p, col, cx) {
   }
 
   // Standard
-  ctx.fillStyle = headGrad;
-  roundRect(head.x, head.y, head.w, head.h, 9);
-  ctx.fill();
-  ctx.fillStyle = "#eaf6ff";
-  ctx.shadowColor = col.head;
-  ctx.shadowBlur = 14;
-  roundRect(head.x + 6, head.y + 10, head.w - 12, 12 * eyeOpen + 2, 4);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = shadeColor(col.head, -35);
-  ctx.lineWidth = 3;
+  drawPart(head.x, head.y, head.w, head.h, 10, col.head, r, accent);
+  drawHeadAccentRing(cx, head.y + head.h * 0.5, head.w * 0.55, head.h * 0.52, accent);
+  drawNeonVisor(head.x + 6, head.y + 10, head.w - 12, 12, eyeOpen, accent);
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = accent;
+  ctx.shadowBlur = 8;
   ctx.beginPath();
   ctx.moveTo(cx, head.y);
-  ctx.lineTo(cx, head.y - 12);
+  ctx.lineTo(cx, head.y - 14);
   ctx.stroke();
-  ctx.fillStyle = "#ffd54a";
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = COLORS.accent;
+  ctx.shadowColor = GLOW.accent;
+  ctx.shadowBlur = 10;
   ctx.beginPath();
-  ctx.arc(cx, head.y - 14, 4, 0, Math.PI * 2);
+  ctx.arc(cx, head.y - 16, 4, 0, Math.PI * 2);
   ctx.fill();
+  ctx.shadowBlur = 0;
 }
 
 function drawDrillHead(r, head, col, cx) {

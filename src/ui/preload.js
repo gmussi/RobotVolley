@@ -1,7 +1,9 @@
 /**
  * Asset preload + loading splash progress.
  */
-import { stadiumBg, logoImage, arenaBgImage, stadiumLayersReady } from "./art.js";
+import {
+  stadiumBg, logoImage, arenaBgImage, stadiumLayersReady, rebuildStadiumComposite,
+} from "./art.js";
 
 const images = [
   logoImage,
@@ -36,6 +38,7 @@ export async function preloadAssets(onProgress) {
   };
 
   await Promise.all(images.map((img) => imageLoaded(img).then(tick)));
+  if (stadiumLayersReady()) rebuildStadiumComposite();
   return stadiumLayersReady();
 }
 

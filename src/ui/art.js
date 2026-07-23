@@ -2,6 +2,8 @@
  * Art asset loader. Prefers Gemini-painted WebPs when present; falls back to
  * procedural SVGs from tools/genart.py. Canvas drawImage uses the loaded URLs.
  */
+import { W, H } from "../data/constants.js";
+
 const bgWebps = import.meta.glob("../assets/bg/*.webp", { eager: true, import: "default" });
 const logoWebps = import.meta.glob("../assets/logo.webp", { eager: true, import: "default" });
 
@@ -35,5 +37,32 @@ export function stadiumLayersReady() {
     && imageReady(stadiumBg.court);
 }
 
+/** Pre-composited sky + stadium + court — one blit per frame instead of three alpha blends. */
+let stadiumComposite = null;
+
+export function rebuildStadiumComposite() {
+  if (!stadiumLayersReady()) {
+    stadiumComposite = null;
+    return null;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const c = canvas.getContext("2d");
+  c.drawImage(stadiumBg.sky, 0, 0, W, H);
+  c.drawImage(stadiumBg.stadium, 0, 0, W, H);
+  c.drawImage(stadiumBg.court, 0, 0, W, H);
+  stadiumComposite = canvas;
+  return stadiumComposite;
+}
+
+export function getStadiumComposite() {
+  if (!stadiumComposite && stadiumLayersReady()) rebuildStadiumComposite();
+  return stadiumComposite;
+}
+
 export const arenaBgImage = loadImage(pickUrl(bgWebps, "arena"));
 export const logoImage = loadImage(pickUrl(logoWebps, "logo"));
+
+/** Wordmark centroid in logo.webp — used to center the readable title, not the full canvas. */
+export const logoVisualAnchor = { x: 682.5 / 1181, y: 0.5 };

@@ -13,7 +13,10 @@ import { drawLotteryAnimation } from "./lottery.js";
 import { drawSettings } from "./settings.js";
 import { drawPauseOverlay } from "./pause.js";
 import { drawRobotFigure, drawPartPreview } from "./robotDraw.js";
-import { arenaBgImage, stadiumBg, stadiumLayersReady, logoImage } from "./art.js";
+import {
+  arenaBgImage, stadiumBg, stadiumLayersReady, getStadiumComposite,
+  logoImage, logoVisualAnchor,
+} from "./art.js";
 import { drawTouchControls } from "./touchControls.js";
 import {
   COLORS, GLOW, fontDisplay, fontBody,
@@ -21,7 +24,8 @@ import {
   drawFooterHint, drawKeyCap, drawCircularGauge, drawGlassPanel,
 } from "./neonUi.js";
 import { codeFor } from "../data/controls.js";
-import { colorblindMode, reducedMotion } from "../data/accessibility.js";
+import { drawArenaEffects, drawProceduralArena } from "./stadiumDraw.js";
+import { colorblindMode } from "../data/accessibility.js";
 
 let ctx;
 let renderRemainder = 0;
@@ -62,84 +66,66 @@ export function render() {
 function drawArena() {
   if (stadiumLayersReady()) {
     drawStadiumArena();
+    drawArenaEffects(ctx, performance.now() * 0.001);
     return;
   }
 
   if (stadiumBg.master.complete && stadiumBg.master.naturalWidth) {
     ctx.drawImage(stadiumBg.master, 0, 0, W, H);
+    drawArenaEffects(ctx, performance.now() * 0.001);
     return;
   }
 
   if (arenaBgImage.complete && arenaBgImage.naturalWidth) {
     ctx.drawImage(arenaBgImage, 0, 0, W, H);
+    drawArenaEffects(ctx, performance.now() * 0.001);
     return;
   }
 
-  const g = ctx.createLinearGradient(0, 0, 0, FLOOR_Y);
-  g.addColorStop(0, "#0d1430");
-  g.addColorStop(1, "#151d3d");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, FLOOR_Y);
-
-  ctx.fillStyle = "rgba(255,90,95,0.05)";
-  ctx.fillRect(0, 0, W / 2, FLOOR_Y);
-  ctx.fillStyle = "rgba(41,182,246,0.05)";
-  ctx.fillRect(W / 2, 0, W / 2, FLOOR_Y);
-
-  ctx.strokeStyle = "rgba(255,255,255,0.03)";
-  ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 50) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, FLOOR_Y); ctx.stroke();
-  }
-
-  const gg = ctx.createLinearGradient(0, FLOOR_Y, 0, H);
-  gg.addColorStop(0, "#2a2f45");
-  gg.addColorStop(1, "#171a29");
-  ctx.fillStyle = gg;
-  ctx.fillRect(0, FLOOR_Y, W, H - FLOOR_Y);
-  ctx.fillStyle = "rgba(255,255,255,0.08)";
-  ctx.fillRect(0, FLOOR_Y, W, 3);
+  drawProceduralArena(ctx);
 }
 
 function drawStadiumArena() {
-  const t = performance.now() * 0.001;
-  const pulse = reducedMotion ? 1 : 0.96 + 0.04 * Math.sin(t * 0.8);
-  const flicker = reducedMotion ? 1 : 0.97 + 0.03 * Math.sin(t * 2.5);
+  const composite = getStadiumComposite();
+  if (composite) {
+    ctx.drawImage(composite, 0, 0, W, H);
+    return;
+  }
+
   const { sky, stadium, court } = stadiumBg;
-
-  ctx.globalAlpha = pulse;
   ctx.drawImage(sky, 0, 0, W, H);
-
-  ctx.globalAlpha = flicker;
   ctx.drawImage(stadium, 0, 0, W, H);
-
-  ctx.globalAlpha = 1;
   ctx.drawImage(court, 0, 0, W, H);
-  ctx.globalAlpha = 1;
 }
 
 function drawNet() {
-  const grd = ctx.createLinearGradient(NET.x, 0, NET.x + NET.w, 0);
-  grd.addColorStop(0, "#c8c8c8");
-  grd.addColorStop(0.5, "#ffffff");
-  grd.addColorStop(1, "#a0a0a0");
+  const capY = NET.top - 6;
+  ctx.save();
+  ctx.fillStyle = COLORS.accent;
+  roundRect(ctx, NET.x - 4, capY, NET.w + 8, 10, 4);
+  ctx.fill();
+
+  const grd = ctx.createLinearGradient(NET.x, NET.top, NET.x + NET.w, FLOOR_Y);
+  grd.addColorStop(0, "rgba(255,255,255,0.92)");
+  grd.addColorStop(1, "rgba(200,210,230,0.55)");
   ctx.fillStyle = grd;
   roundRect(ctx, NET.x, NET.top, NET.w, NET.h, 6);
   ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+
+  ctx.strokeStyle = "rgba(255,255,255,0.28)";
   ctx.lineWidth = 1;
   for (let y = NET.top + 8; y < FLOOR_Y; y += 12) {
     ctx.beginPath(); ctx.moveTo(NET.x, y); ctx.lineTo(NET.x + NET.w, y); ctx.stroke();
   }
-  ctx.fillStyle = COLORS.accent;
-  roundRect(ctx, NET.x - 3, NET.top - 6, NET.w + 6, 8, 3);
-  ctx.fill();
-  ctx.save();
-  ctx.shadowColor = GLOW.accent;
-  ctx.shadowBlur = 8;
-  ctx.fillStyle = COLORS.accent;
-  roundRect(ctx, NET.x - 3, NET.top - 6, NET.w + 6, 8, 3);
-  ctx.fill();
+
+  ctx.strokeStyle = "rgba(255,213,74,0.35)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(NET.x - 2, NET.top);
+  ctx.lineTo(NET.x - 2, FLOOR_Y);
+  ctx.moveTo(NET.x + NET.w + 2, NET.top);
+  ctx.lineTo(NET.x + NET.w + 2, FLOOR_Y);
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -456,6 +442,7 @@ function drawHudPieceSlot(robot, slot, x, cy, size) {
     cy,
     size,
     robot.colors,
+    { lite: true },
   );
 }
 
@@ -511,14 +498,23 @@ function drawMenu() {
   drawScrim(ctx, 0.5);
 
   if (logoImage.complete && logoImage.naturalWidth) {
-    const lw = 560, lh = 160;
-    ctx.drawImage(logoImage, (W - lw) / 2, H * 0.06, lw, lh);
+    const lw = 700;
+    const lh = lw * (logoImage.naturalHeight / logoImage.naturalWidth);
+    const cx = W / 2;
+    const cy = H * 0.11;
+    ctx.drawImage(
+      logoImage,
+      cx - lw * logoVisualAnchor.x,
+      cy - lh * logoVisualAnchor.y,
+      lw,
+      lh,
+    );
   } else {
-    drawTitle(ctx, "ROBOT VOLLEY", W / 2, H * 0.16, 64);
+    drawTitle(ctx, "ROBOT VOLLEY", W / 2, H * 0.10, 64);
   }
 
   const now = performance.now();
-  const startY = H * 0.42;
+  const startY = H * 0.45;
   const rowH = 52;
   const itemW = 440;
   const itemH = 44;
