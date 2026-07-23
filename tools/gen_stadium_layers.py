@@ -28,10 +28,11 @@ sys.path.insert(0, ROOT)
 from gen_nanobanana import load_key, make_client, gen_image, remove_chroma_bg  # noqa: E402
 
 STYLE = (
-    "Flat vector illustration for a premium arcade sports game. Bold geometric shapes, "
-    "clean hard edges, flat color fills only — no gradients, no brushwork, no texture, "
-    "no 3D shading, not photographic. Limited palette: deep navy, crimson (#ff5a5f), "
-    "cyan (#29b6f6), dark floor tones. No text, no watermark, no UI chrome."
+    "Hand-painted neon sci-fi sports arena at night. Rich atmospheric depth, "
+    "electric crimson and cyan team lighting, center-court spotlight, dark navy "
+    "sky with stars, glowing abstract billboards. Painterly illustrative style — "
+    "not flat vector, not photographic 3D. Saturated colors against deep shadow. "
+    "No text, no watermark, no UI chrome."
 )
 
 MASTER_SUBJECT = (

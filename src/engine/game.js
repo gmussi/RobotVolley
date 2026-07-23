@@ -174,6 +174,9 @@ export function menuSelect() {
     state = "settings";
     return false;
   }
+  if (o.action === "customize") {
+    return false;
+  }
   // Placeholder entries (no mode yet) can be highlighted/selected but launch nothing.
   if (!o.mode) return false;
   startGame(o.mode);

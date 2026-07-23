@@ -13,6 +13,11 @@
     "genart": "python3 tools/genart.py",
     "genart:ai": "python3 tools/gen_nanobanana.py",
     "genart:stadium": "python3 tools/gen_stadium_layers.py",
+    "genart:icons": "python3 tools/export_icons.py",
+    "capture:shots": "node tools/capture_store_shots.mjs",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:android": "npx cap open android",
+    "cap:ios": "npx cap open ios",
     "genaudio": "node tools/gen_audio.mjs",
     "encode:music": "bash tools/encode_match_music.sh"
   },
