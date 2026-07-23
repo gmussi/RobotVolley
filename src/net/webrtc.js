@@ -1,5 +1,7 @@
 /**
- * WebRTC DataChannel peer connection (host creates offer).
+ * WebRTC peer connection with two DataChannels:
+ * - ctrl: reliable/ordered (hello, serve edges)
+ * - game: unreliable/unordered (state snapshots, inputs) — avoids backlog hitching
  */
 import { encode, decode } from "./protocol.js";
 
@@ -7,8 +9,12 @@ const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
 
 export function createPeerConnection({ isHost, onSignal, onMessage, onOpen, onClose }) {
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  let channel = null;
+  let ctrl = null;
+  let game = null;
+  let ctrlOpen = false;
+  let gameOpen = false;
   let makingOffer = false;
+  let opened = false;
 
   pc.onicecandidate = (ev) => {
     if (ev.candidate) {
@@ -17,20 +23,38 @@ export function createPeerConnection({ isHost, onSignal, onMessage, onOpen, onCl
   };
 
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === "failed" || pc.connectionState === "disconnected" || pc.connectionState === "closed") {
+    if (
+      pc.connectionState === "failed" ||
+      pc.connectionState === "disconnected" ||
+      pc.connectionState === "closed"
+    ) {
       onClose?.({ reason: pc.connectionState });
     }
   };
 
-  function wireChannel(ch) {
-    channel = ch;
+  function maybeOpen() {
+    if (opened || !ctrlOpen || !gameOpen) return;
+    opened = true;
+    onOpen?.();
+  }
+
+  function wireChannel(ch, kind) {
     ch.binaryType = "arraybuffer";
-    ch.onopen = () => onOpen?.();
-    ch.onclose = () => onClose?.({ reason: "channel_closed" });
-    ch.onerror = () => onClose?.({ reason: "channel_error" });
+    ch.onopen = () => {
+      if (kind === "ctrl") {
+        ctrl = ch;
+        ctrlOpen = true;
+      } else {
+        game = ch;
+        gameOpen = true;
+      }
+      maybeOpen();
+    };
+    ch.onclose = () => onClose?.({ reason: `${kind}_closed` });
+    ch.onerror = () => onClose?.({ reason: `${kind}_error` });
     ch.onmessage = (ev) => {
       try {
-        onMessage?.(decode(ev.data));
+        onMessage?.(decode(ev.data), kind);
       } catch {
         /* ignore */
       }
@@ -38,10 +62,16 @@ export function createPeerConnection({ isHost, onSignal, onMessage, onOpen, onCl
   }
 
   if (isHost) {
-    const ch = pc.createDataChannel("game", { ordered: true });
-    wireChannel(ch);
+    wireChannel(pc.createDataChannel("ctrl", { ordered: true }), "ctrl");
+    wireChannel(
+      pc.createDataChannel("game", { ordered: false, maxRetransmits: 0 }),
+      "game",
+    );
   } else {
-    pc.ondatachannel = (ev) => wireChannel(ev.channel);
+    pc.ondatachannel = (ev) => {
+      const kind = ev.channel.label === "ctrl" ? "ctrl" : "game";
+      wireChannel(ev.channel, kind);
+    };
   }
 
   async function handleSignal(payload) {
@@ -74,19 +104,31 @@ export function createPeerConnection({ isHost, onSignal, onMessage, onOpen, onCl
     }
   }
 
-  function send(msg) {
-    if (channel && channel.readyState === "open") {
-      channel.send(encode(msg));
+  function sendCtrl(msg) {
+    if (ctrl && ctrl.readyState === "open") {
+      ctrl.send(encode(msg));
+      return true;
+    }
+    return false;
+  }
+
+  function sendGame(msg) {
+    if (game && game.readyState === "open") {
+      // Drop rather than queue if the buffer is backing up.
+      if (game.bufferedAmount > 256 * 1024) return false;
+      game.send(encode(msg));
       return true;
     }
     return false;
   }
 
   function close() {
-    try {
-      channel?.close();
-    } catch {
-      /* ignore */
+    for (const ch of [ctrl, game]) {
+      try {
+        ch?.close();
+      } catch {
+        /* ignore */
+      }
     }
     try {
       pc.close();
@@ -98,7 +140,10 @@ export function createPeerConnection({ isHost, onSignal, onMessage, onOpen, onCl
   return {
     handleSignal,
     startHostOffer,
-    send,
+    sendCtrl,
+    sendGame,
+    /** @deprecated use sendCtrl/sendGame */
+    send: sendCtrl,
     close,
     get makingOffer() {
       return makingOffer;

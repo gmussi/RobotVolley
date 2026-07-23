@@ -263,7 +263,7 @@ function frame(now) {
   const uiBlocked = state === "searching" || state === "disconnect";
   const online = gameMode === "online" || isOnlineActive();
   const { runSim } = online
-    ? tickOnline(now, keys)
+    ? tickOnline(now, keys, dt)
     : { runSim: !uiBlocked };
 
   if (runSim) {

@@ -8,12 +8,13 @@ import { DC } from "./protocol.js";
 import {
   enterSearching, showDisconnect, toMenu, startGame, setOnlineStatus,
   getRobotLoadout, applyRobotLoadout, buildSnapshot, applySnapshot,
-  applyRemoteInput, applyRemoteServe, readLocalOnlineInput,
+  applyRemoteInput, applyRemoteServe, readLocalOnlineInput, extrapolateVisual,
   onlineIsHost, onlineLocalSeat, state, servingSide,
 } from "../engine/game.js";
 import { codeFor } from "../data/controls.js";
 
-const SNAPSHOT_INTERVAL_MS = 40;
+/** ~50 Hz snapshots — guest extrapolates between them for smooth render. */
+const SNAPSHOT_INTERVAL_MS = 20;
 
 let mm = null;
 let peer = null;
@@ -25,6 +26,11 @@ let lastSnapAt = 0;
 let active = false;
 let serveKeyDown = false;
 let channelReady = false;
+
+/** Guest: latest unapplied snapshot (coalesce bursts onto one apply/frame). */
+let pendingSnap = null;
+let lastSnapTick = -1;
+let lastSentInput = null;
 
 const listeners = new Set();
 
@@ -45,13 +51,16 @@ export function isOnlineSearching() {
   return state === "searching";
 }
 
-function cleanupNet(keepUi = false) {
+function cleanupNet() {
   active = false;
   channelReady = false;
   matchInfo = null;
   pendingLoadout = null;
   remoteInput = null;
   serveKeyDown = false;
+  pendingSnap = null;
+  lastSnapTick = -1;
+  lastSentInput = null;
   try {
     peer?.close();
   } catch {
@@ -64,19 +73,16 @@ function cleanupNet(keepUi = false) {
     /* ignore */
   }
   mm = null;
-  if (!keepUi) {
-    /* caller handles UI */
-  }
 }
 
 export function cancelOnline() {
-  cleanupNet(true);
+  cleanupNet();
   toMenu();
   notify("cancelled");
 }
 
 export function beginOnlineMatchmaking() {
-  cleanupNet(true);
+  cleanupNet();
   enterSearching();
 
   if (!import.meta.env.VITE_MATCHMAKING_URL) {
@@ -104,7 +110,7 @@ export function beginOnlineMatchmaking() {
     },
     peer_left: () => {
       if (active || matchInfo) {
-        cleanupNet(true);
+        cleanupNet();
         showDisconnect("Opponent disconnected");
         notify("disconnect");
       }
@@ -120,7 +126,7 @@ export function beginOnlineMatchmaking() {
     close: () => {
       if (state === "searching") {
         showDisconnect("Lost connection to matchmaking server");
-        cleanupNet(true);
+        cleanupNet();
         notify("disconnect");
       }
     },
@@ -137,7 +143,8 @@ function startWebRtc(msg) {
     onMessage: onChannelMessage,
     onOpen: () => {
       channelReady = true;
-      peer.send({
+      setOnlineStatus("Opponent found — syncing…");
+      peer.sendCtrl({
         type: DC.HELLO,
         seat: msg.seat,
         localLoadout: capturePreMatchLoadout(msg.seat),
@@ -146,8 +153,9 @@ function startWebRtc(msg) {
     onClose: () => {
       if (!active && !matchInfo) return;
       const wasActive = active;
-      cleanupNet(true);
-      if (wasActive || state === "searching") {
+      const wasSearching = state === "searching";
+      cleanupNet();
+      if (wasActive || wasSearching) {
         showDisconnect("Opponent disconnected");
         notify("disconnect");
       }
@@ -155,15 +163,23 @@ function startWebRtc(msg) {
   });
 
   if (msg.isHost) {
-    // Slight delay so guest's ondatachannel is ready.
+    // Slight delay so guest's ondatachannel handlers are attached.
     setTimeout(() => peer?.startHostOffer(), 50);
   }
 }
 
 /** Prefer lab customization on the seat the player will occupy. */
 function capturePreMatchLoadout(seat) {
-  // Before startGame, robots hold menu customization (P1 left / P2 right).
   return getRobotLoadout(seat);
+}
+
+function queueSnapshot(snap) {
+  if (!snap || matchInfo?.isHost) return;
+  const tick = snap.tick ?? 0;
+  if (tick < lastSnapTick) return;
+  if (!pendingSnap || tick >= (pendingSnap.tick ?? 0)) {
+    pendingSnap = snap;
+  }
 }
 
 function onChannelMessage(msg) {
@@ -171,8 +187,8 @@ function onChannelMessage(msg) {
 
   if (msg.type === DC.HELLO) {
     pendingLoadout = msg.localLoadout || null;
-    // Host starts as soon as the guest hello arrives (loadout exchange).
-    if (matchInfo.isHost) beginMatch();
+    // Both sides enter the match once peer hello arrives (channels are up).
+    beginMatch();
     return;
   }
 
@@ -187,11 +203,16 @@ function onChannelMessage(msg) {
   }
 
   if (msg.type === DC.STATE && !matchInfo.isHost) {
-    // Guest enters the match on the first authoritative snapshot.
-    if (!active) beginMatch();
-    applySnapshot(msg.snapshot);
-    notify("snapshot", msg.snapshot);
+    queueSnapshot(msg.snapshot);
   }
+}
+
+function sendBootstrapSnapshot() {
+  if (!peer || !matchInfo?.isHost) return;
+  const snap = buildSnapshot(tickCounter);
+  // Reliable first snapshot so the guest always leaves "connecting".
+  peer.sendCtrl({ type: DC.STATE, snapshot: snap });
+  peer.sendGame({ type: DC.STATE, snapshot: snap });
 }
 
 function beginMatch() {
@@ -214,12 +235,28 @@ function beginMatch() {
   active = true;
   tickCounter = 0;
   lastSnapAt = performance.now();
+  lastSnapTick = -1;
+  lastSentInput = null;
   setOnlineStatus("");
   notify("match_started", matchInfo);
 
-  // Host pushes an immediate snapshot so guest syncs.
   if (matchInfo.isHost) {
-    peer?.send({ type: DC.STATE, snapshot: buildSnapshot(tickCounter) });
+    sendBootstrapSnapshot();
+  }
+}
+
+function inputChanged(a, b) {
+  if (!a || !b) return true;
+  return a.moveDir !== b.moveDir || a.jumpHeld !== b.jumpHeld || a.attackHeld !== b.attackHeld;
+}
+
+function applyPendingSnapshot() {
+  if (!pendingSnap) return;
+  const snap = pendingSnap;
+  pendingSnap = null;
+  if (snap.tick == null || snap.tick >= lastSnapTick) {
+    applySnapshot(snap);
+    lastSnapTick = snap.tick ?? lastSnapTick;
   }
 }
 
@@ -227,8 +264,17 @@ function beginMatch() {
  * Per-frame online netcode. Call from the main loop.
  * @returns {{ runSim: boolean }} whether local physics should advance
  */
-export function tickOnline(now, keys) {
-  if (!active || !matchInfo || !channelReady) {
+export function tickOnline(now, keys, dt = 0) {
+  // Guest must be able to drain pendingSnap before `active` flips true.
+  if (!matchInfo || !channelReady) {
+    return { runSim: false };
+  }
+
+  if (!matchInfo.isHost) {
+    if (!active && pendingSnap) beginMatch();
+    applyPendingSnapshot();
+    if (!active) return { runSim: false };
+  } else if (!active) {
     return { runSim: false };
   }
 
@@ -236,29 +282,32 @@ export function tickOnline(now, keys) {
 
   if (matchInfo.isHost) {
     if (remoteInput) applyRemoteInput(remoteInput);
-    // Local seat input already applied by readInput in main.
     if (now - lastSnapAt >= SNAPSHOT_INTERVAL_MS) {
       tickCounter++;
-      peer?.send({ type: DC.STATE, snapshot: buildSnapshot(tickCounter) });
+      peer?.sendGame({ type: DC.STATE, snapshot: buildSnapshot(tickCounter) });
       lastSnapAt = now;
     }
     return { runSim: true };
   }
 
-  // Guest: send inputs + serve edges; do not simulate.
-  peer?.send({ type: DC.INPUT, input });
+  if (inputChanged(input, lastSentInput)) {
+    peer?.sendGame({ type: DC.INPUT, input });
+    lastSentInput = input;
+  }
 
   const serveCode = codeFor(0, "serve");
   const down = keys.has(serveCode);
   const serverSeat = servingSide < 0 ? 0 : 1;
   if (serverSeat === onlineLocalSeat) {
     if (down && !serveKeyDown) {
-      peer?.send({ type: DC.SERVE, action: "down" });
+      peer?.sendCtrl({ type: DC.SERVE, action: "down" });
     } else if (!down && serveKeyDown) {
-      peer?.send({ type: DC.SERVE, action: "up" });
+      peer?.sendCtrl({ type: DC.SERVE, action: "up" });
     }
   }
   serveKeyDown = down;
+
+  if (dt > 0) extrapolateVisual(dt);
 
   return { runSim: false };
 }
@@ -271,5 +320,6 @@ export function getOnlineDebug() {
     seat: matchInfo?.seat,
     onlineIsHost,
     onlineLocalSeat,
+    lastSnapTick,
   };
 }

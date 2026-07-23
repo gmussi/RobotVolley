@@ -1169,7 +1169,7 @@ function serializeRobot(r) {
 }
 
 export function buildSnapshot(tick) {
-  return {
+  const snap = {
     tick,
     state,
     score: [score[0], score[1]],
@@ -1178,7 +1178,6 @@ export function buildSnapshot(tick) {
     serveCharge,
     messageTimer,
     lotteryTimer,
-    lotteryResults,
     lotteryTick,
     bannerText,
     winner,
@@ -1192,6 +1191,9 @@ export function buildSnapshot(tick) {
     },
     robots: robots.map(serializeRobot),
   };
+  // Lottery payloads are large — only send while the reel is showing.
+  if (state === "lottery") snap.lotteryResults = lotteryResults;
+  return snap;
 }
 
 export function applySnapshot(snap) {
@@ -1204,7 +1206,7 @@ export function applySnapshot(snap) {
   serveCharge = snap.serveCharge;
   messageTimer = snap.messageTimer;
   lotteryTimer = snap.lotteryTimer;
-  lotteryResults = snap.lotteryResults;
+  if (snap.lotteryResults !== undefined) lotteryResults = snap.lotteryResults;
   if (snap.lotteryTick != null && snap.lotteryTick !== lotteryTick) {
     lotteryTick = snap.lotteryTick;
   }
@@ -1239,7 +1241,12 @@ export function applySnapshot(snap) {
     r.drillAngle = src.drillAngle;
     r.cogAngle = src.cogAngle;
     r.attackCooldown = src.attackCooldown;
-    if (src.colors) r.colors = { ...src.colors };
+    if (src.colors) {
+      r.colors.head = src.colors.head;
+      r.colors.torso = src.colors.torso;
+      r.colors.arms = src.colors.arms;
+      r.colors.legs = src.colors.legs;
+    }
     if (src.attack) {
       const spec = getArmSpec(r);
       r.attack = { ...src.attack, spec };
@@ -1247,6 +1254,38 @@ export function applySnapshot(snap) {
       r.attack = null;
     }
     updateRobotParts(r);
+  }
+}
+
+/**
+ * Guest-side visual smoothing between authoritative snapshots.
+ * Advances positions with last known velocities — corrected on next snap.
+ */
+export function extrapolateVisual(dt) {
+  if (state !== "play" && state !== "serve") return;
+  for (const r of robots) {
+    if (!r.onGround) r.vy += GRAVITY * dt;
+    r.x += r.vx * dt;
+    r.y += r.vy * dt;
+    if (r.y + r.h >= FLOOR_Y) {
+      r.y = FLOOR_Y - r.h;
+      r.vy = 0;
+      r.onGround = true;
+    }
+    const minX = r.side < 0 ? 6 : NET.x + NET.w + COURT_GAP + ARM_OVERHANG;
+    const maxX = r.side < 0 ? NET.x - COURT_GAP - ARM_OVERHANG - r.w : W - r.w - 6;
+    if (r.x < minX) r.x = minX;
+    if (r.x > maxX) r.x = maxX;
+    updateRobotParts(r);
+  }
+  if (state === "play" && ball.live) {
+    ball.vy += BALL_GRAVITY * dt;
+    ball.x += ball.vx * dt;
+    ball.y += ball.vy * dt;
+  } else if (state === "serve") {
+    const s = servingSide < 0 ? P1 : P2;
+    ball.x = s.x + s.w / 2;
+    ball.y = s.y - 60;
   }
 }
 
