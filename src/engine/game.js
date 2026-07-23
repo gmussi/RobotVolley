@@ -133,9 +133,34 @@ function enterServePhase() {
 }
 
 export const menuOptions = [
-  { mode: "1p", label: "1 PLAYER", sub: "vs CPU", x: 0, y: 0, w: 0, h: 0 },
-  { mode: "2p", label: "2 PLAYERS", sub: "human vs human", x: 0, y: 0, w: 0, h: 0 },
+  { mode: "1p", label: "SINGLE PLAYER", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+  { mode: "2p", label: "TWO PLAYERS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+  { mode: null, label: "ONLINE MATCH", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+  { mode: null, action: "controls", label: "CONTROLS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
 ];
+
+// Single Player is highlighted by default.
+export let menuIndex = 0;
+
+export function setMenuIndex(i) {
+  if (i >= 0 && i < menuOptions.length) menuIndex = i;
+}
+
+export function menuMove(delta) {
+  const n = menuOptions.length;
+  menuIndex = (menuIndex + delta + n) % n;
+}
+
+// Returns true if an actual game mode was started.
+export function menuSelect() {
+  const o = menuOptions[menuIndex];
+  if (!o || o.disabled) return false;
+  if (o.action === "controls") { state = "controls"; return false; }
+  // Placeholder entries (no mode yet) can be highlighted/selected but launch nothing.
+  if (!o.mode) return false;
+  startGame(o.mode);
+  return true;
+}
 
 export function shadeColor(hex, percent) {
   const num = parseInt(hex.slice(1), 16);

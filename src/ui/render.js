@@ -6,11 +6,12 @@ import {
 } from "../data/constants.js";
 import {
   ball, score, state, gameMode, servingSide, serveCharge,
-  bannerText, winner, menuOptions, P1, P2, getArmSpec,
+  bannerText, winner, menuOptions, menuIndex, P1, P2, getArmSpec,
 } from "../engine/game.js";
 import { drawLotteryAnimation } from "./lottery.js";
 import { drawRobotFigure, drawPartPreview } from "./robotDraw.js";
 import { arenaBgImage, stadiumBg, stadiumLayersReady, logoImage } from "./art.js";
+import { codeFor } from "../data/controls.js";
 
 let ctx;
 let renderRemainder = 0;
@@ -34,7 +35,7 @@ export function render() {
   drawRobot(P1);
   drawRobot(P2);
   drawAttacks();
-  if (state !== "menu") { drawBall(); drawBallTracker(); drawHUD(); }
+  if (state !== "menu" && state !== "controls") { drawBall(); drawBallTracker(); drawHUD(); }
   if (state === "lottery") {
     ctx.fillStyle = "rgba(6,9,18,0.62)";
     ctx.fillRect(0, 0, W, H);
@@ -443,6 +444,7 @@ function drawHudPieceSlot(robot, slot, x, cy, size) {
 
 function drawBanner() {
   if (state === "menu") { drawMenu(); return; }
+  if (state === "controls") { drawControls(); return; }
   if (state === "serve") {
     const serverIsCpu = gameMode === "1p" && servingSide > 0;
     const name = serverIsCpu ? "CPU" : `PLAYER ${servingSide < 0 ? 1 : 2}`;
@@ -463,47 +465,208 @@ function drawBanner() {
   }
 }
 
+const MENU_FONT = "'Courier New', ui-monospace, monospace";
+
 function drawMenu() {
-  ctx.fillStyle = "rgba(6,9,18,0.72)";
+  // Deep retro backdrop.
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, "rgba(10,12,34,0.94)");
+  grad.addColorStop(1, "rgba(4,5,16,0.94)");
+  ctx.fillStyle = grad;
   ctx.fillRect(0, 0, W, H);
 
-  if (logoImage.complete && logoImage.naturalWidth) {
-    const lw = 420, lh = 120;
-    ctx.drawImage(logoImage, (W - lw) / 2, H * 0.14, lw, lh);
-  } else {
-    centerText("ROBOT VOLLEY", "#ffd54a", 58, H * 0.24);
-  }
-  centerText("choose a mode", "rgba(255,255,255,0.6)", 18, H * 0.24 + 42);
+  // CRT scanlines.
+  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  for (let sy = 0; sy < H; sy += 4) ctx.fillRect(0, sy, W, 2);
 
-  const bw = 300, bh = 96, gap = 40;
-  const totalW = bw * 2 + gap;
-  const x0 = (W - totalW) / 2;
-  const y = H * 0.5;
-  const accents = ["#ff5a5f", "#29b6f6"];
+  // Prominent logo up top.
+  if (logoImage.complete && logoImage.naturalWidth) {
+    const lw = 560, lh = 160;
+    ctx.drawImage(logoImage, (W - lw) / 2, H * 0.06, lw, lh);
+  } else {
+    drawPixelTitle("ROBOT VOLLEY", W / 2, H * 0.16);
+  }
+
+  const now = performance.now();
+  const blink = Math.floor(now / 380) % 2 === 0;
+
+  const startY = H * 0.48;
+  const rowH = 56;
+  const itemW = 440;
+  const itemH = 44;
 
   menuOptions.forEach((o, i) => {
-    o.x = x0 + i * (bw + gap);
-    o.y = y;
-    o.w = bw;
-    o.h = bh;
-    ctx.fillStyle = "rgba(255,255,255,0.05)";
-    roundRect(o.x, o.y, bw, bh, 14); ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = accents[i];
-    roundRect(o.x, o.y, bw, bh, 14); ctx.stroke();
-    ctx.fillStyle = accents[i];
-    ctx.font = "bold 34px 'Segoe UI', sans-serif";
-    ctx.textAlign = "left"; ctx.textBaseline = "middle";
-    ctx.fillText(`${i + 1}`, o.x + 22, o.y + bh / 2);
-    ctx.fillStyle = "#f5f7ff";
-    ctx.font = "bold 24px 'Segoe UI', sans-serif";
-    ctx.fillText(o.label, o.x + 62, o.y + bh / 2 - 12);
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.font = "15px 'Segoe UI', sans-serif";
-    ctx.fillText(o.sub, o.x + 62, o.y + bh / 2 + 14);
+    const cy = startY + i * rowH;
+    o.w = itemW; o.h = itemH;
+    o.x = (W - itemW) / 2;
+    o.y = cy - itemH / 2;
+
+    const selected = i === menuIndex;
+
+    if (selected) {
+      ctx.fillStyle = "rgba(255,213,74,0.10)";
+      ctx.fillRect(o.x, o.y, o.w, o.h);
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.letterSpacing = "5px";
+    ctx.font = `bold 30px ${MENU_FONT}`;
+
+    // Chunky shadow for a 16-bit look.
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillText(o.label, W / 2 + 3, cy + 3);
+    ctx.fillStyle = selected ? "#ffd54a" : "#e8ecff";
+    ctx.fillText(o.label, W / 2, cy);
+    ctx.letterSpacing = "0px";
+
+    // Blinking selection cursor.
+    if (selected && blink) {
+      ctx.fillStyle = "#ff5a5f";
+      ctx.font = `bold 26px ${MENU_FONT}`;
+      ctx.fillText("▶", o.x + 26, cy);
+    }
   });
 
-  centerText("press 1 or 2  ·  or click", "rgba(255,255,255,0.45)", 15, y + bh + 40);
+  // Footer hints.
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `bold 14px ${MENU_FONT}`;
+  ctx.letterSpacing = "2px";
+  ctx.fillStyle = blink ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.35)";
+  ctx.fillText("▲ ▼  SELECT      ENTER  START", W / 2, H - 62);
+  ctx.fillStyle = "rgba(255,255,255,0.4)";
+  ctx.font = `bold 12px ${MENU_FONT}`;
+  ctx.fillText("© 2026  ROBOT VOLLEY", W / 2, H - 36);
+  ctx.letterSpacing = "0px";
+}
+
+function drawPixelTitle(txt, cx, cy, size = 72) {
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.letterSpacing = "6px";
+  ctx.font = `bold ${size}px ${MENU_FONT}`;
+  ctx.fillStyle = "#1a1030";
+  ctx.fillText(txt, cx + 5, cy + 5);
+  ctx.fillStyle = "#ffd54a";
+  ctx.fillText(txt, cx, cy);
+  ctx.letterSpacing = "0px";
+}
+
+const KEY_GLYPH = {
+  ArrowLeft: "◄", ArrowRight: "►", ArrowUp: "▲", ArrowDown: "▼",
+  Slash: "/", Space: "SPACE",
+};
+
+function keyGlyph(code) {
+  if (KEY_GLYPH[code]) return KEY_GLYPH[code];
+  if (code && code.startsWith("Key")) return code.slice(3);
+  return code || "?";
+}
+
+// One key on the game map, action label to its right.
+const CONTROL_ROWS = [
+  { act: "left", label: "MOVE LEFT" },
+  { act: "right", label: "MOVE RIGHT" },
+  { act: "jump", label: "JUMP" },
+  { act: "serve", label: "SERVE", note: "hold to charge" },
+  { act: "attack", label: "ATTACK" },
+];
+
+function drawKeyCap(cx, cy, glyph, accent) {
+  const wide = glyph.length > 1;
+  const w = wide ? 78 : 46;
+  const h = 46;
+  const x = cx - w / 2;
+  const y = cy - h / 2;
+  ctx.fillStyle = "rgba(255,255,255,0.06)";
+  roundRect(x, y, w, h, 8); ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = accent;
+  roundRect(x, y, w, h, 8); ctx.stroke();
+  ctx.fillStyle = "#f5f7ff";
+  ctx.font = `bold ${wide ? 15 : 22}px ${MENU_FONT}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(glyph, cx, cy + 1);
+}
+
+function drawControls() {
+  // Deep retro backdrop + scanlines, matching the title screen.
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, "rgba(10,12,34,0.96)");
+  grad.addColorStop(1, "rgba(4,5,16,0.96)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(0,0,0,0.16)";
+  for (let sy = 0; sy < H; sy += 4) ctx.fillRect(0, sy, W, 2);
+
+  drawPixelTitle("CONTROLS", W / 2, H * 0.12, 52);
+
+  const players = [
+    { idx: 0, name: "PLAYER 1", accent: "#ff5a5f", colX: W * 0.27 },
+    { idx: 1, name: "PLAYER 2", accent: "#29b6f6", colX: W * 0.73 },
+  ];
+
+  const headerY = H * 0.27;
+  const rowY0 = H * 0.37;
+  const rowH = 58;
+  const keyOffset = -120;   // key cap sits left of the column center
+  const labelX = -80;       // action label starts here, left-aligned
+
+  players.forEach((p) => {
+    // Column header.
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.letterSpacing = "4px";
+    ctx.font = `bold 26px ${MENU_FONT}`;
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillText(p.name, p.colX + 2, headerY + 2);
+    ctx.fillStyle = p.accent;
+    ctx.fillText(p.name, p.colX, headerY);
+    ctx.letterSpacing = "0px";
+
+    // Accent underline.
+    ctx.strokeStyle = p.accent;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(p.colX - 150, headerY + 26);
+    ctx.lineTo(p.colX + 150, headerY + 26);
+    ctx.stroke();
+
+    CONTROL_ROWS.forEach((row, i) => {
+      const cy = rowY0 + i * rowH;
+      const glyph = keyGlyph(codeFor(p.idx, row.act));
+      drawKeyCap(p.colX + keyOffset, cy, glyph, p.accent);
+
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.font = `bold 20px ${MENU_FONT}`;
+      ctx.letterSpacing = "2px";
+      ctx.fillStyle = "#e8ecff";
+      ctx.fillText(row.label, p.colX + labelX, cy - (row.note ? 8 : 0));
+      if (row.note) {
+        ctx.font = `bold 12px ${MENU_FONT}`;
+        ctx.fillStyle = "rgba(255,255,255,0.45)";
+        ctx.fillText(row.note, p.colX + labelX, cy + 12);
+      }
+      ctx.letterSpacing = "0px";
+    });
+  });
+
+  // Shared footer note + back hint.
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `bold 14px ${MENU_FONT}`;
+  ctx.letterSpacing = "2px";
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.fillText("SPACE  RESTART A MATCH", W / 2, H - 74);
+
+  const now = performance.now();
+  const blink = Math.floor(now / 380) % 2 === 0;
+  ctx.fillStyle = blink ? "rgba(255,213,74,0.9)" : "rgba(255,213,74,0.4)";
+  ctx.fillText("ENTER / ESC   BACK", W / 2, H - 46);
+  ctx.letterSpacing = "0px";
 }
 
 function centerText(txt, color, size, y) {
