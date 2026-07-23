@@ -9,6 +9,8 @@ import {
   updateBall, updateRobot, updateAttack, collideBallAttack, PHYSICS_STEP, state,
   planPartLottery, commitPartLottery, prepareServe, startGame, lotteryResults, lotteryTick,
   tickServe, LOTTERY_TOTAL_DURATION,
+  canPause, pauseGame, resumeFromPause, pauseSelect, pauseMove,
+  pauseFromState, pauseIndex, leaveSubmenu, toMenu,
 } from "../src/engine/game.js";
 import { HEAD_TYPES } from "../src/data/heads.js";
 import { TORSO_TYPES } from "../src/data/torsos.js";
@@ -417,5 +419,67 @@ describe("arm attacks", () => {
     collideBallRobot(p2);
     expect(ball.smashBy).toBeNull();
     expect(Math.hypot(ball.vx, ball.vy)).toBeLessThanOrEqual(BALL_MAX_SPEED + 1);
+  });
+});
+
+describe("pause", () => {
+  it("can pause during an active match", () => {
+    toMenu();
+    startGame("2p");
+    expect(canPause()).toBe(true);
+    pauseGame();
+    expect(state).toBe("pause");
+    expect(pauseFromState).toBe("serve");
+    resumeFromPause();
+    expect(state).toBe("serve");
+    expect(pauseFromState).toBeNull();
+  });
+
+  it("cannot pause from menu or game over", () => {
+    toMenu();
+    expect(canPause()).toBe(false);
+    startGame("2p");
+    serveBall(0.5);
+    awardPoint(0);
+    awardPoint(0);
+    awardPoint(0);
+    awardPoint(0);
+    awardPoint(0);
+    expect(state).toBe("over");
+    expect(canPause()).toBe(false);
+  });
+
+  it("opens settings from pause and returns to pause", () => {
+    toMenu();
+    startGame("2p");
+    pauseGame();
+    pauseMove(1);
+    expect(pauseIndex).toBe(1);
+    pauseSelect();
+    expect(state).toBe("settings");
+    leaveSubmenu();
+    expect(state).toBe("pause");
+  });
+
+  it("opens controls from pause and returns to pause", () => {
+    toMenu();
+    startGame("2p");
+    pauseGame();
+    pauseMove(2);
+    expect(pauseIndex).toBe(2);
+    pauseSelect();
+    expect(state).toBe("controls");
+    leaveSubmenu();
+    expect(state).toBe("pause");
+  });
+
+  it("quit from pause returns to menu", () => {
+    toMenu();
+    startGame("2p");
+    pauseGame();
+    pauseMove(3);
+    pauseSelect();
+    expect(state).toBe("menu");
+    expect(pauseFromState).toBeNull();
   });
 });

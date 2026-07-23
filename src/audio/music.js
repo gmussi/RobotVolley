@@ -2,6 +2,7 @@
  * Background music — menu/stinger via Web Audio buffers; match track via
  * HTMLAudioElement (native loop, no decode step for long MP3s).
  */
+import { pauseFromState } from "../engine/game.js";
 import { makeMenuLoop, makeVictoryStinger } from "./procedural.js";
 import { decodeAsset } from "./loadBuffer.js";
 
@@ -31,7 +32,7 @@ let musicLevel = 1;
 
 const MATCH_CROSSFADE = 0.8;
 const MENU_CROSSFADE = 0.25;
-const MATCH_STATES = new Set(["serve", "play", "lottery", "point", "over"]);
+const MATCH_STATES = new Set(["serve", "play", "lottery", "point", "over", "pause"]);
 const MENU_STATES = new Set(["menu", "controls", "settings"]);
 const MATCH_TRACK_IDS = ["match_a", "match_b"];
 
@@ -190,6 +191,9 @@ export function startMusicForState(gameState) {
 
 export function onStateChange(prev, next) {
   if (!ctx) return;
+
+  if ((next === "settings" || next === "controls") && pauseFromState) return;
+  if (next === "pause") return;
 
   if (MENU_STATES.has(next) && MATCH_STATES.has(prev)) {
     stopMatchElement();

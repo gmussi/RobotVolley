@@ -164,8 +164,16 @@ export function menuMove(delta) {
 export function menuSelect() {
   const o = menuOptions[menuIndex];
   if (!o || o.disabled) return false;
-  if (o.action === "controls") { state = "controls"; return false; }
-  if (o.action === "settings") { state = "settings"; return false; }
+  if (o.action === "controls") {
+    submenuReturnState = "menu";
+    state = "controls";
+    return false;
+  }
+  if (o.action === "settings") {
+    submenuReturnState = "menu";
+    state = "settings";
+    return false;
+  }
   // Placeholder entries (no mode yet) can be highlighted/selected but launch nothing.
   if (!o.mode) return false;
   startGame(o.mode);
@@ -324,6 +332,79 @@ export function startGame(mode) {
 export function toMenu() {
   state = "menu";
   winner = null;
+  pauseFromState = null;
+}
+
+// ---- Pause ----
+const PAUSABLE_STATES = new Set(["serve", "play", "lottery", "point"]);
+
+export let pauseFromState = null;
+/** @type {"menu"|"pause"} */
+export let submenuReturnState = "menu";
+
+export const pauseOptions = [
+  { action: "resume", label: "RESUME", x: 0, y: 0, w: 0, h: 0 },
+  { action: "settings", label: "SETTINGS", x: 0, y: 0, w: 0, h: 0 },
+  { action: "controls", label: "CONTROLS", x: 0, y: 0, w: 0, h: 0 },
+  { action: "quit", label: "QUIT", x: 0, y: 0, w: 0, h: 0 },
+];
+
+export let pauseIndex = 0;
+
+export function setPauseIndex(i) {
+  if (i >= 0 && i < pauseOptions.length) pauseIndex = i;
+}
+
+export function canPause() {
+  return PAUSABLE_STATES.has(state);
+}
+
+export function pauseGame() {
+  if (!canPause()) return false;
+  pauseFromState = state;
+  state = "pause";
+  pauseIndex = 0;
+  return true;
+}
+
+export function resumeFromPause() {
+  if (state !== "pause" || !pauseFromState) return false;
+  state = pauseFromState;
+  pauseFromState = null;
+  return true;
+}
+
+export function togglePause() {
+  if (state === "pause") return resumeFromPause();
+  return pauseGame();
+}
+
+export function pauseMove(delta) {
+  const n = pauseOptions.length;
+  pauseIndex = (pauseIndex + delta + n) % n;
+}
+
+export function pauseSelect() {
+  const o = pauseOptions[pauseIndex];
+  if (!o) return;
+  if (o.action === "resume") resumeFromPause();
+  else if (o.action === "settings") {
+    submenuReturnState = "pause";
+    state = "settings";
+  } else if (o.action === "controls") {
+    submenuReturnState = "pause";
+    state = "controls";
+  } else if (o.action === "quit") {
+    pauseFromState = null;
+    toMenu();
+  }
+}
+
+export function leaveSubmenu() {
+  const back = submenuReturnState;
+  submenuReturnState = "menu";
+  if (back === "pause" && pauseFromState) state = "pause";
+  else state = "menu";
 }
 
 export function awardPoint(scorer) {
@@ -880,7 +961,7 @@ export function aiControl(r) {
 }
 
 export function readInput(keys, controlMap) {
-  if (state === "menu" || state === "lottery" || state === "controls" || state === "settings") {
+  if (state === "menu" || state === "lottery" || state === "controls" || state === "settings" || state === "pause") {
     for (const r of robots) { r.moveDir = 0; r.jumpHeld = false; r.attackHeld = false; }
     return;
   }
@@ -896,6 +977,7 @@ export function readInput(keys, controlMap) {
 }
 
 export function tickServe(dt) {
+  if (state === "pause") return;
   if (state === "point") {
     messageTimer -= dt;
     if (messageTimer <= 0) prepareServe();
@@ -915,6 +997,7 @@ export function tickServe(dt) {
 }
 
 export function tickPhysics() {
+  if (state === "pause") return;
   for (const r of robots) updateRobot(r, PHYSICS_STEP);
   if (state === "play") updateBall(PHYSICS_STEP);
   else if (state === "serve") {

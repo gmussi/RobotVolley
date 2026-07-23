@@ -3,6 +3,7 @@
  */
 import { W, H } from "../data/constants.js";
 import { getMusicVolume, getSfxVolume, setMusicVolume, setSfxVolume } from "../audio/manager.js";
+import { submenuReturnState } from "../engine/game.js";
 
 const MENU_FONT = "'Courier New', ui-monospace, monospace";
 const STEP = 0.05;
@@ -179,7 +180,9 @@ export function drawSettings(ctx) {
   ctx.fillStyle = "rgba(255,255,255,0.5)";
   ctx.fillText("▲ ▼  SELECT BAR      ◄ ►  ADJUST", W / 2, H - 74);
   ctx.fillStyle = blink ? "rgba(255,213,74,0.9)" : "rgba(255,213,74,0.4)";
-  ctx.fillText("ENTER / ESC   BACK", W / 2, H - 46);
+  const backHint = submenuReturnState === "pause" ? "ENTER / ESC   BACK TO PAUSE"
+    : "ENTER / ESC   BACK";
+  ctx.fillText(backHint, W / 2, H - 46);
   ctx.letterSpacing = "0px";
 }
 

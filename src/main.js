@@ -8,6 +8,8 @@ import {
   score, ball, audioEvents,
   startGame, toMenu, resetPositions,
   menuMove, menuSelect, setMenuIndex,
+  pauseOptions, pauseIndex, pauseMove, pauseSelect, setPauseIndex,
+  pauseGame, resumeFromPause, leaveSubmenu, canPause,
   handleServeKeyDown, handleServeKeyUp,
   readInput, tickServe, tickPhysics,
 } from "./engine/game.js";
@@ -36,14 +38,28 @@ let last = performance.now();
 let acc = 0;
 let settingsDragging = false;
 
-function leaveSubmenu() {
-  toMenu();
+function leaveSubmenuScreen() {
+  leaveSubmenu();
   playUiConfirm();
 }
 
 window.addEventListener("keydown", (e) => {
   if (e.code in CONTROL || e.code === "Space") e.preventDefault();
   keys.add(e.code);
+  if (state === "pause") {
+    if (e.code === "Escape") { resumeFromPause(); playUiConfirm(); return; }
+    if (e.code === "ArrowUp" || e.code === "KeyW") { pauseMove(-1); playUiNavigate(); return; }
+    if (e.code === "ArrowDown" || e.code === "KeyS") { pauseMove(1); playUiNavigate(); return; }
+    if (e.code === "Enter" || e.code === "Space") {
+      const o = pauseOptions[pauseIndex];
+      if (o?.action === "settings") resetSettingsFocus();
+      pauseSelect();
+      playUiConfirm();
+      if (o?.action === "quit") updateHint();
+      return;
+    }
+    return;
+  }
   if (state === "menu") {
     if (e.code === "ArrowUp" || e.code === "KeyW") { menuMove(-1); playUiNavigate(); }
     else if (e.code === "ArrowDown" || e.code === "KeyS") { menuMove(1); playUiNavigate(); }
@@ -59,7 +75,7 @@ window.addEventListener("keydown", (e) => {
   }
   if (state === "settings") {
     if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) {
-      leaveSubmenu();
+      leaveSubmenuScreen();
       return;
     }
     if (handleSettingsKey(e.code)) {
@@ -69,7 +85,14 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (state === "controls") {
-    if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) leaveSubmenu();
+    if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) {
+      leaveSubmenuScreen();
+    }
+    return;
+  }
+  if (e.code === "Escape" && canPause()) {
+    pauseGame();
+    playUiConfirm();
     return;
   }
   if (state === "serve") handleServeKeyDown(e.code, CONTROL);
@@ -85,6 +108,15 @@ canvas.addEventListener("mousemove", (e) => {
   const { mx, my } = eventToCanvas(canvas, e);
   if (state === "settings" && settingsDragging) {
     handleSettingsPointer(mx, my, "move");
+    return;
+  }
+  if (state === "pause") {
+    pauseOptions.forEach((o, i) => {
+      if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h && i !== pauseIndex) {
+        setPauseIndex(i);
+        playUiNavigate();
+      }
+    });
     return;
   }
   if (state !== "menu") return;
@@ -107,13 +139,27 @@ window.addEventListener("mouseup", () => {
 
 canvas.addEventListener("mousedown", (e) => {
   const { mx, my } = eventToCanvas(canvas, e);
+  if (state === "pause") {
+    for (let i = 0; i < pauseOptions.length; i++) {
+      const o = pauseOptions[i];
+      if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) {
+        setPauseIndex(i);
+        if (o.action === "settings") resetSettingsFocus();
+        pauseSelect();
+        playUiConfirm();
+        if (o.action === "quit") updateHint();
+        return;
+      }
+    }
+    return;
+  }
   if (state === "settings") {
     if (handleSettingsPointer(mx, my, "down")) {
       settingsDragging = true;
       playUiConfirm();
       return;
     }
-    leaveSubmenu();
+    leaveSubmenuScreen();
     return;
   }
   if (state === "menu") {
@@ -128,7 +174,9 @@ canvas.addEventListener("mousedown", (e) => {
         return;
       }
     }
-  } else if (state === "controls" || state === "over") {
+  } else if (state === "controls") {
+    leaveSubmenuScreen();
+  } else if (state === "over") {
     toMenu();
   }
 });

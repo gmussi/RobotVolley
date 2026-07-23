@@ -6,10 +6,12 @@ import {
 } from "../data/constants.js";
 import {
   ball, score, state, gameMode, servingSide, serveCharge,
-  bannerText, winner, menuOptions, menuIndex, P1, P2, getArmSpec,
+  bannerText, winner, menuOptions, menuIndex, pauseFromState, submenuReturnState,
+  P1, P2, getArmSpec,
 } from "../engine/game.js";
 import { drawLotteryAnimation } from "./lottery.js";
 import { drawSettings } from "./settings.js";
+import { drawPauseOverlay } from "./pause.js";
 import { drawRobotFigure, drawPartPreview } from "./robotDraw.js";
 import { arenaBgImage, stadiumBg, stadiumLayersReady, logoImage } from "./art.js";
 import { codeFor } from "../data/controls.js";
@@ -36,16 +38,18 @@ export function render() {
   drawRobot(P1);
   drawRobot(P2);
   drawAttacks();
+  const vis = state === "pause" ? pauseFromState : state;
   if (state !== "menu" && state !== "controls" && state !== "settings") {
     drawBall(); drawBallTracker(); drawHUD();
   }
-  if (state === "lottery") {
+  if (vis === "lottery") {
     ctx.fillStyle = "rgba(6,9,18,0.62)";
     ctx.fillRect(0, 0, W, H);
     drawLotteryAnimation(ctx);
   } else {
-    drawBanner();
+    drawBanner(vis);
   }
+  if (state === "pause") drawPauseOverlay(ctx);
 }
 
 function drawArena() {
@@ -445,11 +449,11 @@ function drawHudPieceSlot(robot, slot, x, cy, size) {
   );
 }
 
-function drawBanner() {
-  if (state === "menu") { drawMenu(); return; }
-  if (state === "controls") { drawControls(); return; }
+function drawBanner(vis = state) {
+  if (vis === "menu") { drawMenu(); return; }
+  if (vis === "controls") { drawControls(); return; }
   if (state === "settings") { drawSettings(ctx); return; }
-  if (state === "serve") {
+  if (vis === "serve") {
     const serverIsCpu = gameMode === "1p" && servingSide > 0;
     const name = serverIsCpu ? "CPU" : `PLAYER ${servingSide < 0 ? 1 : 2}`;
     centerText(`${name} TO SERVE`,
@@ -458,9 +462,9 @@ function drawBanner() {
     const servePrompt = serverIsCpu ? "serving…"
       : `hold  ${key}  to charge · release to serve`;
     centerText(servePrompt, "rgba(255,255,255,0.6)", 16, H * 0.32 + 34);
-  } else if (state === "point") {
+  } else if (vis === "point") {
     centerText(bannerText, "#ffd54a", 34, H * 0.4);
-  } else if (state === "over") {
+  } else if (vis === "over") {
     ctx.fillStyle = "rgba(6,9,18,0.7)";
     ctx.fillRect(0, 0, W, H);
     centerText(bannerText, winner === 0 ? "#ff5a5f" : "#29b6f6", 54, H * 0.42);
@@ -669,7 +673,9 @@ function drawControls() {
   const now = performance.now();
   const blink = Math.floor(now / 380) % 2 === 0;
   ctx.fillStyle = blink ? "rgba(255,213,74,0.9)" : "rgba(255,213,74,0.4)";
-  ctx.fillText("ENTER / ESC   BACK", W / 2, H - 46);
+  const backHint = submenuReturnState === "pause" ? "ENTER / ESC   BACK TO PAUSE"
+    : "ENTER / ESC   BACK";
+  ctx.fillText(backHint, W / 2, H - 46);
   ctx.letterSpacing = "0px";
 }
 
