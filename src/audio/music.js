@@ -29,6 +29,10 @@ let matchUrls = [];
 let activeMatchUrl = null;
 let matchVolume = 0.38;
 let musicLevel = 1;
+let mediaPrimed = false;
+
+/** Tiny silent WAV — primes HTMLAudioElement autoplay during a user gesture. */
+const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
 const MATCH_CROSSFADE = 0.8;
 const MENU_CROSSFADE = 0.25;
@@ -91,6 +95,20 @@ export function setMusicLevel(level) {
   musicLevel = Math.max(0, Math.min(1, level));
   if (matchEl) matchEl.volume = matchVolume * musicLevel;
   if (musicLevel <= 0) stopMatchElement();
+}
+
+/** Call synchronously inside a user-gesture handler (Firefox HTML media unlock). */
+export function primeMatchMedia() {
+  if (mediaPrimed) return;
+  const el = new Audio(SILENT_WAV);
+  el.volume = 0;
+  const playPromise = el.play();
+  if (playPromise) {
+    playPromise.then(() => {
+      el.pause();
+      mediaPrimed = true;
+    }).catch(() => {});
+  }
 }
 
 function stopMatchElement() {

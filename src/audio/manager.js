@@ -4,7 +4,7 @@
 import { initSfx, playSfx } from "./sfx.js";
 import {
   initMusic, onStateChange as musicStateChange, updateIntensity,
-  startMusicForState, setMusicLevel,
+  startMusicForState, setMusicLevel, primeMatchMedia,
 } from "./music.js";
 import { mapEngineEvent, uiNavigate, uiConfirm, lotteryTick } from "./events.js";
 import { centerOptionIndex } from "../ui/lottery.js";
@@ -29,6 +29,7 @@ let sfxGain = null;
 let musicGainNode = null;
 
 let unlocked = false;
+let silentPrimed = false;
 let musicVolume = 1;
 let sfxVolume = 1;
 
@@ -83,20 +84,29 @@ function loadAssetUrls(...globs) {
   return out;
 }
 
-function tryUnlock(onReady) {
+function primeSilentBuffer() {
+  if (!ctx || silentPrimed) return;
+  const buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  src.connect(ctx.destination);
+  src.start(0);
+  silentPrimed = true;
+}
+
+/** Must run synchronously inside a user-gesture handler (not in rAF / promise callbacks). */
+function unlockFromGesture(onReady) {
   if (!ctx) return;
   if (unlocked) {
     onReady?.();
     return;
   }
-  const resume = ctx.state === "suspended" ? ctx.resume() : Promise.resolve();
-  resume.then(() => {
-    if (!unlocked) {
-      unlocked = true;
-      startMusicForState(state);
-    }
-    onReady?.();
-  }).catch(() => {});
+  if (ctx.state === "suspended") ctx.resume();
+  primeSilentBuffer();
+  primeMatchMedia();
+  unlocked = true;
+  startMusicForState(state);
+  onReady?.();
 }
 
 function loadVolume(key, fallback) {
@@ -134,9 +144,9 @@ export function setSfxVolume(v) {
 }
 
 function bindUnlock() {
-  const unlock = () => tryUnlock();
+  const unlock = () => unlockFromGesture();
   window.addEventListener("keydown", unlock, true);
-  window.addEventListener("mousedown", unlock, true);
+  window.addEventListener("pointerdown", unlock, true);
   window.addEventListener("touchstart", unlock, { capture: true, passive: true });
 }
 
@@ -149,7 +159,6 @@ export function drainEvents(events) {
     return;
   }
   if (!unlocked) {
-    tryUnlock();
     events.length = 0;
     return;
   }
@@ -161,23 +170,18 @@ export function drainEvents(events) {
 }
 
 export function playUiNavigate() {
-  if (!ctx || sfxVolume <= 0) return;
-  tryUnlock(() => {
-    const m = uiNavigate();
-    playSfx(m.id, m, ctx, sfxGain);
-  });
+  if (!ctx || sfxVolume <= 0 || !unlocked) return;
+  const m = uiNavigate();
+  playSfx(m.id, m, ctx, sfxGain);
 }
 
 export function playUiConfirm() {
-  if (!ctx || sfxVolume <= 0) return;
-  tryUnlock(() => {
-    const m = uiConfirm();
-    playSfx(m.id, m, ctx, sfxGain);
-  });
+  if (!ctx || sfxVolume <= 0 || !unlocked) return;
+  const m = uiConfirm();
+  playSfx(m.id, m, ctx, sfxGain);
 }
 
 export function onStateChange(prev, next) {
-  if (!unlocked) tryUnlock();
   if (!unlocked) return;
   musicStateChange(prev, next);
 }
