@@ -6,6 +6,7 @@ import { CONTROL } from "./data/controls.js";
 import {
   W, PHYSICS_STEP, state, menuOptions, lotteryTick,
   startGame, toMenu, resetPositions,
+  menuMove, menuSelect, setMenuIndex,
   handleServeKeyDown, handleServeKeyUp,
   readInput, tickServe, tickPhysics,
 } from "./engine/game.js";
@@ -25,8 +26,15 @@ window.addEventListener("keydown", (e) => {
   if (e.code in CONTROL || e.code === "Space") e.preventDefault();
   keys.add(e.code);
   if (state === "menu") {
-    if (e.code === "Digit1" || e.code === "Numpad1") { startGame("1p"); updateHint(); }
+    if (e.code === "ArrowUp" || e.code === "KeyW") menuMove(-1);
+    else if (e.code === "ArrowDown" || e.code === "KeyS") menuMove(1);
+    else if (e.code === "Enter" || e.code === "Space") { if (menuSelect()) updateHint(); }
+    else if (e.code === "Digit1" || e.code === "Numpad1") { startGame("1p"); updateHint(); }
     else if (e.code === "Digit2" || e.code === "Numpad2") { startGame("2p"); updateHint(); }
+    return;
+  }
+  if (state === "controls") {
+    if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) toMenu();
     return;
   }
   if (state === "serve") handleServeKeyDown(e.code, CONTROL);
@@ -38,17 +46,27 @@ window.addEventListener("keyup", (e) => {
   handleServeKeyUp(e.code, CONTROL);
 });
 
+canvas.addEventListener("mousemove", (e) => {
+  if (state !== "menu") return;
+  const { mx, my } = eventToCanvas(canvas, e);
+  menuOptions.forEach((o, i) => {
+    if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) setMenuIndex(i);
+  });
+});
+
 canvas.addEventListener("mousedown", (e) => {
   const { mx, my } = eventToCanvas(canvas, e);
   if (state === "menu") {
-    for (const o of menuOptions) {
+    for (let i = 0; i < menuOptions.length; i++) {
+      const o = menuOptions[i];
       if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) {
-        startGame(o.mode);
-        updateHint();
+        if (o.disabled) return;
+        setMenuIndex(i);
+        if (menuSelect()) updateHint();
         return;
       }
     }
-  } else if (state === "over") {
+  } else if (state === "controls" || state === "over") {
     toMenu();
   }
 });
