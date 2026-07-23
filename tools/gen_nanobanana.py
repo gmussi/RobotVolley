@@ -91,11 +91,30 @@ def make_client(key):
     return genai.Client(api_key=key)
 
 
-def gen_image(client, prompt, aspect=None, style_ref_bytes=None, tries=4):
+def gen_image(client, prompt, aspect=None, style_ref_bytes=None,
+              mood_ref_bytes=None, tries=4):
     from google.genai import types
 
     parts = [prompt]
-    if style_ref_bytes:
+    if style_ref_bytes and mood_ref_bytes:
+        parts = [
+            "COMPOSITION: Match the exact camera angle, horizon, framing, and layout "
+            "of the FIRST image.\n"
+            "MOOD ONLY from the SECOND image: borrow its color palette, neon lighting "
+            "character, material feel, and atmospheric mood. Do NOT copy the second "
+            "image's composition, camera angle, objects, or layout.\n" + prompt,
+            types.Part.from_bytes(data=style_ref_bytes, mime_type="image/png"),
+            types.Part.from_bytes(data=mood_ref_bytes, mime_type="image/png"),
+        ]
+    elif mood_ref_bytes:
+        parts = [
+            "Use the reference ONLY for mood, palette, and lighting — not composition. "
+            "Borrow its color palette, neon lighting character, material textures, and "
+            "atmospheric mood. Create completely ORIGINAL artwork. Do NOT recreate, "
+            "trace, or closely copy the reference image:\n" + prompt,
+            types.Part.from_bytes(data=mood_ref_bytes, mime_type="image/png"),
+        ]
+    elif style_ref_bytes:
         parts = [
             "Match the exact art style, brushwork, palette and finish of the "
             "FIRST image. Then paint this new subject in that same hand:\n" + prompt,

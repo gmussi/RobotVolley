@@ -37,11 +37,15 @@ export function stadiumLayersReady() {
     && imageReady(stadiumBg.court);
 }
 
-/** Pre-composited sky + stadium + court — one blit per frame instead of three alpha blends. */
+export function stadiumBackdropReady() {
+  return imageReady(stadiumBg.master) || stadiumLayersReady();
+}
+
+/** Pre-composited backdrop — one blit per frame instead of three alpha blends. */
 let stadiumComposite = null;
 
 export function rebuildStadiumComposite() {
-  if (!stadiumLayersReady()) {
+  if (!stadiumBackdropReady()) {
     stadiumComposite = null;
     return null;
   }
@@ -49,15 +53,24 @@ export function rebuildStadiumComposite() {
   canvas.width = W;
   canvas.height = H;
   const c = canvas.getContext("2d");
-  c.drawImage(stadiumBg.sky, 0, 0, W, H);
-  c.drawImage(stadiumBg.stadium, 0, 0, W, H);
-  c.drawImage(stadiumBg.court, 0, 0, W, H);
+
+  // Prefer the opaque master — chroma-keyed layers often leave gaps when stacked.
+  if (imageReady(stadiumBg.master)) {
+    c.drawImage(stadiumBg.master, 0, 0, W, H);
+  } else {
+    c.fillStyle = "#060912";
+    c.fillRect(0, 0, W, H);
+    c.drawImage(stadiumBg.sky, 0, 0, W, H);
+    c.drawImage(stadiumBg.stadium, 0, 0, W, H);
+    c.drawImage(stadiumBg.court, 0, 0, W, H);
+  }
+
   stadiumComposite = canvas;
   return stadiumComposite;
 }
 
 export function getStadiumComposite() {
-  if (!stadiumComposite && stadiumLayersReady()) rebuildStadiumComposite();
+  if (!stadiumComposite && stadiumBackdropReady()) rebuildStadiumComposite();
   return stadiumComposite;
 }
 

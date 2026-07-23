@@ -2,7 +2,7 @@
  * Asset preload + loading splash progress.
  */
 import {
-  stadiumBg, logoImage, arenaBgImage, stadiumLayersReady, rebuildStadiumComposite,
+  stadiumBg, logoImage, arenaBgImage, stadiumBackdropReady, rebuildStadiumComposite,
 } from "./art.js";
 
 const images = [
@@ -38,8 +38,8 @@ export async function preloadAssets(onProgress) {
   };
 
   await Promise.all(images.map((img) => imageLoaded(img).then(tick)));
-  if (stadiumLayersReady()) rebuildStadiumComposite();
-  return stadiumLayersReady();
+  if (stadiumBackdropReady()) rebuildStadiumComposite();
+  return stadiumBackdropReady();
 }
 
 export function hideSplash() {

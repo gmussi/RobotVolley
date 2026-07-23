@@ -14,8 +14,7 @@ import { drawSettings } from "./settings.js";
 import { drawPauseOverlay } from "./pause.js";
 import { drawRobotFigure, drawPartPreview } from "./robotDraw.js";
 import {
-  arenaBgImage, stadiumBg, stadiumLayersReady, getStadiumComposite,
-  logoImage, logoVisualAnchor,
+  arenaBgImage, getStadiumComposite, logoImage, logoVisualAnchor,
 } from "./art.js";
 import { drawTouchControls } from "./touchControls.js";
 import {
@@ -64,14 +63,9 @@ export function render() {
 }
 
 function drawArena() {
-  if (stadiumLayersReady()) {
-    drawStadiumArena();
-    drawArenaEffects(ctx, performance.now() * 0.001);
-    return;
-  }
-
-  if (stadiumBg.master.complete && stadiumBg.master.naturalWidth) {
-    ctx.drawImage(stadiumBg.master, 0, 0, W, H);
+  const composite = getStadiumComposite();
+  if (composite) {
+    ctx.drawImage(composite, 0, 0, W, H);
     drawArenaEffects(ctx, performance.now() * 0.001);
     return;
   }
@@ -83,19 +77,6 @@ function drawArena() {
   }
 
   drawProceduralArena(ctx);
-}
-
-function drawStadiumArena() {
-  const composite = getStadiumComposite();
-  if (composite) {
-    ctx.drawImage(composite, 0, 0, W, H);
-    return;
-  }
-
-  const { sky, stadium, court } = stadiumBg;
-  ctx.drawImage(sky, 0, 0, W, H);
-  ctx.drawImage(stadium, 0, 0, W, H);
-  ctx.drawImage(court, 0, 0, W, H);
 }
 
 function drawNet() {
