@@ -6,6 +6,8 @@ dist/
 coverage/
 .claude/settings.local.json
 .env
+.env.local
 tools/.env
+server/.wrangler/
 tools/style_ref.png
 reference/

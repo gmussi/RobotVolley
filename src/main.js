@@ -5,7 +5,7 @@ import "./styles/main.css";
 import { CONTROL } from "./data/controls.js";
 import {
   PHYSICS_STEP, state, menuOptions, menuIndex, lotteryTick,
-  score, ball, audioEvents,
+  score, ball, audioEvents, gameMode,
   startGame, toMenu, resetPositions,
   menuMove, menuSelect, setMenuIndex,
   pauseOptions, pauseIndex, pauseMove, pauseSelect, setPauseIndex,
@@ -16,7 +16,7 @@ import {
 import { initRender, render, setRenderRemainder } from "./ui/render.js";
 import { initViewport, eventToCanvas } from "./ui/viewport.js";
 import { wireDomControls, updateHint, syncRobotPartsToDom, openLab } from "./ui/customize.js";
-import { initTouchControls, drawTouchControls } from "./ui/touchControls.js";
+import { initTouchControls } from "./ui/touchControls.js";
 import { preloadAssets, hideSplash, setSplashProgress } from "./ui/preload.js";
 import {
   initAudio, drainEvents, onStateChange, tickLotterySounds,
@@ -25,6 +25,15 @@ import {
 import {
   resetSettingsFocus, handleSettingsKey, handleSettingsPointer,
 } from "./ui/settings.js";
+import {
+  beginOnlineMatchmaking, cancelOnline, tickOnline, isOnlineActive, onOnlineEvent,
+} from "./net/session.js";
+
+onOnlineEvent((event) => {
+  if (event === "match_started" || event === "cancelled" || event === "disconnect") {
+    updateHint();
+  }
+});
 
 const canvas = document.getElementById("game");
 const stage = document.getElementById("stage");
@@ -45,9 +54,34 @@ function leaveSubmenuScreen() {
   playUiConfirm();
 }
 
+function startOnlineFromMenu() {
+  beginOnlineMatchmaking();
+  playUiConfirm();
+  updateHint();
+}
+
 window.addEventListener("keydown", (e) => {
   if (e.code in CONTROL || e.code === "Space") e.preventDefault();
   keys.add(e.code);
+
+  if (state === "searching") {
+    if (e.code === "Escape" || e.code === "Space" || e.code === "Backspace") {
+      cancelOnline();
+      playUiConfirm();
+      updateHint();
+    }
+    return;
+  }
+
+  if (state === "disconnect") {
+    if (e.code === "Space" || e.code === "Enter" || e.code === "Escape") {
+      toMenu();
+      playUiConfirm();
+      updateHint();
+    }
+    return;
+  }
+
   if (state === "pause") {
     if (e.code === "Escape") { resumeFromPause(); playUiConfirm(); return; }
     if (e.code === "ArrowUp" || e.code === "KeyW") { pauseMove(-1); playUiNavigate(); return; }
@@ -57,7 +91,10 @@ window.addEventListener("keydown", (e) => {
       if (o?.action === "settings") resetSettingsFocus();
       pauseSelect();
       playUiConfirm();
-      if (o?.action === "quit") updateHint();
+      if (o?.action === "quit") {
+        if (isOnlineActive()) cancelOnline();
+        updateHint();
+      }
       return;
     }
     return;
@@ -69,6 +106,7 @@ window.addEventListener("keydown", (e) => {
       const o = menuOptions[menuIndex];
       if (o?.action === "settings") resetSettingsFocus();
       if (o?.action === "customize") { openLab(); playUiConfirm(); return; }
+      if (o?.action === "online") { startOnlineFromMenu(); return; }
       if (menuSelect()) { playUiConfirm(); updateHint(); }
       else if (o?.action === "settings" || o?.action === "controls") playUiConfirm();
     }
@@ -99,7 +137,10 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (state === "serve") handleServeKeyDown(e.code, CONTROL);
-  if (e.code === "Space" && state === "over") toMenu();
+  if (e.code === "Space" && state === "over") {
+    if (isOnlineActive()) cancelOnline();
+    else toMenu();
+  }
 });
 
 window.addEventListener("keyup", (e) => {
@@ -142,6 +183,18 @@ window.addEventListener("mouseup", () => {
 
 canvas.addEventListener("mousedown", (e) => {
   const { mx, my } = eventToCanvas(canvas, e);
+  if (state === "searching") {
+    cancelOnline();
+    playUiConfirm();
+    updateHint();
+    return;
+  }
+  if (state === "disconnect") {
+    toMenu();
+    playUiConfirm();
+    updateHint();
+    return;
+  }
   if (state === "pause") {
     for (let i = 0; i < pauseOptions.length; i++) {
       const o = pauseOptions[i];
@@ -150,7 +203,10 @@ canvas.addEventListener("mousedown", (e) => {
         if (o.action === "settings") resetSettingsFocus();
         pauseSelect();
         playUiConfirm();
-        if (o.action === "quit") updateHint();
+        if (o.action === "quit") {
+          if (isOnlineActive()) cancelOnline();
+          updateHint();
+        }
         return;
       }
     }
@@ -173,6 +229,7 @@ canvas.addEventListener("mousedown", (e) => {
         setMenuIndex(i);
         if (o.action === "settings") resetSettingsFocus();
         if (o.action === "customize") { openLab(); playUiConfirm(); return; }
+        if (o.action === "online") { startOnlineFromMenu(); return; }
         if (menuSelect()) { playUiConfirm(); updateHint(); }
         else if (o.action === "settings" || o.action === "controls") playUiConfirm();
         return;
@@ -181,7 +238,8 @@ canvas.addEventListener("mousedown", (e) => {
   } else if (state === "controls") {
     leaveSubmenuScreen();
   } else if (state === "over") {
-    toMenu();
+    if (isOnlineActive()) cancelOnline();
+    else toMenu();
   }
 });
 
@@ -201,7 +259,16 @@ function frame(now) {
   if (dt > 0.1) dt = 0.1;
 
   readInput(keys, CONTROL);
-  tickServe(dt);
+
+  const uiBlocked = state === "searching" || state === "disconnect";
+  const online = gameMode === "online" || isOnlineActive();
+  const { runSim } = online
+    ? tickOnline(now, keys)
+    : { runSim: !uiBlocked };
+
+  if (runSim) {
+    tickServe(dt);
+  }
 
   if (state !== prevState) {
     onStateChange(prevState, state);
@@ -220,10 +287,14 @@ function frame(now) {
     syncRobotPartsToDom();
   }
 
-  acc += dt;
-  while (acc >= PHYSICS_STEP) {
-    tickPhysics();
-    acc -= PHYSICS_STEP;
+  if (runSim) {
+    acc += dt;
+    while (acc >= PHYSICS_STEP) {
+      tickPhysics();
+      acc -= PHYSICS_STEP;
+    }
+  } else {
+    acc = 0;
   }
 
   setRenderRemainder(acc);

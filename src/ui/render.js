@@ -7,7 +7,7 @@ import {
 import {
   ball, score, state, gameMode, servingSide, serveCharge,
   bannerText, winner, menuOptions, menuIndex, pauseFromState, submenuReturnState,
-  P1, P2, getArmSpec,
+  P1, P2, getArmSpec, onlineStatus, onlineLocalSeat,
 } from "../engine/game.js";
 import { drawLotteryAnimation } from "./lottery.js";
 import { drawSettings } from "./settings.js";
@@ -401,7 +401,11 @@ function drawRobotPiecesHUD(robot, side, cy, slotSize, gap) {
   ctx.textBaseline = "middle";
   ctx.fillStyle = accent;
   ctx.font = fontBody(11, 700);
-  const label = side < 0 ? "P1" : (gameMode === "1p" ? "CPU" : "P2");
+  let label = side < 0 ? "P1" : (gameMode === "1p" ? "CPU" : "P2");
+  if (gameMode === "online") {
+    const seat = side < 0 ? 0 : 1;
+    label = seat === onlineLocalSeat ? "YOU" : "OPP";
+  }
   const labelX = side < 0 ? margin : W - margin;
   ctx.fillText(label, labelX, cy + slotSize / 2 + 10);
 }
@@ -427,18 +431,42 @@ function drawHudPieceSlot(robot, slot, x, cy, size) {
   );
 }
 
+function drawOnlineOverlay() {
+  drawScrim(ctx, 0.6);
+  drawGlassPanel(ctx, W / 2 - 300, H * 0.30, 600, 200, {
+    radius: 16,
+    borderColor: COLORS.accent,
+    glowColor: GLOW.accent || GLOW.p1,
+  });
+  const title = state === "searching" ? "ONLINE MATCH" : "DISCONNECTED";
+  centerText(ctx, title, COLORS.accent, 36, H * 0.38);
+  centerText(ctx, onlineStatus || "", COLORS.text, 18, H * 0.38 + 48, false);
+  const hint = state === "searching"
+    ? "press ESC or SPACE to cancel"
+    : "press SPACE for the menu";
+  centerText(ctx, hint, COLORS.textMuted, 14, H * 0.38 + 96, false);
+}
+
 function drawBanner(vis = state) {
   if (vis === "menu") { drawMenu(); return; }
+  if (vis === "searching" || vis === "disconnect") { drawOnlineOverlay(); return; }
   if (vis === "controls") { drawControls(); return; }
   if (state === "settings") { drawSettings(ctx); return; }
   if (vis === "serve") {
     const serverIsCpu = gameMode === "1p" && servingSide > 0;
-    const name = serverIsCpu ? "CPU" : `PLAYER ${servingSide < 0 ? 1 : 2}`;
+    const serverSeat = servingSide < 0 ? 0 : 1;
+    let name = serverIsCpu ? "CPU" : `PLAYER ${serverSeat + 1}`;
+    if (gameMode === "online") {
+      name = serverSeat === onlineLocalSeat ? "YOU" : "OPPONENT";
+    }
     centerText(ctx, `${name} TO SERVE`,
       servingSide < 0 ? COLORS.p1 : COLORS.p2, 30, H * 0.32);
-    const key = servingSide < 0 ? "S" : "↓";
+    const key = gameMode === "online" ? "S" : (servingSide < 0 ? "S" : "↓");
+    const localServing = gameMode !== "online" || serverSeat === onlineLocalSeat;
     const servePrompt = serverIsCpu ? "serving…"
-      : `hold  ${key}  to charge · release to serve`;
+      : localServing
+        ? `hold  ${key}  to charge · release to serve`
+        : "waiting for opponent to serve…";
     centerText(ctx, servePrompt, COLORS.textMuted, 16, H * 0.32 + 34, false);
   } else if (vis === "point") {
     centerText(ctx, bannerText, COLORS.accent, 34, H * 0.4);

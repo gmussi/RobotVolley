@@ -1,0 +1,12 @@
+name = "robot-volley-mm"
+main = "src/index.js"
+compatibility_date = "2026-07-01"
+
+[[durable_objects.bindings]]
+name = "MATCHMAKER"
+class_name = "Matchmaker"
+
+# Free-plan Durable Objects require SQLite-backed classes.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Matchmaker"]

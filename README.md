@@ -11,8 +11,8 @@ npm install
 npm run dev
 ```
 
-Open the printed `localhost` URL. Pick **1 Player** (vs CPU) or **2 Players**, then
-serve and rally.
+Open the printed `localhost` URL. Pick **1 Player** (vs CPU), **2 Players**, or
+**Online Match** (requires matchmaking server — see below), then serve and rally.
 
 ## Game rules
 
@@ -114,25 +114,98 @@ npm run genart:ai    # Gemini-painted WebP upgrades (needs GEMINI_API_KEY)
 src/
   data/       constants, controls — pure data, no engine/ui imports
   engine/     game rules, physics, AI — no DOM or canvas
+  net/        matchmaking client, WebRTC, online session
   ui/         canvas renderer, DOM panels, art loader
   styles/     CSS
   assets/     SVG baselines + optional Gemini WebPs
+server/               Cloudflare Worker matchmaking + signaling
 tools/
   genart.py           procedural SVG generator
   gen_nanobanana.py   Gemini image generator → WebP
 legacy/               pre-refactor single-file prototypes
 ```
 
-**Architecture rule:** `engine/` never imports from `ui/`. Only `src/main.js`
-wires engine and renderer together.
+**Architecture rule:** `engine/` never imports from `ui/` or `net/`. Only
+`src/main.js` wires engine, renderer, and networking together.
 
 See [`tools/ART_PIPELINE.md`](./tools/ART_PIPELINE.md) for the Gemini art workflow.
+
+## Online multiplayer
+
+Online play uses **queue matchmaking** (prefer nearby opponents via Cloudflare
+GeoIP) and **WebRTC DataChannels** for the match itself. One peer hosts the
+physics sim; the matchmaking Worker only handles the queue and signaling.
+
+There is **no local matchmaking server** in day-to-day development. Deploy the
+Worker once; both `npm run dev` and GitHub Pages connect to that hosted
+`wss://` URL.
+
+### 1. Cloudflare account
+
+1. Sign up or log in at [dash.cloudflare.com](https://dash.cloudflare.com).
+2. Confirm **Workers** are enabled (free plan is enough for MVP).
+3. Note your Account ID under **Workers & Pages → Overview**.
+
+### 2. Install Wrangler and log in (one-time)
+
+```bash
+cd server
+npm install
+npx wrangler login
+npx wrangler whoami
+```
+
+### 3. Deploy the matchmaking Worker
+
+```bash
+cd server
+npx wrangler deploy
+```
+
+Wrangler prints a URL like `https://robot-volley-mm.<subdomain>.workers.dev`.
+The WebSocket endpoint is:
+
+```text
+wss://robot-volley-mm.<subdomain>.workers.dev/ws
+```
+
+Health check:
+
+```bash
+curl -i https://robot-volley-mm.<subdomain>.workers.dev/health
+```
+
+Redeploy after server changes with the same `npx wrangler deploy`.
+
+### 4. Point the game client at the Worker
+
+Copy [`.env.example`](./.env.example) to `.env` (gitignored) at the repo root:
+
+```bash
+VITE_MATCHMAKING_URL=wss://robot-volley-mm.<subdomain>.workers.dev/ws
+```
+
+Restart `npm run dev` after changing env vars.
+
+For GitHub Pages, add a repository **Actions variable** named
+`VITE_MATCHMAKING_URL` with that same `wss://…/ws` value
+(**Settings → Secrets and variables → Actions → Variables**). The deploy
+workflow passes it into `vite build`.
+
+| Task | What to run |
+|------|-------------|
+| Change the game client | `npm run dev` (uses hosted `VITE_MATCHMAKING_URL`) |
+| Change matchmaking server | edit `server/`, then `npx wrangler deploy` |
+| Smoke-test online | two browsers/tabs → **Online Match** |
 
 ## Deploying
 
 Pushing to `main` runs tests, builds, and deploys to GitHub Pages automatically
 (see [`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml)). Enable
 Pages under **Settings → Pages → Build and deployment → GitHub Actions** once.
+
+Set the `VITE_MATCHMAKING_URL` Actions variable (see Online multiplayer) so
+production builds can reach matchmaking.
 
 Live site: **https://gmussi.github.io/RobotVolley/**
 

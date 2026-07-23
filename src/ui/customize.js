@@ -111,6 +111,8 @@ export function updateHint() {
   if (!p2) return;
   if (gameMode === "1p") {
     p2.innerHTML = '<span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <b style="color:#29b6f6">CPU</b> — computer controlled';
+  } else if (gameMode === "online") {
+    p2.innerHTML = '<span class="tag-p2"><b>ONLINE</b></span> &nbsp; you use <span class="kbd">A</span><span class="kbd">D</span><span class="kbd">W</span><span class="kbd">S</span><span class="kbd">F</span> — opponent is remote';
   } else {
     p2.innerHTML = '<span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <span class="kbd">&larr;</span><span class="kbd">&rarr;</span> move &nbsp; <span class="kbd">&uarr;</span> jump &nbsp; hold <span class="kbd">&darr;</span> serve &nbsp; <span class="kbd">/</span> attack';
   }

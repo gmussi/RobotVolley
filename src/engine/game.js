@@ -16,6 +16,7 @@ import { HEAD_TYPES, HEAD_TYPE_IDS } from "../data/heads.js";
 import { TORSO_TYPES, TORSO_TYPE_IDS } from "../data/torsos.js";
 import { ARM_TYPES, ARM_TYPE_IDS } from "../data/arms.js";
 import { codeFor } from "../data/controls.js";
+import { setMatchSeed, clearMatchSeed, matchRandom, matchRandomInt } from "./rng.js";
 
 export { W, H, FLOOR_Y, PHYSICS_STEP };
 
@@ -47,6 +48,37 @@ export let lotteryTimer = 0;
 export let lotteryTick = 0;
 let rallyIndex = 0;
 
+/** Local seat index (0/1) when gameMode === "online". */
+export let onlineLocalSeat = 0;
+/** Host runs physics; guest applies snapshots. */
+export let onlineIsHost = true;
+/** Status line for searching / disconnect screens. */
+export let onlineStatus = "";
+
+export function setOnlineLocalSeat(seat) {
+  onlineLocalSeat = seat === 1 ? 1 : 0;
+}
+
+export function setOnlineIsHost(isHost) {
+  onlineIsHost = !!isHost;
+}
+
+export function setOnlineStatus(text) {
+  onlineStatus = text || "";
+}
+
+export function enterSearching() {
+  gameMode = null;
+  onlineStatus = "Searching for opponent…";
+  state = "searching";
+}
+
+export function showDisconnect(reason = "Opponent disconnected") {
+  onlineStatus = reason;
+  state = "disconnect";
+  gameMode = null;
+}
+
 export const LOTTERY_SPIN_DURATION = 3;
 export const LOTTERY_HOLD_DURATION = 1;
 export const LOTTERY_TOTAL_DURATION = LOTTERY_SPIN_DURATION + LOTTERY_HOLD_DURATION;
@@ -68,7 +100,7 @@ const PART_SLOTS = [
 function pickRandomOther(ids, current) {
   const others = ids.filter((id) => id !== current);
   const pool = others.length ? others : ids;
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pool[matchRandomInt(pool.length)];
 }
 
 function partSlotName(key) {
@@ -90,7 +122,7 @@ function partTypeDescription(slot, typeId) {
 
 export function planPartLottery() {
   lotteryResults = robots.map((r) => {
-    const slot = PART_SLOTS[Math.floor(Math.random() * PART_SLOTS.length)];
+    const slot = PART_SLOTS[matchRandomInt(PART_SLOTS.length)];
     const oldType = r[slot.key];
     const newType = pickRandomOther(slot.ids, oldType);
     return {
@@ -105,7 +137,7 @@ export function planPartLottery() {
         id,
         label: partTypeLabel(slot, id),
       })),
-      reelCycles: 4 + Math.random() * 3,
+      reelCycles: 4 + matchRandom() * 3,
     };
   });
 }
@@ -143,7 +175,7 @@ function enterServePhase() {
 export const menuOptions = [
   { mode: "1p", label: "SINGLE PLAYER", disabled: false, x: 0, y: 0, w: 0, h: 0 },
   { mode: "2p", label: "TWO PLAYERS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
-  { mode: null, label: "ONLINE MATCH", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+  { mode: null, action: "online", label: "ONLINE MATCH", disabled: false, x: 0, y: 0, w: 0, h: 0 },
   { mode: null, action: "controls", label: "CONTROLS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
   { mode: null, action: "settings", label: "SETTINGS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
 ];
@@ -161,6 +193,7 @@ export function menuMove(delta) {
 }
 
 // Returns true if an actual game mode was started.
+// Online matchmaking is started by the caller when action === "online".
 export function menuSelect() {
   const o = menuOptions[menuIndex];
   if (!o || o.disabled) return false;
@@ -174,10 +207,9 @@ export function menuSelect() {
     state = "settings";
     return false;
   }
-  if (o.action === "customize") {
+  if (o.action === "customize" || o.action === "online") {
     return false;
   }
-  // Placeholder entries (no mode yet) can be highlighted/selected but launch nothing.
   if (!o.mode) return false;
   startGame(o.mode);
   return true;
@@ -322,17 +354,34 @@ export function serveBall(charge) {
   emitAudio("serve_launch", { charge });
 }
 
-export function startGame(mode) {
+/**
+ * @param {"1p"|"2p"|"online"} mode
+ * @param {{ seed?: number, localSeat?: number }} [opts]
+ */
+export function startGame(mode, opts = {}) {
   gameMode = mode;
   score[0] = 0; score[1] = 0;
   winner = null;
   rallyIndex = 0;
+  onlineStatus = "";
+  if (mode === "online") {
+    setOnlineLocalSeat(opts.localSeat ?? 0);
+    setOnlineIsHost(opts.isHost !== false);
+    if (opts.seed != null) setMatchSeed(opts.seed);
+  } else {
+    clearMatchSeed();
+    onlineLocalSeat = 0;
+    onlineIsHost = true;
+  }
   resetRobots();
-  servingSide = Math.random() < 0.5 ? -1 : 1;
+  servingSide = matchRandom() < 0.5 ? -1 : 1;
   prepareServe();
 }
 
 export function toMenu() {
+  clearMatchSeed();
+  gameMode = null;
+  onlineStatus = "";
   state = "menu";
   winner = null;
   pauseFromState = null;
@@ -359,6 +408,7 @@ export function setPauseIndex(i) {
 }
 
 export function canPause() {
+  if (gameMode === "online") return false;
   return PAUSABLE_STATES.has(state);
 }
 
@@ -436,9 +486,31 @@ export function isServerKey(code, controlMap) {
   return ctrl && ctrl.act === "serve" && ctrl.player === serverPlayer;
 }
 
+function isLocalOnlineServer() {
+  if (gameMode !== "online") return true;
+  const serverSeat = servingSide < 0 ? 0 : 1;
+  return serverSeat === onlineLocalSeat;
+}
+
+/** True when local online player uses P1 keybindings for serve. */
+function isOnlineServeKey(code, controlMap) {
+  const ctrl = controlMap[code];
+  return ctrl && ctrl.act === "serve" && ctrl.player === 0;
+}
+
 export function handleServeKeyDown(code, controlMap) {
   if (state !== "serve") return;
   if (gameMode === "1p" && servingSide > 0) return;
+  // Guest never mutates serve state — session relays edges to the host.
+  if (gameMode === "online" && !onlineIsHost) return;
+  if (gameMode === "online") {
+    if (!isLocalOnlineServer()) return;
+    if (isOnlineServeKey(code, controlMap) && !serveCharging) {
+      serveCharging = true;
+      serveCharge = SERVE_CHARGE_FLOOR;
+    }
+    return;
+  }
   if (isServerKey(code, controlMap) && !serveCharging) {
     serveCharging = true;
     serveCharge = SERVE_CHARGE_FLOOR;
@@ -447,7 +519,27 @@ export function handleServeKeyDown(code, controlMap) {
 
 export function handleServeKeyUp(code, controlMap) {
   if (state !== "serve" || !serveCharging) return;
+  if (gameMode === "online" && !onlineIsHost) return;
+  if (gameMode === "online") {
+    if (!isLocalOnlineServer()) return;
+    if (isOnlineServeKey(code, controlMap)) serveBall(serveCharge);
+    return;
+  }
   if (isServerKey(code, controlMap)) serveBall(serveCharge);
+}
+
+/** Guest → host serve edges (charge start / release). */
+export function applyRemoteServe(action) {
+  if (gameMode !== "online" || !onlineIsHost || state !== "serve") return;
+  const remoteSeat = onlineLocalSeat === 0 ? 1 : 0;
+  const serverSeat = servingSide < 0 ? 0 : 1;
+  if (remoteSeat !== serverSeat) return;
+  if (action === "down" && !serveCharging) {
+    serveCharging = true;
+    serveCharge = SERVE_CHARGE_FLOOR;
+  } else if (action === "up" && serveCharging) {
+    serveBall(serveCharge);
+  }
 }
 
 // ---- Robot physics ----
@@ -964,8 +1056,22 @@ export function aiControl(r) {
 }
 
 export function readInput(keys, controlMap) {
-  if (state === "menu" || state === "lottery" || state === "controls" || state === "settings" || state === "pause") {
+  if (
+    state === "menu" || state === "lottery" || state === "controls" ||
+    state === "settings" || state === "pause" || state === "searching" ||
+    state === "disconnect"
+  ) {
     for (const r of robots) { r.moveDir = 0; r.jumpHeld = false; r.attackHeld = false; }
+    return;
+  }
+  if (gameMode === "online") {
+    // Always use P1 keybindings for the local seat; remote seat is set by netcode.
+    const r = robots[onlineLocalSeat];
+    const L = keys.has(codeFor(0, "left"));
+    const R = keys.has(codeFor(0, "right"));
+    r.moveDir = (R ? 1 : 0) - (L ? 1 : 0);
+    r.jumpHeld = keys.has(codeFor(0, "jump"));
+    r.attackHeld = keys.has(codeFor(0, "attack"));
     return;
   }
   for (let i = 0; i < 2; i++) {
@@ -976,6 +1082,171 @@ export function readInput(keys, controlMap) {
     r.moveDir = (R ? 1 : 0) - (L ? 1 : 0);
     r.jumpHeld = keys.has(codeFor(i, "jump"));
     r.attackHeld = keys.has(codeFor(i, "attack"));
+  }
+}
+
+/** Host applies the latest guest input before ticking physics. */
+export function applyRemoteInput(input) {
+  if (!input || gameMode !== "online") return;
+  const seat = onlineLocalSeat === 0 ? 1 : 0;
+  const r = robots[seat];
+  r.moveDir = input.moveDir || 0;
+  r.jumpHeld = !!input.jumpHeld;
+  r.attackHeld = !!input.attackHeld;
+}
+
+export function readLocalOnlineInput(keys) {
+  const L = keys.has(codeFor(0, "left"));
+  const R = keys.has(codeFor(0, "right"));
+  return {
+    moveDir: (R ? 1 : 0) - (L ? 1 : 0),
+    jumpHeld: keys.has(codeFor(0, "jump")),
+    attackHeld: keys.has(codeFor(0, "attack")),
+  };
+}
+
+export function getRobotLoadout(seat) {
+  const r = robots[seat];
+  return {
+    headType: r.headType,
+    torsoType: r.torsoType,
+    legType: r.legType,
+    armType: r.armType,
+    colors: { ...r.colors },
+  };
+}
+
+export function applyRobotLoadout(seat, loadout) {
+  if (!loadout) return;
+  const r = robots[seat];
+  if (loadout.headType) r.headType = loadout.headType;
+  if (loadout.torsoType) r.torsoType = loadout.torsoType;
+  if (loadout.legType) r.legType = loadout.legType;
+  if (loadout.armType) r.armType = loadout.armType;
+  if (loadout.colors) r.colors = { ...r.colors, ...loadout.colors };
+  updateRobotParts(r);
+  lotteryTick++;
+}
+
+function serializeAttack(at) {
+  if (!at) return null;
+  return {
+    kind: at.kind,
+    t: at.t,
+    hitR: at.hitR,
+    connected: !!at.connected,
+    x: at.x, y: at.y, cx: at.cx, cy: at.cy,
+    spin: at.spin || 0,
+    vx: at.vx || 0, vy: at.vy || 0,
+    life: at.life || 0,
+    // arm type id is enough for guest to look up spec again if needed
+    armType: at.spec?.id || null,
+  };
+}
+
+function serializeRobot(r) {
+  return {
+    x: r.x, y: r.y, vx: r.vx, vy: r.vy,
+    onGround: r.onGround,
+    facing: r.facing,
+    moveDir: r.moveDir,
+    jumpHeld: r.jumpHeld,
+    attackHeld: r.attackHeld,
+    headType: r.headType,
+    torsoType: r.torsoType,
+    legType: r.legType,
+    armType: r.armType,
+    flapsUsed: r.flapsUsed,
+    squash: r.squash,
+    flapFx: r.flapFx,
+    magnetFx: r.magnetFx,
+    drillAngle: r.drillAngle,
+    cogAngle: r.cogAngle,
+    attackCooldown: r.attackCooldown,
+    attack: serializeAttack(r.attack),
+    colors: { ...r.colors },
+  };
+}
+
+export function buildSnapshot(tick) {
+  return {
+    tick,
+    state,
+    score: [score[0], score[1]],
+    servingSide,
+    serveCharging,
+    serveCharge,
+    messageTimer,
+    lotteryTimer,
+    lotteryResults,
+    lotteryTick,
+    bannerText,
+    winner,
+    rallyIndex,
+    ball: {
+      x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy,
+      spin: ball.spin, live: ball.live,
+      lastHitBy: ball.lastHitBy,
+      smashBy: ball.smashBy,
+      magnetHold: ball.magnetHold,
+    },
+    robots: robots.map(serializeRobot),
+  };
+}
+
+export function applySnapshot(snap) {
+  if (!snap) return;
+  state = snap.state;
+  score[0] = snap.score[0];
+  score[1] = snap.score[1];
+  servingSide = snap.servingSide;
+  serveCharging = snap.serveCharging;
+  serveCharge = snap.serveCharge;
+  messageTimer = snap.messageTimer;
+  lotteryTimer = snap.lotteryTimer;
+  lotteryResults = snap.lotteryResults;
+  if (snap.lotteryTick != null && snap.lotteryTick !== lotteryTick) {
+    lotteryTick = snap.lotteryTick;
+  }
+  bannerText = snap.bannerText;
+  winner = snap.winner;
+  if (snap.rallyIndex != null) rallyIndex = snap.rallyIndex;
+
+  const b = snap.ball;
+  ball.x = b.x; ball.y = b.y; ball.vx = b.vx; ball.vy = b.vy;
+  ball.spin = b.spin; ball.live = b.live;
+  ball.lastHitBy = b.lastHitBy;
+  ball.smashBy = b.smashBy;
+  ball.magnetHold = b.magnetHold;
+
+  for (let i = 0; i < 2; i++) {
+    const src = snap.robots[i];
+    const r = robots[i];
+    r.x = src.x; r.y = src.y; r.vx = src.vx; r.vy = src.vy;
+    r.onGround = src.onGround;
+    r.facing = src.facing;
+    r.moveDir = src.moveDir;
+    r.jumpHeld = src.jumpHeld;
+    r.attackHeld = src.attackHeld;
+    r.headType = src.headType;
+    r.torsoType = src.torsoType;
+    r.legType = src.legType;
+    r.armType = src.armType;
+    r.flapsUsed = src.flapsUsed;
+    r.squash = src.squash;
+    r.flapFx = src.flapFx;
+    r.magnetFx = src.magnetFx;
+    r.drillAngle = src.drillAngle;
+    r.cogAngle = src.cogAngle;
+    r.attackCooldown = src.attackCooldown;
+    if (src.colors) r.colors = { ...src.colors };
+    if (src.attack) {
+      const spec = getArmSpec(r);
+      r.attack = { ...src.attack, spec };
+    } else {
+      r.attack = null;
+    }
+    updateRobotParts(r);
   }
 }
 
