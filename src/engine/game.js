@@ -14,6 +14,7 @@ import {
 } from "../data/constants.js";
 import { HEAD_TYPES, HEAD_TYPE_IDS } from "../data/heads.js";
 import { TORSO_TYPES, TORSO_TYPE_IDS } from "../data/torsos.js";
+import { ARM_TYPES, ARM_TYPE_IDS } from "../data/arms.js";
 import { codeFor } from "../data/controls.js";
 
 export { W, H, FLOOR_Y, PHYSICS_STEP };
@@ -22,7 +23,7 @@ export { W, H, FLOOR_Y, PHYSICS_STEP };
 export const score = [0, 0];
 export const ball = {
   x: W * 0.25, y: 150, vx: 0, vy: 0, r: BALL_R,
-  spin: 0, live: false, lastHitBy: null, magnetHold: null,
+  spin: 0, live: false, lastHitBy: null, magnetHold: null, smashBy: null,
 };
 
 export let state = "menu";
@@ -54,6 +55,7 @@ const PART_SLOTS = [
   { key: "headType", ids: HEAD_TYPE_IDS, labels: HEAD_TYPES },
   { key: "torsoType", ids: TORSO_TYPE_IDS, labels: TORSO_TYPES },
   { key: "legType", ids: LEG_TYPE_IDS, labels: LEG_TYPES },
+  { key: "armType", ids: ARM_TYPE_IDS, labels: ARM_TYPES },
 ];
 
 function pickRandomOther(ids, current) {
@@ -65,6 +67,7 @@ function pickRandomOther(ids, current) {
 function partSlotName(key) {
   if (key === "headType") return "head";
   if (key === "torsoType") return "torso";
+  if (key === "armType") return "arms";
   return "feet";
 }
 
@@ -115,6 +118,7 @@ function setupServePhase() {
   ball.vx = 0; ball.vy = 0; ball.spin = 0;
   ball.lastHitBy = null;
   ball.magnetHold = null;
+  ball.smashBy = null;
   ball.x = servingSide < 0 ? W * 0.25 : W * 0.75;
   ball.y = (FLOOR_Y - ROBOT_H) - 60;
   state = "serve";
@@ -148,6 +152,10 @@ export function getHeadSpec(r) {
 
 export function getTorsoSpec(r) {
   return TORSO_TYPES[r.torsoType] ?? TORSO_TYPES.standard;
+}
+
+export function getArmSpec(r) {
+  return ARM_TYPES[r.armType] ?? ARM_TYPES.hand;
 }
 
 export function updateRobotParts(r) {
@@ -192,6 +200,7 @@ export function makeRobot(side) {
     legType: "normal",
     headType: "standard",
     torsoType: "standard",
+    armType: "hand",
     flapsUsed: 0,
     squash: 0,
     eyeBlink: 0,
@@ -199,6 +208,10 @@ export function makeRobot(side) {
     magnetFx: 0,
     drillAngle: 0,
     cogAngle: 0,
+    attackCooldown: 0,
+    attackHeld: false,
+    attackPrevHeld: false,
+    attack: null,
     colors: { ...(side < 0 ? DEFAULT_COLORS.p1 : DEFAULT_COLORS.p2) },
     parts: {},
   };
@@ -215,8 +228,11 @@ export function resetRobots() {
     r.legType = "normal";
     r.headType = "standard";
     r.torsoType = "standard";
+    r.armType = "hand";
     r.flapsUsed = 0;
     r.magnetFx = 0;
+    r.attack = null;
+    r.attackCooldown = 0;
     updateRobotParts(r);
   }
   lotteryResults = [null, null];
@@ -231,6 +247,8 @@ export function resetPositions() {
     r.y = FLOOR_Y - ROBOT_H;
     r.vx = 0; r.vy = 0; r.onGround = true; r.squash = 0; r.flapsUsed = 0;
     r.magnetFx = 0;
+    r.attack = null;
+    r.attackCooldown = 0;
   }
 }
 
@@ -276,6 +294,7 @@ export function awardPoint(scorer) {
   score[scorer]++;
   ball.live = false;
   ball.magnetHold = null;
+  ball.smashBy = null;
   if (score[scorer] >= WIN_SCORE) {
     winner = scorer;
     state = "over";
@@ -368,7 +387,133 @@ export function updateRobot(r, dt) {
   r.magnetFx = Math.max(0, r.magnetFx - dt);
   if (r.headType === "drill") r.drillAngle += dt * 22;
   if (r.torsoType === "lowCoG") r.cogAngle += dt * 3;
+  updateAttack(r, dt);
   updateRobotParts(r);
+}
+
+// ---- Arm attack (orb sweep + thrown weapons) ----
+/** Unit direction for a clock hour, mirrored so +x always points at the enemy. */
+function attackDir(r, hour) {
+  const a = (hour % 12) * Math.PI / 6;
+  const enemyDir = -r.side;
+  return { dx: Math.sin(a) * enemyDir, dy: -Math.cos(a) };
+}
+
+function attackOrigin(r) {
+  return { cx: r.x + r.w / 2, cy: r.y + 30 };
+}
+
+function positionOrb(r) {
+  const at = r.attack, spec = at.spec;
+  const prog = Math.min(1, at.t / spec.windup);
+  const hour = spec.startHour + (spec.endHour - spec.startHour) * prog;
+  const { dx, dy } = attackDir(r, hour);
+  const { cx, cy } = attackOrigin(r);
+  at.cx = cx; at.cy = cy;
+  at.x = cx + dx * spec.orbitR;
+  at.y = cy + dy * spec.orbitR;
+}
+
+function startAttack(r) {
+  const spec = getArmSpec(r);
+  const { cx, cy } = attackOrigin(r);
+  if (spec.kind === "orb") {
+    r.attack = { kind: "orb", spec, t: 0, hitR: spec.hitR, connected: false,
+      x: cx, y: cy, cx, cy, spin: 0 };
+    positionOrb(r);
+  } else {
+    const { dx, dy } = attackDir(r, spec.launchHour);
+    const reach = 34;
+    r.attack = { kind: "projectile", spec, t: 0, hitR: spec.hitR, connected: false,
+      x: cx + dx * reach, y: cy + dy * reach,
+      vx: dx * spec.launchSpeed, vy: dy * spec.launchSpeed, spin: 0 };
+  }
+}
+
+function endAttack(r) {
+  if (r.attack) r.attackCooldown = r.attack.spec.cooldown;
+  r.attack = null;
+}
+
+export function updateAttack(r, dt) {
+  if (r.attackCooldown > 0) r.attackCooldown = Math.max(0, r.attackCooldown - dt);
+
+  const pressed = r.attackHeld && !r.attackPrevHeld;
+  r.attackPrevHeld = r.attackHeld;
+
+  if (!r.attack && pressed && state === "play" && r.attackCooldown <= 0) startAttack(r);
+
+  const at = r.attack;
+  if (!at) return;
+
+  at.t += dt;
+  if (at.spec.spinRate) at.spin += at.spec.spinRate * dt;
+
+  if (at.kind === "orb") {
+    positionOrb(r);
+    if (at.t >= at.spec.windup) endAttack(r);
+  } else {
+    at.vy += at.spec.gravity * dt;
+    at.x += at.vx * dt;
+    at.y += at.vy * dt;
+    if (at.x < -40 || at.x > W + 40 || at.y > FLOOR_Y + 40 || at.y < -600) endAttack(r);
+  }
+}
+
+/**
+ * Hand orb: contact-based smash. The ball is launched along the orb→ball
+ * normal, so the angle depends on where the orb strikes it (hit from below →
+ * flies up, from the side → flies across). The horizontal component is always
+ * forced toward the enemy so it never smashes back over the smasher's own side.
+ * Fired at bonus speed, above the normal cap.
+ */
+function smashBall(r) {
+  const spec = getArmSpec(r);
+  const at = r.attack;
+  const enemyDir = -r.side;
+  let nx = ball.x - at.x;
+  let ny = ball.y - at.y;
+  let d = Math.hypot(nx, ny);
+  if (d < 0.001) { nx = enemyDir; ny = 0; d = 1; } // dead-centre fallback
+  nx /= d; ny /= d;
+  if (nx * enemyDir < 0) nx = -nx;
+  ball.vx = nx * spec.smashSpeed;
+  ball.vy = ny * spec.smashSpeed;
+  ball.spin = enemyDir * 3;
+  ball.lastHitBy = r.side;
+  ball.smashBy = r.side;
+  r.eyeBlink = 0.12;
+}
+
+/** Axe / ninja star: ordinary redirect, kept under the normal speed cap. */
+function deflectBall(r, at) {
+  let nx = ball.x - at.x, ny = ball.y - at.y;
+  const d = Math.hypot(nx, ny) || 1;
+  nx /= d; ny /= d;
+  const vn = ball.vx * nx + ball.vy * ny;
+  if (vn < 0) {
+    const e = at.spec.deflectBounce;
+    ball.vx -= (1 + e) * vn * nx;
+    ball.vy -= (1 + e) * vn * ny;
+  }
+  ball.vx += at.vx * at.spec.impartVel;
+  ball.vy += at.vy * at.spec.impartVel;
+  ball.spin = -r.side * 2;
+  ball.lastHitBy = r.side;
+  const sp = Math.hypot(ball.vx, ball.vy);
+  if (sp > BALL_MAX_SPEED) { ball.vx *= BALL_MAX_SPEED / sp; ball.vy *= BALL_MAX_SPEED / sp; }
+  r.eyeBlink = 0.12;
+}
+
+export function collideBallAttack(r) {
+  const at = r.attack;
+  if (!at || at.connected) return;
+  const dx = ball.x - at.x, dy = ball.y - at.y;
+  const rr = ball.r + at.hitR;
+  if (dx * dx + dy * dy > rr * rr) return;
+  at.connected = true;
+  if (at.kind === "orb") smashBall(r);
+  else { deflectBall(r, at); endAttack(r); }
 }
 
 function circleRectContact(cx, cy, cr, rect) {
@@ -467,6 +612,9 @@ export function collideBallRobot(r, opts = {}) {
 
   const contact = resolveBallRobotContact(r);
   if (!contact) return false;
+
+  // The opponent touching a smashed ball resets it (the clamp below reslows it).
+  if (ball.smashBy !== null && ball.smashBy !== r.side) ball.smashBy = null;
 
   const { nx, ny, dist, part } = contact;
   const cx = ball.x;
@@ -624,6 +772,7 @@ export function updateBall(dt) {
 
   collideBallNet(prevX, prevY);
   for (const r of robots) collideBallRobot(r);
+  for (const r of robots) collideBallAttack(r);
 
   if (ball.y + ball.r >= FLOOR_Y) {
     ball.y = FLOOR_Y - ball.r;
@@ -670,11 +819,13 @@ export function aiControl(r) {
   const onMySide = ball.x > W / 2 - 30;
   r.jumpHeld = ball.live && r.onGround && onMySide && dx < 66 &&
                inReachV && ball.vy > -40;
+  r.attackHeld = ball.live && onMySide && r.attackCooldown <= 0 && !r.attack &&
+                 dx < 140 && ball.y > r.y - 130 && ball.y < r.y + r.h;
 }
 
 export function readInput(keys, controlMap) {
   if (state === "menu" || state === "lottery") {
-    for (const r of robots) { r.moveDir = 0; r.jumpHeld = false; }
+    for (const r of robots) { r.moveDir = 0; r.jumpHeld = false; r.attackHeld = false; }
     return;
   }
   for (let i = 0; i < 2; i++) {
@@ -684,6 +835,7 @@ export function readInput(keys, controlMap) {
     const R = keys.has(codeFor(i, "right"));
     r.moveDir = (R ? 1 : 0) - (L ? 1 : 0);
     r.jumpHeld = keys.has(codeFor(i, "jump"));
+    r.attackHeld = keys.has(codeFor(i, "attack"));
   }
 }
 

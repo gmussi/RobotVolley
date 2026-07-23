@@ -17,8 +17,8 @@
     </div>
   </div>
   <div id="hint">
-    <div><span class="tag-p1"><b>PLAYER 1</b></span> &nbsp; <span class="kbd">A</span><span class="kbd">D</span> move &nbsp; <span class="kbd">W</span> jump &nbsp; hold <span class="kbd">S</span> serve</div>
-    <div id="p2hint"><span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <span class="kbd">&larr;</span><span class="kbd">&rarr;</span> move &nbsp; <span class="kbd">&uarr;</span> jump &nbsp; hold <span class="kbd">&darr;</span> serve</div>
+    <div><span class="tag-p1"><b>PLAYER 1</b></span> &nbsp; <span class="kbd">A</span><span class="kbd">D</span> move &nbsp; <span class="kbd">W</span> jump &nbsp; hold <span class="kbd">S</span> serve &nbsp; <span class="kbd">F</span> attack</div>
+    <div id="p2hint"><span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <span class="kbd">&larr;</span><span class="kbd">&rarr;</span> move &nbsp; <span class="kbd">&uarr;</span> jump &nbsp; hold <span class="kbd">&darr;</span> serve &nbsp; <span class="kbd">/</span> attack</div>
     <div>Hold serve to charge force &nbsp;·&nbsp; <span class="kbd">Space</span> restart</div>
   </div>
   <div id="colorPanel">
@@ -83,6 +83,20 @@
       <button class="torsoBtn" data-type="heavy" title="Tanky on ground, sluggish in air">Heavy</button>
       <button class="torsoBtn" data-type="light" title="Floaty and agile in air">Light</button>
       <button class="torsoBtn" data-type="lowCoG" title="Stable, lower center with spinning counterweight">Low CoG</button>
+    </div>
+  </div>
+  <div id="armPanel">
+    <div class="armGroup p1" data-player="0">
+      <span class="tag-p1"><b>P1 Arms</b></span>
+      <button class="armBtn active" data-type="hand" title="Orb sweep — smashes the ball">Hand</button>
+      <button class="armBtn" data-type="axe" title="Spinning arc throw — deflects the ball">Axe</button>
+      <button class="armBtn" data-type="ninjaStar" title="Straight fast throw — deflects the ball">Ninja Star</button>
+    </div>
+    <div class="armGroup p2" data-player="1">
+      <span class="tag-p2"><b>P2 Arms</b></span>
+      <button class="armBtn active" data-type="hand" title="Orb sweep — smashes the ball">Hand</button>
+      <button class="armBtn" data-type="axe" title="Spinning arc throw — deflects the ball">Axe</button>
+      <button class="armBtn" data-type="ninjaStar" title="Straight fast throw — deflects the ball">Ninja Star</button>
     </div>
   </div>
   <script type="module" src="/src/main.js"></script>

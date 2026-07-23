@@ -54,6 +54,16 @@ serve and rally.
 - Each touch can add only a limited amount of speed — rallies build pace gradually
   rather than exploding on a single hit.
 
+### Attacking
+
+- Press the **Attack** key to trigger your **arm weapon**. Each arm attacks differently
+  (see Customization) and can only fire once per short **cooldown**.
+- A **Hand** smash launches the ball at the enemy *above* the normal speed cap and leaves
+  it glowing "hot" — it keeps that bonus speed until the **opponent touches it**, which
+  resets it back under the cap.
+- **Axe** and **Ninja Star** throws simply **deflect** the ball on contact (a normal
+  redirect within the usual speed limits).
+
 ### Controls
 
 | | Player 1 | Player 2 |
@@ -62,6 +72,7 @@ serve and rally.
 | Move right | `D` | `→` |
 | Jump | `W` | `↑` |
 | Serve (hold) | `S` | `↓` |
+| Attack | `F` | `/` |
 
 - **Space** — return to menu after a match ends.
 - **1 / 2** or click menu cards — pick game mode.
@@ -82,6 +93,9 @@ Before or during a match, customize each robot:
 | **Heavy torso** | Tanky on ground, sluggish in air — layered armor plates |
 | **Light torso** | Floaty and agile in air, slippery on ground — open metal beam frame |
 | **Low CoG torso** | Stable with a lower chest hitbox — standard chassis with a spinning counterweight cog |
+| **Hand arm** | Orb sweeps from 11 o'clock over the top to the front — smashes the ball at the enemy above the speed cap |
+| **Axe arm** | Throws a spinning axe on an up-and-over arc — deflects the ball |
+| **Ninja Star arm** | Throws a straight, fast shuriken — deflects the ball |
 
 ## Development
 

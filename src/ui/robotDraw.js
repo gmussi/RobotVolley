@@ -71,7 +71,11 @@ function partViewBounds(r, slotKey) {
   }
   if (slotKey === "torsoType") return { ...p.torso };
   if (slotKey === "legType") return unionRects(p.legL, p.legR, p.footL, p.footR);
-  if (slotKey === "arms") return unionRects(p.armL, p.armR);
+  if (slotKey === "armType" || slotKey === "arms") {
+    const b = unionRects(p.armL, p.armR);
+    b.y -= 18; b.h += 18; // room for the weapon emblem above the hands
+    return b;
+  }
   return { ...p.torso };
 }
 
@@ -92,6 +96,8 @@ function buildPreviewRobot(slotKey, typeId, colors) {
     legType: "normal",
     headType: "standard",
     torsoType: "standard",
+    armType: "hand",
+    attack: null,
     flapsUsed: 0,
     squash: 0,
     eyeBlink: 0,
@@ -105,6 +111,7 @@ function buildPreviewRobot(slotKey, typeId, colors) {
   if (slotKey === "legType") r.legType = typeId;
   else if (slotKey === "headType") r.headType = typeId;
   else if (slotKey === "torsoType") r.torsoType = typeId;
+  else if (slotKey === "armType") r.armType = typeId;
   updateRobotParts(r);
   return r;
 }
@@ -116,13 +123,7 @@ function drawPreviewPart(r, slotKey) {
   if (slotKey === "headType") drawRobotHead(r, p, col, cx);
   else if (slotKey === "torsoType") drawRobotTorso(r, p, col, cx);
   else if (slotKey === "legType") drawRobotLegs(r, p, col);
-  else if (slotKey === "arms") {
-    ctx.fillStyle = col.arms;
-    roundRect(p.armL.x, p.armL.y, p.armL.w, p.armL.h, 5);
-    ctx.fill();
-    roundRect(p.armR.x, p.armR.y, p.armR.w, p.armR.h, 5);
-    ctx.fill();
-  }
+  else if (slotKey === "armType" || slotKey === "arms") drawRobotArms(r, p, col);
 }
 
 export function colorsFromAccent(accent) {
@@ -474,11 +475,87 @@ function drawRobot(r, floorY) {
 
   drawRobotTorso(r, p, col, cx);
 
-  ctx.fillStyle = col.arms;
-  roundRect(p.armL.x, p.armL.y, p.armL.w, p.armL.h, 5); ctx.fill();
-  roundRect(p.armR.x, p.armR.y, p.armR.w, p.armR.h, 5); ctx.fill();
+  drawRobotArms(r, p, col);
 
   drawRobotHead(r, p, col, cx);
+  ctx.restore();
+}
+
+function drawRobotArms(r, p, col) {
+  const armCol = col.arms;
+  const dark = shadeColor(armCol, -28);
+  for (const arm of [p.armL, p.armR]) {
+    const grad = ctx.createLinearGradient(arm.x, arm.y, arm.x + arm.w, arm.y);
+    grad.addColorStop(0, dark);
+    grad.addColorStop(0.5, armCol);
+    grad.addColorStop(1, dark);
+    ctx.fillStyle = grad;
+    roundRect(arm.x, arm.y, arm.w, arm.h, 5);
+    ctx.fill();
+  }
+
+  // Weapon emblem sits in the enemy-facing hand (hidden while a projectile is airborne).
+  const enemyDir = -r.side;
+  const frontArm = enemyDir > 0 ? p.armR : p.armL;
+  const hx = frontArm.x + frontArm.w / 2;
+  const hy = frontArm.y + frontArm.h - 3;
+  const projectileGone = r.attack && r.attack.kind === "projectile";
+  if (!projectileGone) drawArmEmblem(r.armType, hx, hy, enemyDir, armCol);
+}
+
+function drawArmEmblem(type, hx, hy, dir, armCol) {
+  ctx.save();
+  if (type === "axe") {
+    ctx.strokeStyle = "#7a5230";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(hx, hy + 3);
+    ctx.lineTo(hx + dir * 3, hy - 12);
+    ctx.stroke();
+    ctx.fillStyle = "#c8cdd6";
+    ctx.beginPath();
+    ctx.moveTo(hx + dir * 3, hy - 16);
+    ctx.lineTo(hx + dir * 13, hy - 12);
+    ctx.lineTo(hx + dir * 13, hy - 4);
+    ctx.lineTo(hx + dir * 3, hy - 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#555d6a";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  } else if (type === "ninjaStar") {
+    ctx.save();
+    ctx.translate(hx, hy - 8);
+    ctx.fillStyle = "#c8cdd6";
+    ctx.strokeStyle = "#555d6a";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const a = i * Math.PI / 2;
+      ctx.lineTo(Math.cos(a) * 8, Math.sin(a) * 8);
+      ctx.lineTo(Math.cos(a + Math.PI / 4) * 3, Math.sin(a + Math.PI / 4) * 3);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#3a4048";
+    ctx.beginPath();
+    ctx.arc(0, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else {
+    // hand: a metal fist with a faint energy orb hint
+    ctx.fillStyle = shadeColor(armCol, 22);
+    ctx.beginPath();
+    ctx.arc(hx, hy - 4, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(120,220,255,0.5)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(hx, hy - 12, 5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

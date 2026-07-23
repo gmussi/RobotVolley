@@ -6,7 +6,7 @@ import {
 } from "../data/constants.js";
 import {
   ball, score, state, gameMode, servingSide, serveCharge,
-  bannerText, winner, menuOptions, P1, P2,
+  bannerText, winner, menuOptions, P1, P2, getArmSpec,
 } from "../engine/game.js";
 import { drawLotteryAnimation } from "./lottery.js";
 import { drawRobotFigure, drawPartPreview } from "./robotDraw.js";
@@ -33,6 +33,7 @@ export function render() {
   drawNet();
   drawRobot(P1);
   drawRobot(P2);
+  drawAttacks();
   if (state !== "menu") { drawBall(); drawBallTracker(); drawHUD(); }
   if (state === "lottery") {
     ctx.fillStyle = "rgba(6,9,18,0.62)";
@@ -122,6 +123,85 @@ function drawRobot(r) {
   drawRobotFigure(ctx, r, FLOOR_Y);
 }
 
+function drawAttacks() {
+  for (const r of [P1, P2]) {
+    const at = r.attack;
+    if (!at) continue;
+    if (at.kind === "orb") drawOrb(at);
+    else if (r.armType === "axe") drawFlyingAxe(at);
+    else drawFlyingStar(at);
+  }
+}
+
+function drawOrb(at) {
+  ctx.save();
+  const g = ctx.createRadialGradient(at.x, at.y, 2, at.x, at.y, at.hitR + 7);
+  g.addColorStop(0, "rgba(210,248,255,0.95)");
+  g.addColorStop(0.5, "rgba(90,200,255,0.7)");
+  g.addColorStop(1, "rgba(90,200,255,0)");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(at.x, at.y, at.hitR + 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(at.x, at.y, at.hitR - 2, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawFlyingAxe(at) {
+  ctx.save();
+  ctx.translate(at.x, at.y);
+  ctx.rotate(at.spin);
+  ctx.scale(1.5, 1.5);
+  ctx.strokeStyle = "#7a5230";
+  ctx.lineWidth = 4;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(0, 11);
+  ctx.lineTo(0, -12);
+  ctx.stroke();
+  ctx.fillStyle = "#c8cdd6";
+  ctx.strokeStyle = "#555d6a";
+  ctx.lineWidth = 1;
+  for (const s of [1, -1]) {
+    ctx.beginPath();
+    ctx.moveTo(0, -12);
+    ctx.quadraticCurveTo(s * 17, -10, s * 14, 1);
+    ctx.quadraticCurveTo(s * 6, -2, 0, -4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawFlyingStar(at) {
+  ctx.save();
+  ctx.translate(at.x, at.y);
+  ctx.rotate(at.spin);
+  ctx.fillStyle = "#dfe4ea";
+  ctx.strokeStyle = "#555d6a";
+  ctx.lineWidth = 1.5;
+  const R = at.hitR + 2, rIn = R * 0.42;
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2;
+    ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R);
+    ctx.lineTo(Math.cos(a + Math.PI / 4) * rIn, Math.sin(a + Math.PI / 4) * rIn);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#2a3038";
+  ctx.beginPath();
+  ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 function drawBall() {
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.25)";
@@ -140,6 +220,20 @@ function drawBall() {
   }
 
   if (ball.y + ball.r < 0) return;
+
+  if (ball.smashBy !== null) {
+    ctx.save();
+    const tg = ctx.createRadialGradient(
+      ball.x, ball.y, ball.r * 0.3, ball.x, ball.y, ball.r * 2.1);
+    tg.addColorStop(0, "rgba(255,180,40,0.8)");
+    tg.addColorStop(0.5, "rgba(255,90,20,0.45)");
+    tg.addColorStop(1, "rgba(255,60,0,0)");
+    ctx.fillStyle = tg;
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, ball.r * 2.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   ctx.save();
   ctx.translate(ball.x, ball.y);
@@ -238,6 +332,9 @@ function drawHUD() {
   const boxH = 54;
   const boxX = W / 2 - boxW / 2;
   const boxY = cy - boxH / 2;
+
+  drawAttackGauge(P1, boxX - 16, cy, "#ff5a5f");
+  drawAttackGauge(P2, boxX + boxW + 8, cy, "#29b6f6");
   roundRect(boxX, boxY, boxW, boxH, 10);
   ctx.fillStyle = "rgba(0,0,0,0.88)";
   ctx.fill();
@@ -260,12 +357,49 @@ function drawHUD() {
   ctx.fillText(`FIRST TO ${WIN_SCORE}`, W / 2, cy + 16);
 }
 
+/** Vertical bar by the scoreboard: fills as the player's attack recharges. */
+function drawAttackGauge(r, x, cy, accent) {
+  const w = 8, h = 44;
+  const y = cy - h / 2;
+  const maxCd = getArmSpec(r).cooldown || 1;
+  const frac = r.attack ? 0 : 1 - Math.min(1, Math.max(0, r.attackCooldown / maxCd));
+  const ready = frac >= 1;
+
+  roundRect(x, y, w, h, 4);
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  const fh = h * frac;
+  if (fh > 0) {
+    ctx.save();
+    roundRect(x, y, w, h, 4);
+    ctx.clip();
+    ctx.globalAlpha = ready ? 1 : 0.5;
+    ctx.fillStyle = accent;
+    ctx.fillRect(x, y + h - fh, w, fh);
+    ctx.restore();
+  }
+  if (ready) {
+    ctx.save();
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1.5;
+    roundRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5, 4);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function drawRobotPiecesHUD(robot, side, cy, slotSize, gap) {
   const accent = side < 0 ? "#ff5a5f" : "#29b6f6";
   const slots = [
     { key: "headType", typeId: robot.headType },
     { key: "torsoType", typeId: robot.torsoType },
-    { key: "arms" },
+    { key: "armType", typeId: robot.armType },
     { key: "legType", typeId: robot.legType },
   ];
   const count = slots.length;
