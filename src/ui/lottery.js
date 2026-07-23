@@ -7,23 +7,13 @@ import {
   LOTTERY_SPIN_DURATION, LOTTERY_HOLD_DURATION, LOTTERY_TOTAL_DURATION,
 } from "../engine/game.js";
 import { colorsFromAccent, drawPartPreview } from "./robotDraw.js";
+import { COLORS, fontDisplay, fontBody, drawGlassPanel, roundRect } from "./neonUi.js";
 
 const ITEM_H = 52;
 const PANEL_W = 196;
 const PANEL_H = 292;
 const REEL_H = ITEM_H * 3;
-const ACCENTS = ["#ff5a5f", "#29b6f6"];
-
-function roundRect(ctx, x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
+const ACCENTS = [COLORS.p1, COLORS.p2];
 
 function easeOutCubic(t) {
   return 1 - (1 - t) ** 3;
@@ -89,8 +79,8 @@ function drawReelItem(ctx, result, option, x, y, w, h, accent, highlighted) {
     h * 0.52,
     colorsFromAccent(accent),
   );
-  ctx.fillStyle = highlighted ? "#fff" : "rgba(255,255,255,0.82)";
-  ctx.font = `${highlighted ? "bold " : ""}13px 'Segoe UI', sans-serif`;
+  ctx.fillStyle = highlighted ? COLORS.text : "rgba(255,255,255,0.82)";
+  ctx.font = fontBody(13, highlighted ? 600 : 400);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(option.label, x + w / 2, y + h - 12);
@@ -106,22 +96,21 @@ function drawLotterySide(ctx, result, cx, playerIdx, elapsed) {
   const holding = elapsed >= LOTTERY_SPIN_DURATION;
   const winIdx = Math.max(0, result.options.findIndex((o) => o.id === result.newType));
 
-  ctx.save();
-  ctx.fillStyle = "rgba(8,12,22,0.88)";
-  roundRect(ctx, panelX, panelY, PANEL_W, PANEL_H, 14);
-  ctx.fill();
-  ctx.strokeStyle = accent;
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  drawGlassPanel(ctx, panelX, panelY, PANEL_W, PANEL_H, {
+    radius: 14,
+    borderColor: accent,
+    glowColor: holding ? accent : null,
+    fillAlpha: 0.88,
+  });
 
   ctx.fillStyle = accent;
-  ctx.font = "bold 13px 'Segoe UI', sans-serif";
+  ctx.font = fontBody(13, 700);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(`PLAYER ${playerIdx + 1}`, cx, panelY + 22);
 
-  ctx.fillStyle = "#c084fc";
-  ctx.font = "bold 15px 'Segoe UI', sans-serif";
+  ctx.fillStyle = COLORS.lottery;
+  ctx.font = fontDisplay(15, 600);
   ctx.fillText(`GETTING NEW ${result.slotName.toUpperCase()}`, cx, panelY + 44);
 
   const reelX = panelX + 10;
@@ -180,7 +169,7 @@ function drawLotterySide(ctx, result, cx, playerIdx, elapsed) {
   if (holding) {
     const pulse = 0.85 + 0.15 * Math.sin((elapsed - LOTTERY_SPIN_DURATION) * 8);
     ctx.fillStyle = accent;
-    ctx.font = `bold ${18 + pulse * 2}px 'Segoe UI', sans-serif`;
+    ctx.font = fontDisplay(18 + pulse * 2, 700);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(`${result.slotName}: ${result.newLabel}`, cx, panelY + PANEL_H - 56);
@@ -191,12 +180,10 @@ function drawLotterySide(ctx, result, cx, playerIdx, elapsed) {
       panelY + PANEL_H - 24,
       PANEL_W - 20,
       "rgba(255,255,255,0.82)",
-      "12px 'Segoe UI', sans-serif",
+      fontBody(12),
       14,
     );
   }
-
-  ctx.restore();
 }
 
 export function drawLotteryAnimation(ctx) {

@@ -4,6 +4,7 @@
 import { ROBOT_W, ROBOT_H } from "../data/constants.js";
 import { ball, shadeColor, updateRobotParts } from "../engine/game.js";
 import { HEAD_TYPES } from "../data/heads.js";
+import { COLORS, GLOW, PART_ACCENTS } from "../data/theme.js";
 
 let ctx;
 
@@ -26,6 +27,50 @@ function roundRect(x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+function teamColor(r) {
+  return r.side < 0 ? COLORS.p1 : COLORS.p2;
+}
+
+function headAccent(r) {
+  return PART_ACCENTS[r.headType] || teamColor(r);
+}
+
+function drawTeamGlow(r, cx, cy) {
+  const glow = r.side < 0 ? GLOW.p1 : GLOW.p2;
+  ctx.save();
+  ctx.globalAlpha = 0.28;
+  const g = ctx.createRadialGradient(cx, cy - 24, 8, cx, cy - 24, 72);
+  g.addColorStop(0, glow);
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - 18, 42, 52, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function strokeNeonRect(x, y, w, h, rad, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.7;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 5;
+  roundRect(x, y, w, h, rad);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function fillMetallicRect(x, y, w, h, rad, base, dark, light) {
+  const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+  grad.addColorStop(0, light);
+  grad.addColorStop(0.45, base);
+  grad.addColorStop(1, dark);
+  ctx.fillStyle = grad;
+  roundRect(x, y, w, h, rad);
+  ctx.fill();
 }
 
 function unionRects(...rects) {
@@ -260,14 +305,13 @@ function drawRobotLegs(r, p, col) {
     return;
   }
 
-  // Robot (normal) — classic block legs with a knee joint line.
+  // Robot (normal) — athletic tapered legs with metallic fill.
   for (const leg of [p.legL, p.legR]) {
-    ctx.fillStyle = legCol;
-    roundRect(leg.x, leg.y, leg.w, leg.h, 5);
-    ctx.fill();
-    ctx.fillStyle = light;
-    ctx.fillRect(leg.x + 3, leg.y + leg.h * 0.42, leg.w - 6, 2);
-    ctx.fillStyle = "rgba(0,0,0,0.15)";
+    const dark = shadeColor(legCol, -30);
+    const light = shadeColor(legCol, 18);
+    fillMetallicRect(leg.x, leg.y, leg.w, leg.h, 5, legCol, dark, light);
+    strokeNeonRect(leg.x, leg.y, leg.w, leg.h, 5, teamColor(r));
+    ctx.fillStyle = "rgba(0,0,0,0.12)";
     ctx.fillRect(leg.x + 3, leg.y + 6, 3, leg.h - 12);
   }
   ctx.fillStyle = "#20242f";
@@ -470,6 +514,8 @@ function drawRobot(r, floorY) {
   const shW = r.w * (0.6 + 0.3 * (r.onGround ? 1 : 0.4));
   ctx.ellipse(cx, floorY + 6, shW, 8, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  drawTeamGlow(r, cx, r.y + r.h / 2);
 
   drawRobotLegs(r, p, col);
 

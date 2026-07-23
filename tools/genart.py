@@ -60,17 +60,71 @@ def arena_svg():
 
 
 def logo_svg():
-    return '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 120" aria-hidden="true">
+    return '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 140" aria-hidden="true">
   <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff3c0"/>
+      <stop offset="0.5" stop-color="#ffd54a"/>
+      <stop offset="1" stop-color="#f2b705"/>
+    </linearGradient>
+    <linearGradient id="neonGlow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd54a" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#ffd54a" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- left volleyball mark -->
+  <g transform="translate(48,70)" filter="url(#glow)">
+    <circle r="22" fill="none" stroke="#ffd54a" stroke-width="2.5" opacity="0.9"/>
+    <path d="M-22,0 Q0,-14 22,0 Q0,14 -22,0" fill="none" stroke="#ffd54a" stroke-width="1.5" opacity="0.7"/>
+    <path d="M0,-22 Q14,0 0,22 Q-14,0 0,-22" fill="none" stroke="#ffd54a" stroke-width="1.5" opacity="0.7"/>
+    <line x1="-8" y1="-8" x2="8" y2="8" stroke="#29b6f6" stroke-width="1.2" opacity="0.8"/>
+    <line x1="8" y1="-8" x2="-8" y2="8" stroke="#ff5a5f" stroke-width="1.2" opacity="0.8"/>
+  </g>
+  <!-- wordmark -->
+  <text x="280" y="82" text-anchor="middle" font-family="Rajdhani, Segoe UI, system-ui, sans-serif"
+        font-size="58" font-weight="700" letter-spacing="6" fill="url(#gold)">ROBOT VOLLEY</text>
+  <rect x="120" y="96" width="320" height="2" rx="1" fill="url(#neonGlow)" opacity="0.8"/>
+  <!-- right volleyball mark -->
+  <g transform="translate(512,70)" filter="url(#glow)">
+    <circle r="22" fill="none" stroke="#ffd54a" stroke-width="2.5" opacity="0.9"/>
+    <path d="M-22,0 Q0,-14 22,0 Q0,14 -22,0" fill="none" stroke="#ffd54a" stroke-width="1.5" opacity="0.7"/>
+    <path d="M0,-22 Q14,0 0,22 Q-14,0 0,-22" fill="none" stroke="#ffd54a" stroke-width="1.5" opacity="0.7"/>
+    <line x1="-8" y1="-8" x2="8" y2="8" stroke="#29b6f6" stroke-width="1.2" opacity="0.8"/>
+    <line x1="8" y1="-8" x2="-8" y2="8" stroke="#ff5a5f" stroke-width="1.2" opacity="0.8"/>
+  </g>
+</svg>'''
+
+
+def icon_svg():
+    """App icon mark — volleyball with circuit arcs, works at 32px."""
+    return '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" aria-hidden="true">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#121828"/>
+      <stop offset="1" stop-color="#0a0e1a"/>
+    </linearGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#fff3c0"/>
       <stop offset="1" stop-color="#f2b705"/>
     </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
-  <text x="210" y="72" text-anchor="middle" font-family="Segoe UI, system-ui, sans-serif"
-        font-size="52" font-weight="700" fill="url(#gold)">ROBOT VOLLEY</text>
-  <circle cx="52" cy="60" r="18" fill="none" stroke="#ffd54a" stroke-width="3"/>
-  <circle cx="368" cy="60" r="18" fill="none" stroke="#ffd54a" stroke-width="3"/>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <g transform="translate(256,256)" filter="url(#glow)">
+    <circle r="140" fill="none" stroke="url(#gold)" stroke-width="8"/>
+    <path d="M-140,0 Q0,-90 140,0 Q0,90 -140,0" fill="none" stroke="#ffd54a" stroke-width="5" opacity="0.75"/>
+    <path d="M0,-140 Q90,0 0,140 Q-90,0 0,-140" fill="none" stroke="#ffd54a" stroke-width="5" opacity="0.75"/>
+    <line x1="-50" y1="-50" x2="50" y2="50" stroke="#29b6f6" stroke-width="4" opacity="0.9"/>
+    <line x1="50" y1="-50" x2="-50" y2="50" stroke="#ff5a5f" stroke-width="4" opacity="0.9"/>
+    <circle r="12" fill="#ffd54a" opacity="0.9"/>
+  </g>
 </svg>'''
 
 
@@ -78,6 +132,7 @@ def main():
     print("Generating SVG assets…")
     save("bg/arena.svg", arena_svg())
     save("logo.svg", logo_svg())
+    save("icon.svg", icon_svg())
     print("Done.")
 
 

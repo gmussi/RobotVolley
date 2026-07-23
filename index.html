@@ -2,10 +2,31 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0e1a">
+  <meta name="description" content="Robot Volley — rally, customize, and smash in a neon sci-fi volleyball arena. 1v1 arcade sports for browser and mobile.">
+  <meta property="og:title" content="Robot Volley">
+  <meta property="og:description" content="Rally. Customize. Smash. A neon sci-fi volleyball game for two players.">
+  <meta property="og:image" content="/og-image.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Robot Volley">
+  <meta name="twitter:description" content="Rally. Customize. Smash.">
+  <meta name="twitter:image" content="/og-image.png">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Rajdhani:wght@600;700&display=swap" rel="stylesheet">
   <title>Robot Volley</title>
 </head>
 <body>
+  <div id="splash" aria-hidden="true">
+    <div id="splashLogo">ROBOT VOLLEY</div>
+    <div id="splashBar"><div id="splashFill"></div></div>
+  </div>
   <div id="stage">
     <div id="wrap">
       <canvas id="game"></canvas>
@@ -21,83 +42,12 @@
     <div id="p2hint"><span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <span class="kbd">&larr;</span><span class="kbd">&rarr;</span> move &nbsp; <span class="kbd">&uarr;</span> jump &nbsp; hold <span class="kbd">&darr;</span> serve &nbsp; <span class="kbd">/</span> attack</div>
     <div>Hold serve to charge force &nbsp;·&nbsp; <span class="kbd">Space</span> restart</div>
   </div>
-  <div id="colorPanel">
-    <div class="colorGroup">
-      <span class="tag-p1"><b>P1</b></span>
-      <label>Head <input type="color" id="p1-head"></label>
-      <label>Torso <input type="color" id="p1-torso"></label>
-      <label>Arms <input type="color" id="p1-arms"></label>
-      <label>Legs <input type="color" id="p1-legs"></label>
+  <div id="customizePanel" class="neon-panel hidden">
+    <div class="panel-header">
+      <span class="panel-title">ROBOT LAB</span>
+      <button id="labClose" type="button" class="neon-btn small" aria-label="Close">✕</button>
     </div>
-    <div class="colorGroup">
-      <span class="tag-p2"><b>P2</b></span>
-      <label>Head <input type="color" id="p2-head"></label>
-      <label>Torso <input type="color" id="p2-torso"></label>
-      <label>Arms <input type="color" id="p2-arms"></label>
-      <label>Legs <input type="color" id="p2-legs"></label>
-    </div>
-  </div>
-  <div id="legPanel">
-    <div class="legGroup p1" data-player="0">
-      <span class="tag-p1"><b>P1 Legs</b></span>
-      <button class="legBtn active" data-type="normal" title="Normal jump">Robot</button>
-      <button class="legBtn" data-type="power" title="Jump higher">Power</button>
-      <button class="legBtn" data-type="rocket" title="Many small jumps — tap repeatedly, like Flappy Bird">Rocket</button>
-    </div>
-    <div class="legGroup p2" data-player="1">
-      <span class="tag-p2"><b>P2 Legs</b></span>
-      <button class="legBtn active" data-type="normal" title="Normal jump">Robot</button>
-      <button class="legBtn" data-type="power" title="Jump higher">Power</button>
-      <button class="legBtn" data-type="rocket" title="Many small jumps — tap repeatedly, like Flappy Bird">Rocket</button>
-    </div>
-  </div>
-  <div id="headPanel">
-    <div class="headGroup p1" data-player="0">
-      <span class="tag-p1"><b>P1 Head</b></span>
-      <button class="headBtn active" data-type="standard" title="Balanced bounce">Standard</button>
-      <button class="headBtn" data-type="dome" title="High pop, less control">Dome</button>
-      <button class="headBtn" data-type="magnet" title="Sticky carry then sling">Magnet</button>
-      <button class="headBtn" data-type="drill" title="Dash shove bonus">Drill</button>
-      <button class="headBtn" data-type="satellite" title="Tall reach, soft chest">Satellite</button>
-    </div>
-    <div class="headGroup p2" data-player="1">
-      <span class="tag-p2"><b>P2 Head</b></span>
-      <button class="headBtn active" data-type="standard" title="Balanced bounce">Standard</button>
-      <button class="headBtn" data-type="dome" title="High pop, less control">Dome</button>
-      <button class="headBtn" data-type="magnet" title="Sticky carry then sling">Magnet</button>
-      <button class="headBtn" data-type="drill" title="Dash shove bonus">Drill</button>
-      <button class="headBtn" data-type="satellite" title="Tall reach, soft chest">Satellite</button>
-    </div>
-  </div>
-  <div id="torsoPanel">
-    <div class="torsoGroup p1" data-player="0">
-      <span class="tag-p1"><b>P1 Torso</b></span>
-      <button class="torsoBtn active" data-type="standard" title="Balanced mobility">Standard</button>
-      <button class="torsoBtn" data-type="heavy" title="Tanky on ground, sluggish in air">Heavy</button>
-      <button class="torsoBtn" data-type="light" title="Floaty and agile in air">Light</button>
-      <button class="torsoBtn" data-type="lowCoG" title="Stable, lower center with spinning counterweight">Low CoG</button>
-    </div>
-    <div class="torsoGroup p2" data-player="1">
-      <span class="tag-p2"><b>P2 Torso</b></span>
-      <button class="torsoBtn active" data-type="standard" title="Balanced mobility">Standard</button>
-      <button class="torsoBtn" data-type="heavy" title="Tanky on ground, sluggish in air">Heavy</button>
-      <button class="torsoBtn" data-type="light" title="Floaty and agile in air">Light</button>
-      <button class="torsoBtn" data-type="lowCoG" title="Stable, lower center with spinning counterweight">Low CoG</button>
-    </div>
-  </div>
-  <div id="armPanel">
-    <div class="armGroup p1" data-player="0">
-      <span class="tag-p1"><b>P1 Arms</b></span>
-      <button class="armBtn active" data-type="hand" title="Orb sweep — smashes the ball">Hand</button>
-      <button class="armBtn" data-type="axe" title="Spinning arc throw — deflects the ball">Axe</button>
-      <button class="armBtn" data-type="ninjaStar" title="Straight fast throw — deflects the ball">Ninja Star</button>
-    </div>
-    <div class="armGroup p2" data-player="1">
-      <span class="tag-p2"><b>P2 Arms</b></span>
-      <button class="armBtn active" data-type="hand" title="Orb sweep — smashes the ball">Hand</button>
-      <button class="armBtn" data-type="axe" title="Spinning arc throw — deflects the ball">Axe</button>
-      <button class="armBtn" data-type="ninjaStar" title="Straight fast throw — deflects the ball">Ninja Star</button>
-    </div>
+    <div id="labContent"></div>
   </div>
   <script type="module" src="/src/main.js"></script>
 </body>

@@ -31,19 +31,20 @@ MAXLONG = {"bg": 1600, "logo": 1200}
 WEBP_QUALITY = 88
 
 STYLE = (
-    "Hand-painted digital illustration for a premium arcade sports game. "
-    "Painterly visible brushwork, neon-lit retro-futuristic mood, rich saturated "
-    "colors against deep shadow, atmospheric depth. Confident illustrative style — "
-    "not photographic, not 3D-rendered, not flat vector. No text, no watermark, "
-    "no UI chrome — just the artwork bleeding to all edges."
+    "Hand-painted digital illustration for a premium neon sci-fi sports arcade game. "
+    "Unified broadcast aesthetic — sleek athletic robots, glowing volleyball, "
+    "dark navy stadium with electric crimson and cyan team lighting. Rich saturated "
+    "colors, atmospheric depth, subtle neon bloom. Confident illustrative style — "
+    "not photographic, not 3D-rendered, not flat vector, no CRT scanlines, no pixel "
+    "fonts. No text, no watermark, no UI chrome — artwork bleeds to all edges."
 )
 
 STYLE_ANCHOR_PROMPT = (
-    f"{STYLE} Subject: two stylized robot athletes facing each other across a "
-    "glowing volleyball net in a dark indoor arena, a golden ball suspended between "
-    "them, crimson and cyan team accents, starfield visible through a high window. "
-    "This image defines the master art style for the whole game. Wide cinematic "
-    "composition, painterly."
+    f"{STYLE} Subject: two sleek neon-lit robot athletes mid-rally across a glowing "
+    "volleyball net in a futuristic night stadium, golden ball with light trail, "
+    "crimson left team and cyan right team accents, center-court spotlight, "
+    "abstract neon billboards in background. Master art style for the whole game. "
+    "Wide cinematic composition."
 )
 
 ASSETS = [
@@ -52,8 +53,9 @@ ASSETS = [
      "cyan-tinted right court half, polished floor strip at the bottom, glowing net "
      "post in the center distance, atmospheric haze, no characters, no ball, no UI."),
     ("logo", "logo", "EXCEPTION: isolated title logo emblem for a game called ROBOT "
-     "VOLLEY. Bold retro-futuristic wordmark in gold and white, chunky athletic "
-     "lettering, small volleyball motif, crimson and cyan accent streaks. "
+     "VOLLEY. Bold geometric sans-serif wordmark in gold gradient, neon underglow, "
+     "volleyball circuit motifs flanking text, crimson and cyan accent streaks. "
+     "Clean vector edges, neon sci-fi sports broadcast style — NO CRT, NO pixel font. "
      "Landscape composition on a flat uniform magenta (#FF00FF) chroma-key background "
      "with clear margin — the magenta is ONLY the backdrop, not inside the logo."),
 ]
@@ -215,7 +217,7 @@ def main():
             continue
         print(f"• generating {rel}…")
         prompt = f"{STYLE}\nSubject: {subject}."
-        aspect = "16:9" if cat == "bg" else "3:1"
+        aspect = "16:9" if cat == "bg" else "16:9"
         data = gen_image(client, prompt, aspect=aspect, style_ref_bytes=style_ref)
         maxlong = MAXLONG.get(cat if cat != "logo" else "logo", 1200)
         if cat == "logo" and LOGO_IS_CUTOUT:

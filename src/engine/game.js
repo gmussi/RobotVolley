@@ -144,6 +144,7 @@ export const menuOptions = [
   { mode: "1p", label: "SINGLE PLAYER", disabled: false, x: 0, y: 0, w: 0, h: 0 },
   { mode: "2p", label: "TWO PLAYERS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
   { mode: null, label: "ONLINE MATCH", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+  { mode: null, action: "customize", label: "ROBOT LAB", disabled: false, x: 0, y: 0, w: 0, h: 0 },
   { mode: null, action: "controls", label: "CONTROLS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
   { mode: null, action: "settings", label: "SETTINGS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
 ];
@@ -172,6 +173,9 @@ export function menuSelect() {
   if (o.action === "settings") {
     submenuReturnState = "menu";
     state = "settings";
+    return false;
+  }
+  if (o.action === "customize") {
     return false;
   }
   // Placeholder entries (no mode yet) can be highlighted/selected but launch nothing.

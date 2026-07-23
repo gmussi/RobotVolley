@@ -15,7 +15,9 @@ import {
 } from "./engine/game.js";
 import { initRender, render, setRenderRemainder } from "./ui/render.js";
 import { initViewport, eventToCanvas } from "./ui/viewport.js";
-import { wireDomControls, updateHint, syncRobotPartsToDom } from "./ui/dom.js";
+import { wireDomControls, updateHint, syncRobotPartsToDom, openLab } from "./ui/customize.js";
+import { initTouchControls, drawTouchControls } from "./ui/touchControls.js";
+import { preloadAssets, hideSplash, setSplashProgress } from "./ui/preload.js";
 import {
   initAudio, drainEvents, onStateChange, tickLotterySounds,
   tickMusicIntensity, playUiNavigate, playUiConfirm,
@@ -66,6 +68,7 @@ window.addEventListener("keydown", (e) => {
     else if (e.code === "Enter" || e.code === "Space") {
       const o = menuOptions[menuIndex];
       if (o?.action === "settings") resetSettingsFocus();
+      if (o?.action === "customize") { openLab(); playUiConfirm(); return; }
       if (menuSelect()) { playUiConfirm(); updateHint(); }
       else if (o?.action === "settings" || o?.action === "controls") playUiConfirm();
     }
@@ -169,6 +172,7 @@ canvas.addEventListener("mousedown", (e) => {
         if (o.disabled) return;
         setMenuIndex(i);
         if (o.action === "settings") resetSettingsFocus();
+        if (o.action === "customize") { openLab(); playUiConfirm(); return; }
         if (menuSelect()) { playUiConfirm(); updateHint(); }
         else if (o.action === "settings" || o.action === "controls") playUiConfirm();
         return;
@@ -184,6 +188,12 @@ canvas.addEventListener("mousedown", (e) => {
 wireDomControls();
 resetPositions();
 syncRobotPartsToDom();
+initTouchControls(canvas, keys);
+
+preloadAssets(setSplashProgress).then(() => {
+  hideSplash();
+  requestAnimationFrame(frame);
+});
 
 function frame(now) {
   let dt = (now - last) / 1000;
@@ -222,4 +232,3 @@ function frame(now) {
 }
 
 initAudio();
-requestAnimationFrame(frame);
