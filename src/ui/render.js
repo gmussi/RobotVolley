@@ -9,6 +9,7 @@ import {
   bannerText, winner, menuOptions, menuIndex, P1, P2, getArmSpec,
 } from "../engine/game.js";
 import { drawLotteryAnimation } from "./lottery.js";
+import { drawSettings } from "./settings.js";
 import { drawRobotFigure, drawPartPreview } from "./robotDraw.js";
 import { arenaBgImage, stadiumBg, stadiumLayersReady, logoImage } from "./art.js";
 import { codeFor } from "../data/controls.js";
@@ -35,7 +36,9 @@ export function render() {
   drawRobot(P1);
   drawRobot(P2);
   drawAttacks();
-  if (state !== "menu" && state !== "controls") { drawBall(); drawBallTracker(); drawHUD(); }
+  if (state !== "menu" && state !== "controls" && state !== "settings") {
+    drawBall(); drawBallTracker(); drawHUD();
+  }
   if (state === "lottery") {
     ctx.fillStyle = "rgba(6,9,18,0.62)";
     ctx.fillRect(0, 0, W, H);
@@ -445,6 +448,7 @@ function drawHudPieceSlot(robot, slot, x, cy, size) {
 function drawBanner() {
   if (state === "menu") { drawMenu(); return; }
   if (state === "controls") { drawControls(); return; }
+  if (state === "settings") { drawSettings(ctx); return; }
   if (state === "serve") {
     const serverIsCpu = gameMode === "1p" && servingSide > 0;
     const name = serverIsCpu ? "CPU" : `PLAYER ${servingSide < 0 ? 1 : 2}`;
@@ -490,8 +494,8 @@ function drawMenu() {
   const now = performance.now();
   const blink = Math.floor(now / 380) % 2 === 0;
 
-  const startY = H * 0.48;
-  const rowH = 56;
+  const startY = H * 0.42;
+  const rowH = 52;
   const itemW = 440;
   const itemH = 44;
 

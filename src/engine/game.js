@@ -19,6 +19,13 @@ import { codeFor } from "../data/controls.js";
 
 export { W, H, FLOOR_Y, PHYSICS_STEP };
 
+// ---- Audio events (drained by main.js; engine never imports audio) ----
+export const audioEvents = [];
+
+function emitAudio(type, data = {}) {
+  audioEvents.push({ type, ...data });
+}
+
 // ---- Shared state ----
 export const score = [0, 0];
 export const ball = {
@@ -111,6 +118,7 @@ export function commitPartLottery() {
     updateRobotParts(robots[i]);
   }
   lotteryTick++;
+  emitAudio("lottery_land");
 }
 
 function setupServePhase() {
@@ -137,6 +145,7 @@ export const menuOptions = [
   { mode: "2p", label: "TWO PLAYERS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
   { mode: null, label: "ONLINE MATCH", disabled: false, x: 0, y: 0, w: 0, h: 0 },
   { mode: null, action: "controls", label: "CONTROLS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+  { mode: null, action: "settings", label: "SETTINGS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
 ];
 
 // Single Player is highlighted by default.
@@ -156,6 +165,7 @@ export function menuSelect() {
   const o = menuOptions[menuIndex];
   if (!o || o.disabled) return false;
   if (o.action === "controls") { state = "controls"; return false; }
+  if (o.action === "settings") { state = "settings"; return false; }
   // Placeholder entries (no mode yet) can be highlighted/selected but launch nothing.
   if (!o.mode) return false;
   startGame(o.mode);
@@ -298,6 +308,7 @@ export function serveBall(charge) {
   serveCharging = false;
   serveCharge = 0;
   state = "play";
+  emitAudio("serve_launch", { charge });
 }
 
 export function startGame(mode) {
@@ -324,11 +335,13 @@ export function awardPoint(scorer) {
     winner = scorer;
     state = "over";
     bannerText = `PLAYER ${scorer + 1} WINS!`;
+    emitAudio("match_win");
   } else {
     bannerText = `POINT — PLAYER ${scorer + 1}`;
     state = "point";
     messageTimer = 1.3;
     servingSide = scorer === 0 ? 1 : -1;
+    emitAudio("point_score");
   }
 }
 
@@ -373,6 +386,7 @@ export function updateRobot(r, dt) {
       r.squash = 0;
       r.flapFx = 0.18;
       r.flapsUsed++;
+      emitAudio("rocket_flap");
     }
   } else if (r.jumpHeld && r.onGround) {
     const baseJump = r.legType === "power" ? POWER_JUMP_V : JUMP_V;
@@ -453,6 +467,7 @@ function startAttack(r) {
       x: cx + dx * reach, y: cy + dy * reach,
       vx: dx * spec.launchSpeed, vy: dy * spec.launchSpeed, spin: 0 };
   }
+  emitAudio("attack_start");
 }
 
 function endAttack(r) {
@@ -508,6 +523,7 @@ function smashBall(r) {
   ball.lastHitBy = r.side;
   ball.smashBy = r.side;
   r.eyeBlink = 0.12;
+  emitAudio("smash");
 }
 
 /** Axe / ninja star: ordinary redirect, kept under the normal speed cap. */
@@ -528,6 +544,7 @@ function deflectBall(r, at) {
   const sp = Math.hypot(ball.vx, ball.vy);
   if (sp > BALL_MAX_SPEED) { ball.vx *= BALL_MAX_SPEED / sp; ball.vy *= BALL_MAX_SPEED / sp; }
   r.eyeBlink = 0.12;
+  emitAudio("deflect");
 }
 
 export function collideBallAttack(r) {
@@ -602,6 +619,7 @@ function releaseMagnetHold(r) {
   ball.spin = r.facing * 4;
   ball.magnetHold = null;
   r.magnetFx = 0;
+  emitAudio("magnet_release");
 }
 
 function tickMagnetHold(dt) {
@@ -662,6 +680,7 @@ export function collideBallRobot(r, opts = {}) {
     r.magnetFx = spec.carryTime;
     ball.lastHitBy = r.side;
     r.eyeBlink = 0.12;
+    emitAudio("magnet_catch");
     return true;
   }
 
@@ -710,6 +729,7 @@ export function collideBallRobot(r, opts = {}) {
 
   if (isHeadHit && r.headType === "drill" && Math.abs(r.vx) > HEAD_TYPES.drill.shoveMinVx) {
     ball.vx += r.facing * HEAD_TYPES.drill.shoveBoost;
+    emitAudio("drill_shove");
   }
 
   const newSpeed = Math.hypot(ball.vx, ball.vy);
@@ -725,6 +745,7 @@ export function collideBallRobot(r, opts = {}) {
 
   ball.lastHitBy = r.side;
   r.eyeBlink = 0.12;
+  emitAudio("ball_hit", { speed: Math.hypot(ball.vx, ball.vy), part });
   return true;
 }
 
@@ -745,6 +766,7 @@ function collideBallNet(prevX, prevY) {
         ball.vx = Math.abs(ball.vx) * NET_BOUNCE;
       }
       ball.spin *= 0.4;
+      emitAudio("ball_net");
       return;
     }
   }
@@ -765,6 +787,7 @@ function collideBallNet(prevX, prevY) {
   if (vn < 0) {
     ball.vx -= (1 + NET_BOUNCE) * vn * nX;
     ball.vy -= (1 + NET_BOUNCE) * vn * nY;
+    emitAudio("ball_net");
   }
 }
 
@@ -792,8 +815,16 @@ export function updateBall(dt) {
   ball.x += ball.vx * dt;
   ball.y += ball.vy * dt;
 
-  if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx = Math.abs(ball.vx) * 0.95; }
-  if (ball.x + ball.r > W) { ball.x = W - ball.r; ball.vx = -Math.abs(ball.vx) * 0.95; }
+  if (ball.x - ball.r < 0) {
+    ball.x = ball.r;
+    ball.vx = Math.abs(ball.vx) * 0.95;
+    emitAudio("ball_wall");
+  }
+  if (ball.x + ball.r > W) {
+    ball.x = W - ball.r;
+    ball.vx = -Math.abs(ball.vx) * 0.95;
+    emitAudio("ball_wall");
+  }
 
   collideBallNet(prevX, prevY);
   for (const r of robots) collideBallRobot(r);
@@ -849,7 +880,7 @@ export function aiControl(r) {
 }
 
 export function readInput(keys, controlMap) {
-  if (state === "menu" || state === "lottery") {
+  if (state === "menu" || state === "lottery" || state === "controls" || state === "settings") {
     for (const r of robots) { r.moveDir = 0; r.jumpHeld = false; r.attackHeld = false; }
     return;
   }

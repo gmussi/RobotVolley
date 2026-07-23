@@ -4,7 +4,8 @@
 import "./styles/main.css";
 import { CONTROL } from "./data/controls.js";
 import {
-  W, PHYSICS_STEP, state, menuOptions, lotteryTick,
+  PHYSICS_STEP, state, menuOptions, menuIndex, lotteryTick,
+  score, ball, audioEvents,
   startGame, toMenu, resetPositions,
   menuMove, menuSelect, setMenuIndex,
   handleServeKeyDown, handleServeKeyUp,
@@ -13,6 +14,13 @@ import {
 import { initRender, render, setRenderRemainder } from "./ui/render.js";
 import { initViewport, eventToCanvas } from "./ui/viewport.js";
 import { wireDomControls, updateHint, syncRobotPartsToDom } from "./ui/dom.js";
+import {
+  initAudio, drainEvents, onStateChange, tickLotterySounds,
+  tickMusicIntensity, playUiNavigate, playUiConfirm,
+} from "./audio/manager.js";
+import {
+  resetSettingsFocus, handleSettingsKey, handleSettingsPointer,
+} from "./ui/settings.js";
 
 const canvas = document.getElementById("game");
 const stage = document.getElementById("stage");
@@ -22,19 +30,46 @@ initViewport(canvas, stage, fsBtn);
 
 const keys = new Set();
 
+let prevState = state;
+let lastLotteryTick = 0;
+let last = performance.now();
+let acc = 0;
+let settingsDragging = false;
+
+function leaveSubmenu() {
+  toMenu();
+  playUiConfirm();
+}
+
 window.addEventListener("keydown", (e) => {
   if (e.code in CONTROL || e.code === "Space") e.preventDefault();
   keys.add(e.code);
   if (state === "menu") {
-    if (e.code === "ArrowUp" || e.code === "KeyW") menuMove(-1);
-    else if (e.code === "ArrowDown" || e.code === "KeyS") menuMove(1);
-    else if (e.code === "Enter" || e.code === "Space") { if (menuSelect()) updateHint(); }
-    else if (e.code === "Digit1" || e.code === "Numpad1") { startGame("1p"); updateHint(); }
-    else if (e.code === "Digit2" || e.code === "Numpad2") { startGame("2p"); updateHint(); }
+    if (e.code === "ArrowUp" || e.code === "KeyW") { menuMove(-1); playUiNavigate(); }
+    else if (e.code === "ArrowDown" || e.code === "KeyS") { menuMove(1); playUiNavigate(); }
+    else if (e.code === "Enter" || e.code === "Space") {
+      const o = menuOptions[menuIndex];
+      if (o?.action === "settings") resetSettingsFocus();
+      if (menuSelect()) { playUiConfirm(); updateHint(); }
+      else if (o?.action === "settings" || o?.action === "controls") playUiConfirm();
+    }
+    else if (e.code === "Digit1" || e.code === "Numpad1") { startGame("1p"); playUiConfirm(); updateHint(); }
+    else if (e.code === "Digit2" || e.code === "Numpad2") { startGame("2p"); playUiConfirm(); updateHint(); }
+    return;
+  }
+  if (state === "settings") {
+    if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) {
+      leaveSubmenu();
+      return;
+    }
+    if (handleSettingsKey(e.code)) {
+      if (["ArrowUp", "ArrowDown", "KeyW", "KeyS"].includes(e.code)) playUiNavigate();
+      else playUiConfirm();
+    }
     return;
   }
   if (state === "controls") {
-    if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) toMenu();
+    if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) leaveSubmenu();
     return;
   }
   if (state === "serve") handleServeKeyDown(e.code, CONTROL);
@@ -47,22 +82,49 @@ window.addEventListener("keyup", (e) => {
 });
 
 canvas.addEventListener("mousemove", (e) => {
-  if (state !== "menu") return;
   const { mx, my } = eventToCanvas(canvas, e);
+  if (state === "settings" && settingsDragging) {
+    handleSettingsPointer(mx, my, "move");
+    return;
+  }
+  if (state !== "menu") return;
   menuOptions.forEach((o, i) => {
-    if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) setMenuIndex(i);
+    if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) {
+      if (i !== menuIndex) {
+        setMenuIndex(i);
+        playUiNavigate();
+      }
+    }
   });
+});
+
+window.addEventListener("mouseup", () => {
+  if (settingsDragging) {
+    handleSettingsPointer(0, 0, "up");
+    settingsDragging = false;
+  }
 });
 
 canvas.addEventListener("mousedown", (e) => {
   const { mx, my } = eventToCanvas(canvas, e);
+  if (state === "settings") {
+    if (handleSettingsPointer(mx, my, "down")) {
+      settingsDragging = true;
+      playUiConfirm();
+      return;
+    }
+    leaveSubmenu();
+    return;
+  }
   if (state === "menu") {
     for (let i = 0; i < menuOptions.length; i++) {
       const o = menuOptions[i];
       if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) {
         if (o.disabled) return;
         setMenuIndex(i);
-        if (menuSelect()) updateHint();
+        if (o.action === "settings") resetSettingsFocus();
+        if (menuSelect()) { playUiConfirm(); updateHint(); }
+        else if (o.action === "settings" || o.action === "controls") playUiConfirm();
         return;
       }
     }
@@ -75,10 +137,6 @@ wireDomControls();
 resetPositions();
 syncRobotPartsToDom();
 
-let lastLotteryTick = 0;
-let last = performance.now();
-let acc = 0;
-
 function frame(now) {
   let dt = (now - last) / 1000;
   last = now;
@@ -86,6 +144,19 @@ function frame(now) {
 
   readInput(keys, CONTROL);
   tickServe(dt);
+
+  if (state !== prevState) {
+    onStateChange(prevState, state);
+    prevState = state;
+  }
+
+  drainEvents(audioEvents);
+  tickLotterySounds(state);
+
+  const maxScore = Math.max(score[0], score[1]);
+  const ballSpeed = ball.live ? Math.hypot(ball.vx, ball.vy) : 0;
+  tickMusicIntensity(maxScore, ballSpeed);
+
   if (lotteryTick !== lastLotteryTick) {
     lastLotteryTick = lotteryTick;
     syncRobotPartsToDom();
@@ -102,4 +173,5 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+initAudio();
 requestAnimationFrame(frame);

@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "genart": "python3 tools/genart.py",
     "genart:ai": "python3 tools/gen_nanobanana.py",
-    "genart:stadium": "python3 tools/gen_stadium_layers.py"
+    "genart:stadium": "python3 tools/gen_stadium_layers.py",
+    "genaudio": "node tools/gen_audio.mjs",
+    "encode:music": "bash tools/encode_match_music.sh"
   },
   "devDependencies": {
     "jsdom": "^24.0.0",
