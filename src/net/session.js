@@ -15,6 +15,8 @@ import { codeFor } from "../data/controls.js";
 
 /** ~50 Hz snapshots — guest extrapolates between them for smooth render. */
 const SNAPSHOT_INTERVAL_MS = 20;
+/** Abort WebRTC if channels never open (e.g. matched a dead queue ghost). */
+const CONNECT_TIMEOUT_MS = 12000;
 
 let mm = null;
 let peer = null;
@@ -26,6 +28,7 @@ let lastSnapAt = 0;
 let active = false;
 let serveKeyDown = false;
 let channelReady = false;
+let connectTimer = null;
 
 /** Guest: latest unapplied snapshot (coalesce bursts onto one apply/frame). */
 let pendingSnap = null;
@@ -51,28 +54,64 @@ export function isOnlineSearching() {
   return state === "searching";
 }
 
-function cleanupNet() {
-  active = false;
+function clearConnectTimer() {
+  if (connectTimer != null) {
+    clearTimeout(connectTimer);
+    connectTimer = null;
+  }
+}
+
+function cleanupPeerOnly() {
+  clearConnectTimer();
   channelReady = false;
+  // Clear matchInfo before closing so peer onClose does not re-enter requeue.
   matchInfo = null;
   pendingLoadout = null;
-  remoteInput = null;
-  serveKeyDown = false;
   pendingSnap = null;
   lastSnapTick = -1;
   lastSentInput = null;
+  remoteInput = null;
+  serveKeyDown = false;
+  const p = peer;
+  peer = null;
   try {
-    peer?.close();
+    p?.close();
   } catch {
     /* ignore */
   }
-  peer = null;
+}
+
+function cleanupNet() {
+  active = false;
+  cleanupPeerOnly();
   try {
     mm?.close();
   } catch {
     /* ignore */
   }
   mm = null;
+}
+
+/** WebRTC failed before the match started — stay on matchmaker and search again. */
+function failConnectAndRequeue(reason) {
+  const wasActive = active;
+  active = false;
+  cleanupPeerOnly();
+  try {
+    mm?.cancelMatch();
+  } catch {
+    /* ignore */
+  }
+  if (wasActive || !mm) {
+    showDisconnect(reason || "Opponent disconnected");
+    cleanupNet();
+    notify("disconnect");
+    return;
+  }
+  enterSearching();
+  setOnlineStatus(reason || "Connection failed — searching again…");
+  mm.joinQueue();
+  notify("requeue");
 }
 
 export function cancelOnline() {
@@ -109,10 +148,14 @@ export function beginOnlineMatchmaking() {
       peer?.handleSignal(msg.payload);
     },
     peer_left: () => {
-      if (active || matchInfo) {
+      if (active) {
         cleanupNet();
         showDisconnect("Opponent disconnected");
         notify("disconnect");
+        return;
+      }
+      if (matchInfo) {
+        failConnectAndRequeue("Opponent left — searching again…");
       }
     },
     error: (msg) => {
@@ -124,7 +167,7 @@ export function beginOnlineMatchmaking() {
       notify("error", msg);
     },
     close: () => {
-      if (state === "searching") {
+      if (state === "searching" || (!active && matchInfo)) {
         showDisconnect("Lost connection to matchmaking server");
         cleanupNet();
         notify("disconnect");
@@ -135,6 +178,9 @@ export function beginOnlineMatchmaking() {
 }
 
 function startWebRtc(msg) {
+  cleanupPeerOnly();
+  matchInfo = msg;
+
   peer = createPeerConnection({
     isHost: msg.isHost,
     onSignal: (payload) => {
@@ -142,6 +188,7 @@ function startWebRtc(msg) {
     },
     onMessage: onChannelMessage,
     onOpen: () => {
+      clearConnectTimer();
       channelReady = true;
       setOnlineStatus("Opponent found — syncing…");
       peer.sendCtrl({
@@ -151,20 +198,27 @@ function startWebRtc(msg) {
       });
     },
     onClose: () => {
-      if (!active && !matchInfo) return;
-      const wasActive = active;
-      const wasSearching = state === "searching";
-      cleanupNet();
-      if (wasActive || wasSearching) {
+      if (active) {
+        cleanupNet();
         showDisconnect("Opponent disconnected");
         notify("disconnect");
+        return;
+      }
+      if (matchInfo) {
+        failConnectAndRequeue("Could not connect — searching again…");
       }
     },
   });
 
+  connectTimer = setTimeout(() => {
+    if (!channelReady && matchInfo) {
+      failConnectAndRequeue("Connection timed out — searching again…");
+    }
+  }, CONNECT_TIMEOUT_MS);
+
   if (msg.isHost) {
     // Slight delay so guest's ondatachannel handlers are attached.
-    setTimeout(() => peer?.startHostOffer(), 50);
+    setTimeout(() => peer?.startHostOffer(), 80);
   }
 }
 
@@ -187,7 +241,6 @@ function onChannelMessage(msg) {
 
   if (msg.type === DC.HELLO) {
     pendingLoadout = msg.localLoadout || null;
-    // Both sides enter the match once peer hello arrives (channels are up).
     beginMatch();
     return;
   }
@@ -210,13 +263,13 @@ function onChannelMessage(msg) {
 function sendBootstrapSnapshot() {
   if (!peer || !matchInfo?.isHost) return;
   const snap = buildSnapshot(tickCounter);
-  // Reliable first snapshot so the guest always leaves "connecting".
   peer.sendCtrl({ type: DC.STATE, snapshot: snap });
   peer.sendGame({ type: DC.STATE, snapshot: snap });
 }
 
 function beginMatch() {
   if (!matchInfo || active) return;
+  clearConnectTimer();
   const localSeat = matchInfo.seat;
   const myLoadout = capturePreMatchLoadout(localSeat);
 
@@ -265,7 +318,6 @@ function applyPendingSnapshot() {
  * @returns {{ runSim: boolean }} whether local physics should advance
  */
 export function tickOnline(now, keys, dt = 0) {
-  // Guest must be able to drain pendingSnap before `active` flips true.
   if (!matchInfo || !channelReady) {
     return { runSim: false };
   }

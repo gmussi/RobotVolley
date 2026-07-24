@@ -44,10 +44,8 @@ export default {
       headers.set("X-Geo-Colo", cf.colo != null ? String(cf.colo) : "");
       headers.set("X-Geo-Country", cf.country != null ? String(cf.country) : "");
 
-      return stub.fetch(new Request(request.url, {
-        method: request.method,
-        headers,
-      }));
+      // Clone the upgrade request so the WebSocket handshake is preserved.
+      return stub.fetch(new Request(request, { headers }));
     }
 
     return new Response("Not found", {

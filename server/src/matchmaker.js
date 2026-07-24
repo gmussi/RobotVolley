@@ -40,10 +40,14 @@ function randomSeed() {
   return buf[0] >>> 0;
 }
 
+function isOpen(ws) {
+  return !!ws && ws.readyState === 1;
+}
+
 export class Matchmaker {
   constructor(ctx) {
     this.ctx = ctx;
-    /** @type {Map<string, { ws: WebSocket, lat: number|null, lon: number|null, colo: string, country: string, inQueue: boolean, roomId: string|null, peerId: string|null }>} */
+    /** @type {Map<string, { ws: WebSocket, lat: number|null, lon: number|null, colo: string, country: string, inQueue: boolean, roomId: string|null, peerId: string|null, joinedAt: number }>} */
     this.sessions = new Map();
     /** @type {string[]} */
     this.queue = [];
@@ -75,6 +79,7 @@ export class Matchmaker {
       inQueue: false,
       roomId: null,
       peerId: null,
+      joinedAt: Date.now(),
     };
     this.sessions.set(playerId, session);
 
@@ -97,7 +102,7 @@ export class Matchmaker {
 
   send(ws, msg) {
     try {
-      if (ws.readyState === 1) ws.send(JSON.stringify(msg));
+      if (isOpen(ws)) ws.send(JSON.stringify(msg));
     } catch {
       /* ignore */
     }
@@ -106,6 +111,22 @@ export class Matchmaker {
   sendTo(playerId, msg) {
     const s = this.sessions.get(playerId);
     if (s) this.send(s.ws, msg);
+  }
+
+  isAlive(playerId) {
+    const s = this.sessions.get(playerId);
+    return !!(s && isOpen(s.ws));
+  }
+
+  /** Drop closed sockets and stale queue ids so clients never match ghosts. */
+  pruneDead() {
+    for (const [id, s] of [...this.sessions.entries()]) {
+      if (!isOpen(s.ws)) this.onClose(id);
+    }
+    this.queue = this.queue.filter((id) => {
+      const s = this.sessions.get(id);
+      return !!(s && s.inQueue && !s.roomId && isOpen(s.ws));
+    });
   }
 
   onMessage(playerId, raw) {
@@ -124,6 +145,9 @@ export class Matchmaker {
       case "leave_queue":
         this.leaveQueue(playerId);
         break;
+      case "cancel_match":
+        this.cancelMatch(playerId);
+        break;
       case "signal":
         this.relaySignal(playerId, msg);
         break;
@@ -133,23 +157,24 @@ export class Matchmaker {
   }
 
   joinQueue(playerId) {
+    this.pruneDead();
     const s = this.sessions.get(playerId);
-    if (!s) return;
+    if (!s || !isOpen(s.ws)) return;
     if (s.roomId) {
-      this.sendTo(playerId, { type: "error", message: "already_in_match" });
-      return;
+      // Soft-cancel a failed WebRTC attempt so the player can requeue.
+      this.cancelMatch(playerId);
     }
     if (s.inQueue) {
       this.sendTo(playerId, { type: "queue_joined" });
       return;
     }
 
-    // Prefer closest waiting player; match ASAP if anyone is available.
     let bestId = null;
     let bestDist = Number.POSITIVE_INFINITY;
     for (const otherId of this.queue) {
+      if (otherId === playerId) continue;
       const other = this.sessions.get(otherId);
-      if (!other || !other.inQueue || other.roomId) continue;
+      if (!other || !other.inQueue || other.roomId || !isOpen(other.ws)) continue;
       const d = haversineKm(s.lat, s.lon, other.lat, other.lon);
       if (d < bestDist) {
         bestDist = d;
@@ -157,13 +182,13 @@ export class Matchmaker {
       }
     }
 
-    if (bestId) {
+    if (bestId && this.isAlive(bestId)) {
       this.formMatch(bestId, playerId);
       return;
     }
 
     s.inQueue = true;
-    this.queue.push(playerId);
+    if (!this.queue.includes(playerId)) this.queue.push(playerId);
     this.sendTo(playerId, { type: "queue_joined" });
   }
 
@@ -174,10 +199,42 @@ export class Matchmaker {
     this.queue = this.queue.filter((id) => id !== playerId);
   }
 
+  /** Clear a matched pair without closing the WebSocket (WebRTC failed / timeout). */
+  cancelMatch(playerId) {
+    const s = this.sessions.get(playerId);
+    if (!s) return;
+    const peerId = s.peerId;
+    const roomId = s.roomId;
+    s.peerId = null;
+    s.roomId = null;
+    s.inQueue = false;
+    if (roomId) this.rooms.delete(roomId);
+    if (peerId) {
+      const peer = this.sessions.get(peerId);
+      if (peer) {
+        peer.peerId = null;
+        peer.roomId = null;
+        peer.inQueue = false;
+        this.sendTo(peerId, { type: "peer_left" });
+      }
+    }
+  }
+
   formMatch(hostId, guestId) {
     const host = this.sessions.get(hostId);
     const guest = this.sessions.get(guestId);
-    if (!host || !guest) return;
+    if (!host || !guest || !isOpen(host.ws) || !isOpen(guest.ws)) {
+      // One side died — put the survivor back in queue.
+      if (host && isOpen(host.ws)) {
+        host.inQueue = true;
+        if (!this.queue.includes(hostId)) this.queue.push(hostId);
+      }
+      if (guest && isOpen(guest.ws)) {
+        guest.inQueue = true;
+        if (!this.queue.includes(guestId)) this.queue.push(guestId);
+      }
+      return;
+    }
 
     this.leaveQueue(hostId);
     this.leaveQueue(guestId);
@@ -193,7 +250,6 @@ export class Matchmaker {
     host.peerId = guestId;
     guest.peerId = hostId;
 
-    // Waiting player hosts (slightly warmer connection / first joiner).
     this.sendTo(hostId, {
       type: "match_found",
       roomId,
@@ -216,6 +272,11 @@ export class Matchmaker {
     const from = this.sessions.get(fromId);
     if (!from || !from.peerId) {
       this.sendTo(fromId, { type: "error", message: "no_peer" });
+      return;
+    }
+    if (!this.isAlive(from.peerId)) {
+      this.cancelMatch(fromId);
+      this.sendTo(fromId, { type: "peer_left" });
       return;
     }
     const targetId = msg.targetId || from.peerId;

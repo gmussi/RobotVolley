@@ -4,6 +4,7 @@ export const MM = {
   HELLO: "hello",
   JOIN_QUEUE: "join_queue",
   LEAVE_QUEUE: "leave_queue",
+  CANCEL_MATCH: "cancel_match",
   QUEUE_JOINED: "queue_joined",
   MATCH_FOUND: "match_found",
   SIGNAL: "signal",

@@ -76,6 +76,10 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
     send({ type: MM.LEAVE_QUEUE });
   }
 
+  function cancelMatch() {
+    send({ type: MM.CANCEL_MATCH });
+  }
+
   function signal(payload, targetId) {
     send({ type: MM.SIGNAL, payload, targetId });
   }
@@ -101,6 +105,7 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
     connect,
     joinQueue,
     leaveQueue,
+    cancelMatch,
     signal,
     close,
     getPlayerId: () => playerId,
