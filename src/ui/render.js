@@ -49,7 +49,10 @@ export function render() {
   drawRobot(P2);
   drawAttacks();
   const vis = state === "pause" ? pauseFromState : state;
-  if (state !== "menu" && state !== "controls" && state !== "settings") {
+  if (
+    state !== "title" && state !== "menu" &&
+    state !== "controls" && state !== "settings"
+  ) {
     drawBall(); drawBallTracker(); drawHUD();
   }
   if (vis === "lottery") {
@@ -448,6 +451,7 @@ function drawOnlineOverlay() {
 }
 
 function drawBanner(vis = state) {
+  if (vis === "title") { drawTitleScreen(); return; }
   if (vis === "menu") { drawMenu(); return; }
   if (vis === "searching" || vis === "disconnect") { drawOnlineOverlay(); return; }
   if (vis === "controls") { drawControls(); return; }
@@ -503,9 +507,7 @@ const CONTROL_ROWS = [
   { act: "attack", label: "ATTACK" },
 ];
 
-function drawMenu() {
-  drawScrim(ctx, 0.5);
-
+function drawBrandLogo() {
   if (logoImage.complete && logoImage.naturalWidth) {
     const lw = 700;
     const lh = lw * (logoImage.naturalHeight / logoImage.naturalWidth);
@@ -521,6 +523,26 @@ function drawMenu() {
   } else {
     drawTitle(ctx, "ROBOT VOLLEY", W / 2, H * 0.10, 64);
   }
+}
+
+function drawTitleScreen() {
+  drawScrim(ctx, 0.5);
+  drawBrandLogo();
+
+  const pulse = 0.55 + 0.45 * Math.sin(performance.now() * 0.005);
+  ctx.save();
+  ctx.globalAlpha = pulse;
+  centerText(ctx, "PRESS ANY BUTTON", COLORS.accent, 28, H * 0.58);
+  ctx.restore();
+
+  drawFooterHint(ctx, [
+    { text: "© 2026  ROBOT VOLLEY" },
+  ], H - 58);
+}
+
+function drawMenu() {
+  drawScrim(ctx, 0.5);
+  drawBrandLogo();
 
   const now = performance.now();
   const startY = H * 0.45;

@@ -37,7 +37,7 @@ const SILENT_WAV = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAI
 const MATCH_CROSSFADE = 0.8;
 const MENU_CROSSFADE = 0.25;
 const MATCH_STATES = new Set(["serve", "play", "lottery", "point", "over", "pause"]);
-const MENU_STATES = new Set(["menu", "controls", "settings"]);
+const MENU_STATES = new Set(["title", "menu", "controls", "settings"]);
 const MATCH_TRACK_IDS = ["match_a", "match_b"];
 
 function pickFileUrl(urls) {

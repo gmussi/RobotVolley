@@ -6,7 +6,7 @@ import { CONTROL } from "./data/controls.js";
 import {
   PHYSICS_STEP, state, menuOptions, menuIndex, lotteryTick,
   score, ball, audioEvents, gameMode,
-  startGame, toMenu, resetPositions,
+  startGame, toMenu, enterMenu, resetPositions,
   menuMove, menuSelect, setMenuIndex,
   pauseOptions, pauseIndex, pauseMove, pauseSelect, setPauseIndex,
   pauseGame, resumeFromPause, leaveSubmenu, canPause,
@@ -60,9 +60,26 @@ function startOnlineFromMenu() {
   updateHint();
 }
 
+const MODIFIER_CODES = new Set([
+  "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight",
+  "AltLeft", "AltRight", "MetaLeft", "MetaRight", "CapsLock",
+]);
+
+function leaveTitleScreen() {
+  if (state !== "title") return false;
+  enterMenu();
+  playUiConfirm();
+  return true;
+}
+
 window.addEventListener("keydown", (e) => {
   if (e.code in CONTROL || e.code === "Space") e.preventDefault();
   keys.add(e.code);
+
+  if (state === "title") {
+    if (!MODIFIER_CODES.has(e.code)) leaveTitleScreen();
+    return;
+  }
 
   if (state === "searching") {
     if (e.code === "Escape" || e.code === "Space" || e.code === "Backspace") {
@@ -183,6 +200,7 @@ window.addEventListener("mouseup", () => {
 
 canvas.addEventListener("mousedown", (e) => {
   const { mx, my } = eventToCanvas(canvas, e);
+  if (leaveTitleScreen()) return;
   if (state === "searching") {
     cancelOnline();
     playUiConfirm();

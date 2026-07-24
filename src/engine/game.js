@@ -34,7 +34,7 @@ export const ball = {
   spin: 0, live: false, lastHitBy: null, magnetHold: null, smashBy: null,
 };
 
-export let state = "menu";
+export let state = "title";
 export let gameMode = null;
 export let servingSide = -1;
 export let messageTimer = 0;
@@ -385,6 +385,11 @@ export function toMenu() {
   state = "menu";
   winner = null;
   pauseFromState = null;
+}
+
+/** Leave the title/attract screen and open the main menu. */
+export function enterMenu() {
+  state = "menu";
 }
 
 // ---- Pause ----
@@ -1057,9 +1062,9 @@ export function aiControl(r) {
 
 export function readInput(keys, controlMap) {
   if (
-    state === "menu" || state === "lottery" || state === "controls" ||
-    state === "settings" || state === "pause" || state === "searching" ||
-    state === "disconnect"
+    state === "title" || state === "menu" || state === "lottery" ||
+    state === "controls" || state === "settings" || state === "pause" ||
+    state === "searching" || state === "disconnect"
   ) {
     for (const r of robots) { r.moveDir = 0; r.jumpHeld = false; r.attackHeld = false; }
     return;
