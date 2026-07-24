@@ -1,0 +1,66 @@
+// Steam Input action manifest (In-Game Actions).
+//
+// Rename to game_actions_<YOUR_APP_ID>.vdf and upload under the depot's
+// controller_config/ folder once the real Steam app exists. 480 = Spacewar test.
+//
+// At runtime the game is driven by the Web Gamepad API (src/input/gamepad.js);
+// Steam Input adds per-user remapping and glyphs for the long tail of controllers
+// by presenting these named actions in the Steam overlay's controller config.
+"In Game Actions"
+{
+	"actions"
+	{
+		"InGameControls"
+		{
+			"title"		"#Set_Ingame"
+			"StickPadGyro"
+			{
+				"Move"
+				{
+					"title"			"#Action_Move"
+					"input_mode"	"joystick_move"
+				}
+			}
+			"Button"
+			{
+				"jump"		"#Action_Jump"
+				"serve"		"#Action_Serve"
+				"attack"	"#Action_Attack"
+				"pause"		"#Action_Pause"
+			}
+		}
+		"MenuControls"
+		{
+			"title"		"#Set_Menu"
+			"StickPadGyro"
+			{
+				"menu_move"
+				{
+					"title"			"#Action_Navigate"
+					"input_mode"	"joystick_move"
+				}
+			}
+			"Button"
+			{
+				"menu_confirm"	"#Action_Confirm"
+				"menu_back"		"#Action_Back"
+			}
+		}
+	}
+	"localization"
+	{
+		"english"
+		{
+			"Set_Ingame"		"In-Game"
+			"Set_Menu"			"Menus"
+			"Action_Move"		"Move"
+			"Action_Jump"		"Jump"
+			"Action_Serve"		"Serve (hold to charge)"
+			"Action_Attack"		"Attack"
+			"Action_Pause"		"Pause"
+			"Action_Navigate"	"Navigate"
+			"Action_Confirm"	"Confirm"
+			"Action_Back"		"Back"
+		}
+	}
+}

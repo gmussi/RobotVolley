@@ -7,6 +7,7 @@ import {
   startMusicForState, setMusicLevel, primeMatchMedia,
 } from "./music.js";
 import { mapEngineEvent, uiNavigate, uiConfirm, lotteryTick } from "./events.js";
+import { getItem, setItem } from "../platform/save.js";
 import { centerOptionIndex } from "../ui/lottery.js";
 import {
   state,
@@ -110,7 +111,7 @@ function unlockFromGesture(onReady) {
 }
 
 function loadVolume(key, fallback) {
-  const raw = localStorage.getItem(key);
+  const raw = getItem(key);
   if (raw == null) return fallback;
   const v = parseFloat(raw);
   return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : fallback;
@@ -133,13 +134,13 @@ export function getSfxVolume() {
 
 export function setMusicVolume(v) {
   musicVolume = Math.max(0, Math.min(1, v));
-  localStorage.setItem(MUSIC_VOL_KEY, String(musicVolume));
+  setItem(MUSIC_VOL_KEY, String(musicVolume));
   applyVolumes();
 }
 
 export function setSfxVolume(v) {
   sfxVolume = Math.max(0, Math.min(1, v));
-  localStorage.setItem(SFX_VOL_KEY, String(sfxVolume));
+  setItem(SFX_VOL_KEY, String(sfxVolume));
   applyVolumes();
 }
 

@@ -11,3 +11,5 @@ tools/.env
 server/.wrangler/
 tools/style_ref.png
 reference/
+release/
+steam_appid.txt

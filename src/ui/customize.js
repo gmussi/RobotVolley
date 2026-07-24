@@ -1,5 +1,5 @@
 /** Robot Lab — in-game customization panel (neon DOM UI). */
-import { P1, P2, robots, gameMode } from "../engine/game.js";
+import { P1, P2, robots } from "../engine/game.js";
 import { COLOR_PRESETS } from "../data/theme.js";
 import { HEAD_TYPES } from "../data/heads.js";
 import { TORSO_TYPES } from "../data/torsos.js";
@@ -104,16 +104,4 @@ export function syncRobotPartsToDom() {
 
 export function wireDomControls() {
   wireCustomizePanel();
-}
-
-export function updateHint() {
-  const p2 = document.getElementById("p2hint");
-  if (!p2) return;
-  if (gameMode === "1p") {
-    p2.innerHTML = '<span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <b style="color:#29b6f6">CPU</b> — computer controlled';
-  } else if (gameMode === "online") {
-    p2.innerHTML = '<span class="tag-p2"><b>ONLINE</b></span> &nbsp; you use <span class="kbd">A</span><span class="kbd">D</span><span class="kbd">W</span><span class="kbd">S</span><span class="kbd">F</span> — opponent is remote';
-  } else {
-    p2.innerHTML = '<span class="tag-p2"><b>PLAYER 2</b></span> &nbsp; <span class="kbd">&larr;</span><span class="kbd">&rarr;</span> move &nbsp; <span class="kbd">&uarr;</span> jump &nbsp; hold <span class="kbd">&darr;</span> serve &nbsp; <span class="kbd">/</span> attack';
-  }
 }

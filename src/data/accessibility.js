@@ -1,17 +1,18 @@
-/** Accessibility preferences persisted in localStorage. */
+/** Accessibility preferences persisted via the platform save layer. */
+import { getItem, setItem } from "../platform/save.js";
 
-export let colorblindMode = localStorage.getItem("robotvolley_colorblind") === "1";
-export let reducedMotion = localStorage.getItem("robotvolley_reduced_motion") === "1"
+export let colorblindMode = getItem("robotvolley_colorblind") === "1";
+export let reducedMotion = getItem("robotvolley_reduced_motion") === "1"
   || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function setColorblindMode(on) {
   colorblindMode = on;
-  localStorage.setItem("robotvolley_colorblind", on ? "1" : "0");
+  setItem("robotvolley_colorblind", on ? "1" : "0");
 }
 
 export function setReducedMotion(on) {
   reducedMotion = on;
-  localStorage.setItem("robotvolley_reduced_motion", on ? "1" : "0");
+  setItem("robotvolley_reduced_motion", on ? "1" : "0");
 }
 
 export function toggleColorblindMode() {
