@@ -180,6 +180,9 @@ export const menuOptions = [
   { mode: null, action: "settings", label: "SETTINGS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
 ];
 
+/** Hit box for the title-menu footer's CREDITS link; filled in by render.js each draw. */
+export const creditsLink = { x: 0, y: 0, w: 0, h: 0 };
+
 // Single Player is highlighted by default.
 export let menuIndex = 0;
 
@@ -213,6 +216,12 @@ export function menuSelect() {
   if (!o.mode) return false;
   startGame(o.mode);
   return true;
+}
+
+/** Credits is reached via a footer link on the title menu, not a list entry. */
+export function enterCredits() {
+  submenuReturnState = "menu";
+  state = "credits";
 }
 
 export function shadeColor(hex, percent) {

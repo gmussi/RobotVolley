@@ -7,10 +7,12 @@ import {
 import {
   ball, score, state, gameMode, servingSide, serveCharge,
   bannerText, winner, menuOptions, menuIndex, pauseFromState, submenuReturnState,
-  P1, P2, getArmSpec, onlineStatus, onlineLocalSeat,
+  P1, P2, getArmSpec, onlineStatus, onlineLocalSeat, creditsLink,
 } from "../engine/game.js";
 import { drawLotteryAnimation } from "./lottery.js";
 import { drawSettings } from "./settings.js";
+import { drawControlsScreen } from "./controlsScreen.js";
+import { drawCreditsScreen } from "./creditsScreen.js";
 import { drawPauseOverlay } from "./pause.js";
 import { drawRobotFigure, drawPartPreview } from "./robotDraw.js";
 import {
@@ -20,9 +22,8 @@ import { drawTouchControls } from "./touchControls.js";
 import {
   COLORS, GLOW, fontDisplay, fontBody,
   roundRect, drawScrim, drawTitle, drawMenuItem, centerText,
-  drawFooterHint, drawKeyCap, drawCircularGauge, drawGlassPanel,
+  drawFooterHint, drawCircularGauge, drawGlassPanel,
 } from "./neonUi.js";
-import { codeFor } from "../data/controls.js";
 import { drawArenaEffects, drawProceduralArena } from "./stadiumDraw.js";
 import { colorblindMode } from "../data/accessibility.js";
 
@@ -51,7 +52,7 @@ export function render() {
   const vis = state === "pause" ? pauseFromState : state;
   if (
     state !== "title" && state !== "menu" &&
-    state !== "controls" && state !== "settings"
+    state !== "controls" && state !== "settings" && state !== "credits"
   ) {
     drawBall(); drawBallTracker(); drawHUD();
   }
@@ -454,8 +455,9 @@ function drawBanner(vis = state) {
   if (vis === "title") { drawTitleScreen(); return; }
   if (vis === "menu") { drawMenu(); return; }
   if (vis === "searching" || vis === "disconnect") { drawOnlineOverlay(); return; }
-  if (vis === "controls") { drawControls(); return; }
+  if (vis === "controls") { drawControlsScreen(ctx); return; }
   if (state === "settings") { drawSettings(ctx); return; }
+  if (state === "credits") { drawCreditsScreen(ctx); return; }
   if (vis === "serve") {
     const serverIsCpu = gameMode === "1p" && servingSide > 0;
     const serverSeat = servingSide < 0 ? 0 : 1;
@@ -488,24 +490,6 @@ function drawBanner(vis = state) {
 }
 
 
-const KEY_GLYPH = {
-  ArrowLeft: "◄", ArrowRight: "►", ArrowUp: "▲", ArrowDown: "▼",
-  Slash: "/", Space: "SPACE",
-};
-
-function keyGlyph(code) {
-  if (KEY_GLYPH[code]) return KEY_GLYPH[code];
-  if (code && code.startsWith("Key")) return code.slice(3);
-  return code || "?";
-}
-
-const CONTROL_ROWS = [
-  { act: "left", label: "MOVE LEFT" },
-  { act: "right", label: "MOVE RIGHT" },
-  { act: "jump", label: "JUMP" },
-  { act: "serve", label: "SERVE", note: "hold to charge" },
-  { act: "attack", label: "ATTACK" },
-];
 
 function drawBrandLogo() {
   if (logoImage.complete && logoImage.naturalWidth) {
@@ -546,9 +530,14 @@ function drawMenu() {
 
   const now = performance.now();
   const startY = H * 0.45;
-  const rowH = 52;
   const itemW = 440;
   const itemH = 44;
+  // Row spacing shrinks (down to a point) so extra items — e.g. the desktop-only
+  // QUIT entry — never collide with the footer hint drawn at H - 58.
+  const footerClearance = (H - 58) - startY - itemH / 2 - 10;
+  const rowH = menuOptions.length > 1
+    ? Math.min(52, footerClearance / (menuOptions.length - 1))
+    : 52;
 
   menuOptions.forEach((o, i) => {
     const cy = startY + i * rowH;
@@ -558,70 +547,26 @@ function drawMenu() {
     drawMenuItem(ctx, o.label, W / 2, cy, itemW, itemH, i === menuIndex, now);
   });
 
+  const footerY = H - 58;
   drawFooterHint(ctx, [
     { text: "▲ ▼  SELECT      ENTER  START" },
     { text: "© 2026  ROBOT VOLLEY" },
-  ], H - 58);
+  ], footerY);
+
+  const creditsY = footerY + 44;
+  const creditsText = "C   CREDITS";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = fontBody(13, 600);
+  ctx.fillStyle = COLORS.accent;
+  ctx.fillText(creditsText, W / 2, creditsY);
+  const tw = ctx.measureText(creditsText).width;
+  const padX = 24;
+  const padY = 10;
+  creditsLink.x = W / 2 - tw / 2 - padX;
+  creditsLink.y = creditsY - padY;
+  creditsLink.w = tw + padX * 2;
+  creditsLink.h = padY * 2;
 }
 
-function drawControls() {
-  drawScrim(ctx, 0.55);
-  drawTitle(ctx, "CONTROLS", W / 2, H * 0.12, 48);
-
-  const players = [
-    { idx: 0, name: "PLAYER 1", accent: COLORS.p1, colX: W * 0.27 },
-    { idx: 1, name: "PLAYER 2", accent: COLORS.p2, colX: W * 0.73 },
-  ];
-
-  const headerY = H * 0.27;
-  const rowY0 = H * 0.37;
-  const rowH = 58;
-  const keyOffset = -120;
-  const labelX = -80;
-
-  players.forEach((p) => {
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.letterSpacing = "3px";
-    ctx.font = fontDisplay(26, 600);
-    ctx.fillStyle = p.accent;
-    ctx.fillText(p.name, p.colX, headerY);
-    ctx.letterSpacing = "0px";
-
-    ctx.strokeStyle = p.accent;
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.6;
-    ctx.beginPath();
-    ctx.moveTo(p.colX - 150, headerY + 26);
-    ctx.lineTo(p.colX + 150, headerY + 26);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-
-    CONTROL_ROWS.forEach((row, i) => {
-      const cy = rowY0 + i * rowH;
-      const glyph = keyGlyph(codeFor(p.idx, row.act));
-      drawKeyCap(ctx, p.colX + keyOffset, cy, glyph, p.accent);
-
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.font = fontDisplay(20, 600);
-      ctx.letterSpacing = "2px";
-      ctx.fillStyle = COLORS.text;
-      ctx.fillText(row.label, p.colX + labelX, cy - (row.note ? 8 : 0));
-      if (row.note) {
-        ctx.font = fontBody(12, 500);
-        ctx.fillStyle = COLORS.textMuted;
-        ctx.fillText(row.note, p.colX + labelX, cy + 12);
-      }
-      ctx.letterSpacing = "0px";
-    });
-  });
-
-  const backHint = submenuReturnState === "pause" ? "ENTER / ESC   BACK TO PAUSE"
-    : "ENTER / ESC   BACK";
-  drawFooterHint(ctx, [
-    { text: "SPACE  RESTART A MATCH" },
-    { text: backHint, accent: true },
-  ], H - 58);
-}
 

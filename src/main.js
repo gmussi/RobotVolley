@@ -1,12 +1,19 @@
 /**
  * App entry — wires engine, renderer, and input. The only file that knows both sides.
  */
+// Self-hosted fonts (bundled by Vite) so the desktop/Steam build runs offline.
+// Latin subset only — the UI copy is English; skips the Devanagari payload.
+import "@fontsource/inter/latin-400.css";
+import "@fontsource/inter/latin-500.css";
+import "@fontsource/inter/latin-600.css";
+import "@fontsource/rajdhani/latin-600.css";
+import "@fontsource/rajdhani/latin-700.css";
 import "./styles/main.css";
 import { CONTROL } from "./data/controls.js";
 import {
-  PHYSICS_STEP, state, menuOptions, menuIndex, lotteryTick,
-  score, ball, audioEvents, gameMode,
-  startGame, toMenu, enterMenu, resetPositions,
+  PHYSICS_STEP, state, menuOptions, menuIndex, lotteryTick, creditsLink,
+  score, ball, audioEvents, gameMode, winner, onlineLocalSeat,
+  startGame, toMenu, enterMenu, enterCredits, resetPositions,
   menuMove, menuSelect, setMenuIndex,
   pauseOptions, pauseIndex, pauseMove, pauseSelect, setPauseIndex,
   pauseGame, resumeFromPause, leaveSubmenu, canPause,
@@ -15,8 +22,9 @@ import {
 } from "./engine/game.js";
 import { initRender, render, setRenderRemainder } from "./ui/render.js";
 import { initViewport, eventToCanvas } from "./ui/viewport.js";
-import { wireDomControls, updateHint, syncRobotPartsToDom, openLab } from "./ui/customize.js";
+import { wireDomControls, syncRobotPartsToDom, openLab } from "./ui/customize.js";
 import { initTouchControls } from "./ui/touchControls.js";
+import { initGamepads, pollGamepads } from "./input/gamepad.js";
 import { preloadAssets, hideSplash, setSplashProgress } from "./ui/preload.js";
 import {
   initAudio, drainEvents, onStateChange, tickLotterySounds,
@@ -26,20 +34,24 @@ import {
   resetSettingsFocus, handleSettingsKey, handleSettingsPointer,
 } from "./ui/settings.js";
 import {
-  beginOnlineMatchmaking, cancelOnline, tickOnline, isOnlineActive, onOnlineEvent,
+  resetControlsFocus, handleControlsKey, handleControlsPointer,
+} from "./ui/controlsScreen.js";
+import { onMatchEnd } from "./platform/achievements.js";
+import { isDesktop, quitApp } from "./platform/host.js";
+import {
+  beginOnlineMatchmaking, cancelOnline, tickOnline, isOnlineActive,
 } from "./net/session.js";
-
-onOnlineEvent((event) => {
-  if (event === "match_started" || event === "cancelled" || event === "disconnect") {
-    updateHint();
-  }
-});
 
 const canvas = document.getElementById("game");
 const stage = document.getElementById("stage");
-const fsBtn = document.getElementById("fsBtn");
 initRender(canvas);
-initViewport(canvas, stage, fsBtn);
+initViewport(canvas, stage);
+
+// Quitting the app only makes sense on desktop — there's no window to close
+// on the web build, so the option isn't shown there.
+if (isDesktop) {
+  menuOptions.push({ mode: null, action: "quit", label: "QUIT", disabled: false, x: 0, y: 0, w: 0, h: 0 });
+}
 
 const keys = new Set();
 
@@ -57,7 +69,6 @@ function leaveSubmenuScreen() {
 function startOnlineFromMenu() {
   beginOnlineMatchmaking();
   playUiConfirm();
-  updateHint();
 }
 
 const MODIFIER_CODES = new Set([
@@ -85,7 +96,6 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "Escape" || e.code === "Space" || e.code === "Backspace") {
       cancelOnline();
       playUiConfirm();
-      updateHint();
     }
     return;
   }
@@ -94,7 +104,6 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "Space" || e.code === "Enter" || e.code === "Escape") {
       toMenu();
       playUiConfirm();
-      updateHint();
     }
     return;
   }
@@ -106,12 +115,10 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "Enter" || e.code === "Space") {
       const o = pauseOptions[pauseIndex];
       if (o?.action === "settings") resetSettingsFocus();
+      if (o?.action === "controls") resetControlsFocus();
       pauseSelect();
       playUiConfirm();
-      if (o?.action === "quit") {
-        if (isOnlineActive()) cancelOnline();
-        updateHint();
-      }
+      if (o?.action === "quit" && isOnlineActive()) cancelOnline();
       return;
     }
     return;
@@ -122,13 +129,20 @@ window.addEventListener("keydown", (e) => {
     else if (e.code === "Enter" || e.code === "Space") {
       const o = menuOptions[menuIndex];
       if (o?.action === "settings") resetSettingsFocus();
+      if (o?.action === "controls") resetControlsFocus();
       if (o?.action === "customize") { openLab(); playUiConfirm(); return; }
       if (o?.action === "online") { startOnlineFromMenu(); return; }
-      if (menuSelect()) { playUiConfirm(); updateHint(); }
+      if (o?.action === "quit") { playUiConfirm(); quitApp(); return; }
+      if (menuSelect()) playUiConfirm();
       else if (o?.action === "settings" || o?.action === "controls") playUiConfirm();
     }
-    else if (e.code === "Digit1" || e.code === "Numpad1") { startGame("1p"); playUiConfirm(); updateHint(); }
-    else if (e.code === "Digit2" || e.code === "Numpad2") { startGame("2p"); playUiConfirm(); updateHint(); }
+    else if (e.code === "Digit1" || e.code === "Numpad1") { startGame("1p"); playUiConfirm(); }
+    else if (e.code === "Digit2" || e.code === "Numpad2") { startGame("2p"); playUiConfirm(); }
+    else if (e.code === "KeyC") { enterCredits(); playUiConfirm(); }
+    return;
+  }
+  if (state === "credits") {
+    if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) leaveSubmenuScreen();
     return;
   }
   if (state === "settings") {
@@ -143,9 +157,10 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (state === "controls") {
-    if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) {
-      leaveSubmenuScreen();
-    }
+    const res = handleControlsKey(e.code, e.isTrusted);
+    if (res === "leave") leaveSubmenuScreen();
+    else if (res === "nav") playUiNavigate();
+    else if (res === "capture" || res === "bound" || res === "reset" || res === "cancel") playUiConfirm();
     return;
   }
   if (e.code === "Escape" && canPause()) {
@@ -204,13 +219,11 @@ canvas.addEventListener("mousedown", (e) => {
   if (state === "searching") {
     cancelOnline();
     playUiConfirm();
-    updateHint();
     return;
   }
   if (state === "disconnect") {
     toMenu();
     playUiConfirm();
-    updateHint();
     return;
   }
   if (state === "pause") {
@@ -219,12 +232,10 @@ canvas.addEventListener("mousedown", (e) => {
       if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) {
         setPauseIndex(i);
         if (o.action === "settings") resetSettingsFocus();
+        if (o.action === "controls") resetControlsFocus();
         pauseSelect();
         playUiConfirm();
-        if (o.action === "quit") {
-          if (isOnlineActive()) cancelOnline();
-          updateHint();
-        }
+        if (o.action === "quit" && isOnlineActive()) cancelOnline();
         return;
       }
     }
@@ -240,20 +251,31 @@ canvas.addEventListener("mousedown", (e) => {
     return;
   }
   if (state === "menu") {
+    const c = creditsLink;
+    if (mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h) {
+      enterCredits();
+      playUiConfirm();
+      return;
+    }
     for (let i = 0; i < menuOptions.length; i++) {
       const o = menuOptions[i];
       if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) {
         if (o.disabled) return;
         setMenuIndex(i);
         if (o.action === "settings") resetSettingsFocus();
+        if (o.action === "controls") resetControlsFocus();
         if (o.action === "customize") { openLab(); playUiConfirm(); return; }
         if (o.action === "online") { startOnlineFromMenu(); return; }
-        if (menuSelect()) { playUiConfirm(); updateHint(); }
+        if (o.action === "quit") { playUiConfirm(); quitApp(); return; }
+        if (menuSelect()) playUiConfirm();
         else if (o.action === "settings" || o.action === "controls") playUiConfirm();
         return;
       }
     }
   } else if (state === "controls") {
+    if (handleControlsPointer(mx, my, "down")) playUiConfirm();
+    else leaveSubmenuScreen();
+  } else if (state === "credits") {
     leaveSubmenuScreen();
   } else if (state === "over") {
     if (isOnlineActive()) cancelOnline();
@@ -265,6 +287,7 @@ wireDomControls();
 resetPositions();
 syncRobotPartsToDom();
 initTouchControls(canvas, keys);
+initGamepads();
 
 preloadAssets(setSplashProgress).then(() => {
   hideSplash();
@@ -275,6 +298,10 @@ function frame(now) {
   let dt = (now - last) / 1000;
   last = now;
   if (dt > 0.1) dt = 0.1;
+
+  // Controllers feed the same input path as the keyboard (synthetic key events),
+  // so this must run before readInput drains the key state for this frame.
+  pollGamepads(now);
 
   readInput(keys, CONTROL);
 
@@ -290,6 +317,9 @@ function frame(now) {
 
   if (state !== prevState) {
     onStateChange(prevState, state);
+    if (state === "over") {
+      onMatchEnd({ mode: gameMode, winner, scores: score, localSeat: onlineLocalSeat });
+    }
     prevState = state;
   }
 

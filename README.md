@@ -198,6 +198,24 @@ workflow passes it into `vite build`.
 | Change matchmaking server | edit `server/`, then `npx wrangler deploy` |
 | Smoke-test online | two browsers/tabs → **Online Match** |
 
+### 5. (Optional) Add a TURN relay for reliability
+
+WebRTC connects peer-to-peer using STUN by default, which fails for players
+behind symmetric NAT or a restrictive firewall — common enough on a broad Steam
+audience that a TURN relay is worth adding before launch. Point the client at
+one via `.env` (see [`.env.example`](./.env.example)):
+
+```bash
+VITE_TURN_URL=turn:turn.example.com:3478?transport=udp,turns:turn.example.com:5349?transport=tcp
+VITE_TURN_USERNAME=your-username
+VITE_TURN_CREDENTIAL=your-credential
+```
+
+`VITE_TURN_URL` accepts a comma-separated list of URLs sharing one credential
+pair (typical of hosted TURN providers, or a self-run [coturn](https://github.com/coturn/coturn)
+instance). Leave it unset to keep the current STUN-only behavior. For GitHub
+Pages, add matching **Actions variables** the same way as `VITE_MATCHMAKING_URL`.
+
 ## Deploying
 
 Pushing to `main` runs tests, builds, and deploys to GitHub Pages automatically
