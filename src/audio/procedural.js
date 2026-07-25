@@ -185,6 +185,29 @@ export function makeMagnetRelease(ctx) {
   });
 }
 
+export function makePortalOpen(ctx) {
+  return renderBuffer(ctx, 0.22, ctx.sampleRate, (data, sr) => {
+    for (let i = 0; i < data.length; i++) {
+      const t = i / sr;
+      const f = 180 + t * 900;
+      data[i] += Math.sin(2 * Math.PI * f * t) * 0.16 * (1 - t / 0.22);
+      data[i] += Math.sin(2 * Math.PI * (f * 1.5) * t) * 0.08 * (1 - t / 0.22);
+    }
+    noise(data, sr, 0.02, 0.12, 0.08, 0.55);
+  });
+}
+
+export function makePortalExit(ctx) {
+  return renderBuffer(ctx, 0.14, ctx.sampleRate, (data, sr) => {
+    for (let i = 0; i < data.length; i++) {
+      const t = i / sr;
+      const f = 1100 - t * 700;
+      data[i] += Math.sin(2 * Math.PI * f * t) * 0.18 * (1 - t / 0.14);
+    }
+    tone(data, sr, 440, 0.02, 0.08, 0.12, "triangle");
+  });
+}
+
 export function makeRocketFlap(ctx) {
   return renderBuffer(ctx, 0.08, ctx.sampleRate, (data, sr) => {
     noise(data, sr, 0, 0.06, 0.25, 0.45);
@@ -218,6 +241,8 @@ export function makeAllSfxBuffers(ctx) {
     lottery_land: makeLotteryLand(ctx),
     magnet_catch: makeMagnetCatch(ctx),
     magnet_release: makeMagnetRelease(ctx),
+    portal_open: makePortalOpen(ctx),
+    portal_exit: makePortalExit(ctx),
     rocket_flap: makeRocketFlap(ctx),
     drill_shove: makeDrillShove(ctx),
   };

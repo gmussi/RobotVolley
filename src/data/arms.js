@@ -45,6 +45,17 @@ export const ARM_TYPES = {
     deflectBounce: 1,
     impartVel: 0.5,
   },
+  portalGun: {
+    label: "Portal Gun",
+    description: "Opens a portal ahead of the ball — it pauses, then reverses",
+    kind: "portal",
+    cooldown: 2.0,
+    // Portal opens just ahead of the ball along its horizontal travel.
+    portalGap: 40,
+    portalR: 36,
+    // Time spent entering + leaving the portal (ball is frozen).
+    holdTime: 0.5,
+  },
 };
 
 export const ARM_TYPE_IDS = Object.keys(ARM_TYPES);

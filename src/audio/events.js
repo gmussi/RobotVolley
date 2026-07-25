@@ -41,6 +41,10 @@ export function mapEngineEvent(type, data) {
       return { id: "magnet_catch", volume: 0.75 };
     case "magnet_release":
       return { id: "magnet_release", volume: 0.65 };
+    case "portal_open":
+      return { id: "portal_open", volume: 0.75 };
+    case "portal_exit":
+      return { id: "portal_exit", pitch: 0.95 + Math.random() * 0.1, volume: 0.7 };
     case "rocket_flap":
       return { id: "rocket_flap", pitch: 0.9 + Math.random() * 0.2, volume: 0.55 };
     case "drill_shove":

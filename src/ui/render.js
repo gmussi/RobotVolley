@@ -128,9 +128,65 @@ function drawAttacks() {
     const at = r.attack;
     if (!at) continue;
     if (at.kind === "orb") drawOrb(at);
+    else if (at.kind === "portal") drawPortal(at, r);
     else if (r.armType === "axe") drawFlyingAxe(at);
     else drawFlyingStar(at);
   }
+}
+
+/** Oval portal opened ahead of the ball — red for P1, blue for P2. */
+function drawPortal(at, r) {
+  const dir = at.dir || 1;
+  const rx = at.hitR * 0.42;
+  const ry = at.hitR;
+  const pulse = 0.85 + 0.15 * Math.sin((at.t || 0) * 22);
+  const blue = r.side > 0;
+  const glow = blue
+    ? ["rgba(80,200,255,0.55)", "rgba(30,140,220,0.35)", "rgba(0,80,180,0)"]
+    : ["rgba(255,80,60,0.55)", "rgba(220,30,40,0.35)", "rgba(180,0,20,0)"];
+  const rim = blue ? "rgba(70,200,255,0.95)" : "rgba(255,70,55,0.95)";
+  const shadow = blue ? "rgba(40,160,255,0.85)" : "rgba(255,40,30,0.85)";
+  const inner = blue ? "rgba(180,230,255,0.9)" : "rgba(255,200,180,0.9)";
+  const arrow = blue ? "rgba(100,200,255,0.55)" : "rgba(255,120,100,0.55)";
+
+  ctx.save();
+  ctx.translate(at.x, at.y);
+  ctx.scale(pulse, pulse);
+
+  const g = ctx.createRadialGradient(0, 0, 2, 0, 0, ry + 10);
+  g.addColorStop(0, glow[0]);
+  g.addColorStop(0.45, glow[1]);
+  g.addColorStop(1, glow[2]);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx + 10, ry + 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = rim;
+  ctx.lineWidth = 5;
+  ctx.shadowColor = shadow;
+  ctx.shadowBlur = 14;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = inner;
+  ctx.lineWidth = 2;
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rx * 0.55, ry * 0.55, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Hint which way the ball is traveling into the portal.
+  ctx.fillStyle = arrow;
+  ctx.beginPath();
+  ctx.moveTo(-dir * (rx + 14), -8);
+  ctx.lineTo(-dir * (rx + 2), 0);
+  ctx.lineTo(-dir * (rx + 14), 8);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
 }
 
 function drawOrb(at) {

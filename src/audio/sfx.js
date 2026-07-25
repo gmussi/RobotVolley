@@ -20,6 +20,8 @@ const COOLDOWNS = {
   lottery_land: 0.3,
   magnet_catch: 0.15,
   magnet_release: 0.12,
+  portal_open: 0.15,
+  portal_exit: 0.12,
   rocket_flap: 0.12,
   drill_shove: 0.1,
 };

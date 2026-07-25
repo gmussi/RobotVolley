@@ -78,7 +78,7 @@ function frame() {
 
   // Row 3: weapons + a fully-loaded mix
   x = 90;
-  for (const wn of ["axe", "ninjaStar"]) {
+  for (const wn of ["axe", "ninjaStar", "portalGun"]) {
     drawSpriteRobot(ctx, bot(x, floorC - BOX.h, { armType: wn, eyeBlink: blink }), floorC);
     label("weapon " + wn, x, floorC + 26);
     x += 150;
@@ -126,6 +126,7 @@ function frame() {
     ["headType", "standard"], ["headType", "drill"], ["headType", "magnet"],
     ["legType", "rocket"], ["legType", "power"],
     ["armType", "hand"], ["armType", "axe"], ["armType", "ninjaStar"],
+    ["armType", "portalGun"],
   ];
   for (const [slotKey, typeId] of previews) {
     for (const side of [-1, 1]) {

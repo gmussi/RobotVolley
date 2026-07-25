@@ -38,7 +38,7 @@ function emitAudio(type, data = {}) {
 export const score = [0, 0];
 export const ball = {
   x: W * 0.25, y: 150, vx: 0, vy: 0, r: BALL_R,
-  spin: 0, live: false, lastHitBy: null, magnetHold: null, smashBy: null,
+  spin: 0, live: false, lastHitBy: null, magnetHold: null, portalHold: null, smashBy: null,
 };
 
 export let state = "title";
@@ -93,6 +93,7 @@ export function stopAttract() {
   ball.live = false;
   ball.lastHitBy = null;
   ball.magnetHold = null;
+  ball.portalHold = null;
   ball.smashBy = null;
   cpuServeTimer = 0;
   serveCharging = false;
@@ -109,6 +110,7 @@ export function stopAttract() {
 function endAttractRally(scorer) {
   ball.live = false;
   ball.magnetHold = null;
+  ball.portalHold = null;
   ball.smashBy = null;
   attractPhase = "point";
   messageTimer = ATTRACT_POINT_DELAY;
@@ -219,6 +221,7 @@ function setupServePhase() {
   ball.vx = 0; ball.vy = 0; ball.spin = 0;
   ball.lastHitBy = null;
   ball.magnetHold = null;
+  ball.portalHold = null;
   ball.smashBy = null;
   ball.x = servingSide < 0 ? W * 0.25 : W * 0.75;
   ball.y = (FLOOR_Y - ROBOT_H) - 60;
@@ -547,6 +550,7 @@ export function awardPoint(scorer) {
   score[scorer]++;
   ball.live = false;
   ball.magnetHold = null;
+  ball.portalHold = null;
   ball.smashBy = null;
   if (score[scorer] >= WIN_SCORE) {
     winner = scorer;
@@ -713,6 +717,10 @@ function positionOrb(r) {
 
 function startAttack(r) {
   const spec = getArmSpec(r);
+  if (spec.kind === "portal") {
+    startPortalAttack(r, spec);
+    return;
+  }
   const { cx, cy } = attackOrigin(r);
   if (spec.kind === "orb") {
     r.attack = { kind: "orb", spec, t: 0, hitR: spec.hitR, connected: false,
@@ -726,6 +734,43 @@ function startAttack(r) {
       vx: dx * spec.launchSpeed, vy: dy * spec.launchSpeed, spin: 0 };
   }
   emitAudio("attack_start");
+}
+
+/**
+ * Portal gun: open a red portal just ahead of the live ball along its
+ * horizontal travel, freeze the ball for `holdTime`, then reverse its velocity.
+ */
+function startPortalAttack(r, spec) {
+  if (!ball.live || ball.portalHold || ball.magnetHold) return;
+
+  const dir = ball.vx >= 0 ? 1 : -1;
+  const portalX = Math.max(ball.r + 4, Math.min(W - ball.r - 4,
+    ball.x + dir * (ball.r + spec.portalGap)));
+  const portalY = Math.max(ball.r + 4, Math.min(FLOOR_Y - ball.r - 4, ball.y));
+
+  ball.portalHold = {
+    side: r.side,
+    timer: spec.holdTime,
+    holdTime: spec.holdTime,
+    x: portalX,
+    y: portalY,
+    dir,
+    exitVx: -ball.vx,
+    exitVy: -ball.vy,
+    fromX: ball.x,
+    fromY: ball.y,
+  };
+  ball.vx = 0;
+  ball.vy = 0;
+  ball.spin = 0;
+  ball.lastHitBy = r.side;
+
+  r.attack = {
+    kind: "portal", spec, t: 0, hitR: spec.portalR, connected: true,
+    x: portalX, y: portalY, dir, spin: 0,
+  };
+  r.eyeBlink = 0.12;
+  emitAudio("portal_open");
 }
 
 function endAttack(r) {
@@ -750,6 +795,9 @@ export function updateAttack(r, dt) {
   if (at.kind === "orb") {
     positionOrb(r);
     if (at.t >= at.spec.windup) endAttack(r);
+  } else if (at.kind === "portal") {
+    // Lifetime is driven by ball.portalHold (see tickPortalHold).
+    if (!ball.portalHold || ball.portalHold.side !== r.side) endAttack(r);
   } else {
     at.vy += at.spec.gravity * dt;
     at.x += at.vx * dt;
@@ -807,7 +855,7 @@ function deflectBall(r, at) {
 
 export function collideBallAttack(r) {
   const at = r.attack;
-  if (!at || at.connected) return;
+  if (!at || at.connected || at.kind === "portal") return;
   const dx = ball.x - at.x, dy = ball.y - at.y;
   const rr = ball.r + at.hitR;
   if (dx * dx + dy * dy > rr * rr) return;
@@ -878,6 +926,39 @@ function releaseMagnetHold(r) {
   ball.magnetHold = null;
   r.magnetFx = 0;
   emitAudio("magnet_release");
+}
+
+function releasePortalHold() {
+  const hold = ball.portalHold;
+  if (!hold) return;
+  ball.x = hold.x;
+  ball.y = hold.y;
+  ball.vx = hold.exitVx;
+  ball.vy = hold.exitVy;
+  ball.spin = -hold.dir * 3;
+  ball.portalHold = null;
+  emitAudio("portal_exit");
+  for (const r of robots) {
+    if (r.attack?.kind === "portal" && r.side === hold.side) endAttack(r);
+  }
+}
+
+function tickPortalHold(dt) {
+  const hold = ball.portalHold;
+  if (!hold) return;
+
+  // First half: slide into the portal. Second half: sit at the mouth before exit.
+  const total = hold.holdTime || 0.5;
+  const elapsed = total - hold.timer;
+  const enterT = Math.min(1, (elapsed / total) * 2);
+  ball.x = hold.fromX + (hold.x - hold.fromX) * enterT;
+  ball.y = hold.fromY + (hold.y - hold.fromY) * enterT;
+  ball.vx = 0;
+  ball.vy = 0;
+  ball.spin = 0;
+
+  hold.timer -= dt;
+  if (hold.timer <= 0) releasePortalHold();
 }
 
 function tickMagnetHold(dt) {
@@ -1057,6 +1138,13 @@ function collideBallNet(prevX, prevY) {
 export function updateBall(dt) {
   if (!ball.live) return;
 
+  if (ball.portalHold) {
+    tickPortalHold(dt);
+    // Hold frame *and* the release frame skip free flight so the exit
+    // velocity isn't immediately nudged by gravity/spin in the same step.
+    return;
+  }
+
   if (ball.magnetHold) {
     tickMagnetHold(dt);
     if (ball.magnetHold) {
@@ -1233,6 +1321,7 @@ function serializeAttack(at) {
     spin: at.spin || 0,
     vx: at.vx || 0, vy: at.vy || 0,
     life: at.life || 0,
+    dir: at.dir || 0,
     // arm type id is enough for guest to look up spec again if needed
     armType: at.spec?.id || null,
   };
@@ -1279,6 +1368,7 @@ export function buildSnapshot(tick) {
       lastHitBy: ball.lastHitBy,
       smashBy: ball.smashBy,
       magnetHold: ball.magnetHold,
+      portalHold: ball.portalHold,
     },
     robots: robots.map(serializeRobot),
   };
@@ -1311,6 +1401,7 @@ export function applySnapshot(snap) {
   ball.lastHitBy = b.lastHitBy;
   ball.smashBy = b.smashBy;
   ball.magnetHold = b.magnetHold;
+  ball.portalHold = b.portalHold ?? null;
 
   for (let i = 0; i < 2; i++) {
     const src = snap.robots[i];

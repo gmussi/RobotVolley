@@ -51,6 +51,7 @@ export const WEAPONS = {
   hand: { label: "Energy Orb", description: ARM_TYPES.hand.description },
   axe: { label: "Axe", description: ARM_TYPES.axe.description },
   ninjaStar: { label: "Ninja Star", description: ARM_TYPES.ninjaStar.description },
+  portalGun: { label: "Portal Gun", description: ARM_TYPES.portalGun.description },
 };
 
 export const ACCESSORY_IDS = Object.keys(ACCESSORIES);

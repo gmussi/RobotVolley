@@ -467,13 +467,39 @@ function drawRobotArms(r, p, col) {
   const frontArm = enemyDir > 0 ? p.armR : p.armL;
   const hx = frontArm.x + frontArm.w / 2;
   const hy = frontArm.y + frontArm.h - 3;
-  const projectileGone = r.attack && r.attack.kind === "projectile";
-  if (!projectileGone) drawArmEmblem(r.armType, hx, hy, enemyDir, armCol);
+  const propGone = r.attack && (r.attack.kind === "projectile" || r.attack.kind === "portal");
+  if (!propGone) drawArmEmblem(r.armType, hx, hy, enemyDir, armCol, r.side);
 }
 
-function drawArmEmblem(type, hx, hy, dir, armCol) {
+function drawArmEmblem(type, hx, hy, dir, armCol, side = -1) {
   ctx.save();
-  if (type === "axe") {
+  if (type === "portalGun") {
+    // Compact portal gun: barrel + team-colored portal disc at the muzzle.
+    ctx.fillStyle = "#5a6270";
+    ctx.strokeStyle = "#2a3038";
+    ctx.lineWidth = 1.2;
+    roundRect(hx - 3, hy - 10, 6, 12, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#3a424c";
+    ctx.fillRect(hx - 2 + dir * 2, hy - 14, 8, 4);
+    ctx.strokeRect(hx - 2 + dir * 2, hy - 14, 8, 4);
+    const mx = hx + dir * 10;
+    const my = hy - 12;
+    const blue = side > 0;
+    ctx.fillStyle = blue ? "rgba(40,160,230,0.85)" : "rgba(220,40,40,0.85)";
+    ctx.shadowColor = blue ? "rgba(60,180,255,0.8)" : "rgba(255,60,40,0.8)";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.ellipse(mx, my, 3, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = blue ? "rgba(160,220,255,0.9)" : "rgba(255,180,160,0.9)";
+    ctx.lineWidth = 1.2;
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.ellipse(mx, my, 1.5, 4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (type === "axe") {
     ctx.strokeStyle = "#7a5230";
     ctx.lineWidth = 3;
     ctx.lineCap = "round";

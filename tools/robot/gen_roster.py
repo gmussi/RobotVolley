@@ -99,6 +99,10 @@ PARTS = [
     ("weapon", "ninjaStar", "1:1",
      "a single silver metal NINJA THROWING STAR (shuriken) game-item PROP only: four "
      "sharp points, a small center hole, subtle cyan edge glint. Just the star."),
+    ("weapon", "portalGun", "1:1",
+     "a small cartoon PORTAL GUN / sci-fi ray-gun game-item PROP only: short chunky "
+     "silver-grey body, dark grip, muzzle capped by a glowing RED oval portal disc "
+     "(vertical ellipse), subtle cyan edge glint on the metal. Just the gun."),
 ]
 
 # ---- Skeleton: fixed joint lines so any variant connects at the same seams ----
@@ -205,7 +209,7 @@ def catalog_sheet(cat, out_path):
         ("TORSOS", "torso", ["standard", "heavy", "light", "lowCoG"]),
         ("LEGS", "leg", ["normal", "power", "rocket"]),
         ("ARM", "arm", ["hand"]),
-        ("WEAPONS", "weapon", ["axe", "ninjaStar"]),
+        ("WEAPONS", "weapon", ["axe", "ninjaStar", "portalGun"]),
     ]
     cell, pad, rowlabel = 240, 18, 30
     cols = 5

@@ -486,6 +486,95 @@ describe("arm attacks", () => {
     expect(r.attack).toBeNull();
   });
 
+  it("portal gun opens ahead of the ball, holds, then reverses", () => {
+    startGame("2p");
+    serveBall(0.5);
+    const r = robots[0];
+    r.weapon = "portalGun";
+    applyItems(r);
+    expect(getArmSpec(r).kind).toBe("portal");
+
+    ball.live = true;
+    ball.portalHold = null;
+    ball.magnetHold = null;
+    ball.smashBy = null;
+    ball.x = 400; ball.y = 220;
+    ball.vx = 300; ball.vy = -100;
+
+    r.attack = null;
+    r.attackCooldown = 0;
+    r.attackHeld = true; r.attackPrevHeld = false;
+    updateAttack(r, PHYSICS_STEP);
+
+    expect(r.attack?.kind).toBe("portal");
+    expect(ball.portalHold).not.toBeNull();
+    expect(ball.portalHold.dir).toBe(1);
+    expect(ball.portalHold.x).toBeGreaterThan(ball.portalHold.fromX);
+    expect(ball.portalHold.exitVx).toBeCloseTo(-300, 5);
+    expect(ball.portalHold.exitVy).toBeCloseTo(100, 5);
+    expect(ball.vx).toBe(0);
+    expect(ball.vy).toBe(0);
+
+    const steps = Math.ceil(ARM_TYPES.portalGun.holdTime / PHYSICS_STEP) + 2;
+    let released = false;
+    for (let i = 0; i < steps; i++) {
+      const held = !!ball.portalHold;
+      updateAttack(r, PHYSICS_STEP);
+      updateBall(PHYSICS_STEP);
+      if (held && !ball.portalHold) {
+        // Check the exit velocity on the release frame (before later spin/gravity).
+        expect(ball.vx).toBeCloseTo(-300, 5);
+        expect(ball.vy).toBeCloseTo(100, 5);
+        released = true;
+        break;
+      }
+    }
+    expect(released).toBe(true);
+    expect(r.attack).toBeNull();
+    expect(r.attackCooldown).toBeGreaterThan(0);
+  });
+
+  it("portal opens to the left when the ball travels left", () => {
+    startGame("2p");
+    serveBall(0.5);
+    const r = robots[0];
+    r.weapon = "portalGun";
+    applyItems(r);
+
+    ball.live = true;
+    ball.portalHold = null;
+    ball.magnetHold = null;
+    ball.x = 600; ball.y = 240;
+    ball.vx = -250; ball.vy = 40;
+
+    r.attack = null;
+    r.attackCooldown = 0;
+    r.attackHeld = true; r.attackPrevHeld = false;
+    updateAttack(r, PHYSICS_STEP);
+
+    expect(ball.portalHold.dir).toBe(-1);
+    expect(ball.portalHold.x).toBeLessThan(ball.portalHold.fromX);
+    expect(ball.portalHold.exitVx).toBeCloseTo(250, 5);
+  });
+
+  it("portal gun does nothing when the ball is not live", () => {
+    startGame("2p");
+    serveBall(0.5);
+    const r = robots[0];
+    r.weapon = "portalGun";
+    applyItems(r);
+    ball.live = false;
+    ball.portalHold = null;
+
+    r.attack = null;
+    r.attackCooldown = 0;
+    r.attackHeld = true; r.attackPrevHeld = false;
+    updateAttack(r, PHYSICS_STEP);
+    expect(r.attack).toBeNull();
+    expect(ball.portalHold).toBeNull();
+    expect(r.attackCooldown).toBe(0);
+  });
+
   it("an opponent touch resets a hot ball back under the cap", () => {
     const p2 = robots[1];
     updateRobotParts(p2);
