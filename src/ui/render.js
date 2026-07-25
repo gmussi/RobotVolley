@@ -7,7 +7,7 @@ import {
 import {
   ball, score, state, gameMode, servingSide, serveCharge,
   bannerText, winner, menuOptions, menuIndex, pauseFromState, submenuReturnState,
-  P1, P2, getArmSpec, onlineStatus, onlineLocalSeat, creditsLink,
+  P1, P2, getArmSpec, onlineStatus, onlineLocalSeat, creditsLink, attractActive,
 } from "../engine/game.js";
 import { drawLotteryAnimation } from "./lottery.js";
 import { drawSettings } from "./settings.js";
@@ -56,6 +56,10 @@ export function render() {
     state !== "controls" && state !== "settings" && state !== "credits"
   ) {
     drawBall(); drawBallTracker(); drawHUD();
+  } else if (attractActive) {
+    // Menu demo: the ball only, dimmed by the scrim the UI draws over it. No
+    // HUD or off-screen tracker — they'd collide with the logo and menu rows.
+    drawBall();
   }
   if (vis === "lottery") {
     drawScrim(ctx, 0.45);

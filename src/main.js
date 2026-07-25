@@ -13,7 +13,8 @@ import { CONTROL } from "./data/controls.js";
 import {
   PHYSICS_STEP, state, menuOptions, menuIndex, lotteryTick, creditsLink,
   score, ball, audioEvents, gameMode, winner, onlineLocalSeat,
-  startGame, toMenu, enterMenu, enterCredits, resetPositions,
+  startGame, toMenu, enterMenu, enterCredits, resetPositions, startAttract,
+  attractActive,
   menuMove, menuSelect, setMenuIndex,
   pauseOptions, pauseIndex, pauseMove, pauseSelect, setPauseIndex,
   pauseGame, resumeFromPause, leaveSubmenu, canPause,
@@ -285,6 +286,8 @@ canvas.addEventListener("mousedown", (e) => {
 
 wireDomControls();
 resetPositions();
+// The title screen opens onto a CPU-vs-CPU rally running behind the UI.
+startAttract();
 syncRobotPartsToDom();
 initTouchControls(canvas, keys);
 initGamepads();
@@ -327,7 +330,8 @@ function frame(now) {
   tickLotterySounds(state);
 
   const maxScore = Math.max(score[0], score[1]);
-  const ballSpeed = ball.live ? Math.hypot(ball.vx, ball.vy) : 0;
+  // The menu demo's rally must not drive the music — that tracks real matches.
+  const ballSpeed = ball.live && !attractActive ? Math.hypot(ball.vx, ball.vy) : 0;
   tickMusicIntensity(maxScore, ballSpeed);
 
   if (lotteryTick !== lastLotteryTick) {
