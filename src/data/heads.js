@@ -1,4 +1,5 @@
 /** Robot head loadouts — hitbox dimensions and collision tuning. */
+import { BALL_MAX_SPEED } from "./constants.js";
 
 export const HEAD_TYPES = {
   standard: {
@@ -7,16 +8,6 @@ export const HEAD_TYPES = {
     w: 44,
     h: 34,
     dishAbove: 0,
-  },
-  dome: {
-    label: "Dome",
-    description: "High pop, less control",
-    w: 52,
-    h: 28,
-    dishAbove: 0,
-    restitutionBonus: 0.22,
-    minBounceVy: 520,
-    lateralMul: 0.67,
   },
   magnet: {
     label: "Magnet",
@@ -31,24 +22,26 @@ export const HEAD_TYPES = {
   },
   drill: {
     label: "Drill",
-    description: "Dash shove bonus",
+    description: "Flings the ball sideways at full speed",
     w: 44,
     h: 34,
     dishAbove: 0,
     dashMinVx: 120,
-    shoveMinVx: 150,
-    shoveBoost: 320,
     extendW: 18,
     extendH: 24,
     extendOffset: 20,
-  },
-  satellite: {
-    label: "Satellite",
-    description: "Tall reach, soft chest",
-    w: 44,
-    h: 34,
-    dishAbove: 22,
-    torsoRestitutionMul: 0.78,
+    // The drill never bounces the ball — it always flings it sideways, toward
+    // whichever side of the head was struck, with a little lift.
+    //
+    // Calibrated so a robot standing at the middle of its own half (centre
+    // x = W*0.25), struck on the right of the head, skims the ball over the net
+    // at exactly full speed. The binding point is the net's NEAR top corner,
+    // not the net centre — the ball's leading edge reaches the net a radius
+    // earlier than its centre does, and it is still climbing there. At this
+    // angle the underside clears that corner by half a pixel.
+    // Locked by "drill skims the ball over the net" in tests/engine.test.js.
+    launchSpeed: BALL_MAX_SPEED,
+    launchAngleDeg: 18.698,
   },
 };
 

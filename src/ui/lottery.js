@@ -7,6 +7,7 @@ import {
   LOTTERY_SPIN_DURATION, LOTTERY_HOLD_DURATION, LOTTERY_TOTAL_DURATION,
 } from "../engine/game.js";
 import { colorsFromAccent, drawPartPreview } from "./robotDraw.js";
+import { itemPreviewSlot } from "../data/items.js";
 import { COLORS, fontDisplay, fontBody, drawGlassPanel, roundRect } from "./neonUi.js";
 
 const ITEM_H = 52;
@@ -60,7 +61,7 @@ function drawWrappedCenterText(ctx, text, cx, y, maxWidth, color, font, lineHeig
   lines.forEach((ln, i) => ctx.fillText(ln, cx, startY + i * lineHeight));
 }
 
-function drawReelItem(ctx, result, option, x, y, w, h, accent, highlighted) {
+function drawReelItem(ctx, result, option, x, y, w, h, accent, highlighted, side = -1) {
   roundRect(ctx, x + 6, y + 4, w - 12, h - 8, 8);
   ctx.fillStyle = highlighted ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.05)";
   ctx.fill();
@@ -72,12 +73,13 @@ function drawReelItem(ctx, result, option, x, y, w, h, accent, highlighted) {
 
   drawPartPreview(
     ctx,
-    result.slotKey,
+    itemPreviewSlot(result.kind, option.id),
     option.id,
     x + w / 2,
     y + h * 0.38,
     h * 0.52,
     colorsFromAccent(accent),
+    { side },
   );
   ctx.fillStyle = highlighted ? COLORS.text : "rgba(255,255,255,0.82)";
   ctx.font = fontBody(13, highlighted ? 600 : 400);
@@ -138,6 +140,7 @@ function drawLotterySide(ctx, result, cx, playerIdx, elapsed) {
       const option = result.options[((winIdx + row) % n + n) % n];
       drawReelItem(
         ctx, result, option, reelX, selectY + row * ITEM_H, reelW, ITEM_H, accent, row === 0,
+        playerIdx === 0 ? -1 : 1,
       );
     }
   } else {
@@ -149,7 +152,8 @@ function drawLotterySide(ctx, result, cx, playerIdx, elapsed) {
       const itemY = selectY + row * ITEM_H - subOffset;
       if (itemY + ITEM_H < reelY || itemY > reelY + REEL_H) continue;
       const option = result.options[((firstIndex + row) % n + n) % n];
-      drawReelItem(ctx, result, option, reelX, itemY, reelW, ITEM_H, accent, false);
+      drawReelItem(ctx, result, option, reelX, itemY, reelW, ITEM_H, accent, false,
+        playerIdx === 0 ? -1 : 1);
     }
   }
   ctx.restore();
@@ -172,7 +176,9 @@ function drawLotterySide(ctx, result, cx, playerIdx, elapsed) {
     ctx.font = fontDisplay(18 + pulse * 2, 700);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(`${result.slotName}: ${result.newLabel}`, cx, panelY + PANEL_H - 56);
+    // The header already names the category, so the item label stands alone —
+    // prefixing it again overflowed the panel on the longer names.
+    ctx.fillText(result.newLabel, cx, panelY + PANEL_H - 56);
     drawWrappedCenterText(
       ctx,
       result.newDescription,

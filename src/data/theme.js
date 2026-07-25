@@ -45,10 +45,8 @@ export function fontBody(size, weight = 400) {
 
 export const PART_ACCENTS = {
   standard: null,
-  dome: "#7dd3fc",
   magnet: "#c084fc",
   drill: "#fb923c",
-  satellite: "#4ade80",
 };
 
 export const COLOR_PRESETS = [

@@ -5,6 +5,17 @@ import { ROBOT_W, ROBOT_H } from "../data/constants.js";
 import { ball, shadeColor, updateRobotParts } from "../engine/game.js";
 import { HEAD_TYPES } from "../data/heads.js";
 import { COLORS, GLOW, PART_ACCENTS } from "../data/theme.js";
+import { drawSpriteRobot, drawSpritePartPreview, spritesReady } from "./spriteRobot.js";
+
+/** Sprite renderer toggle. Default on; disable at runtime with
+ *  localStorage.setItem("rv_spriteRobots","0") then reload. */
+function spriteModeEnabled() {
+  try {
+    return localStorage.getItem("rv_spriteRobots") !== "0";
+  } catch {
+    return true;
+  }
+}
 
 let ctx;
 let litePreview = false;
@@ -185,29 +196,16 @@ function partViewBounds(r, slotKey) {
       b.y -= 14;
       b.h += 14;
     } else if (r.headType === "drill") {
-      const extend = HEAD_TYPES.drill.extendW + 26;
-      if (r.facing >= 0) b.w += extend;
-      else {
-        b.x -= extend;
-        b.w += extend;
-      }
-      b.h = Math.max(b.h, HEAD_TYPES.drill.extendH + 6);
-    } else if (r.headType === "satellite") {
-      const depth = 16 + HEAD_TYPES.satellite.dishAbove * 0.35;
-      b.y -= depth - HEAD_TYPES.satellite.dishAbove;
-      b.h += depth - HEAD_TYPES.satellite.dishAbove + 10;
-      const lnbPad = 18;
-      if (r.facing >= 0) b.w += lnbPad;
-      else {
-        b.x -= lnbPad;
-        b.w += lnbPad;
-      }
+      // The cone rises above the hitbox (see drawDrillHead) — frame it in.
+      const rise = Math.ceil(b.h * 0.47) + 4;
+      b.y -= rise;
+      b.h += rise;
     }
     return b;
   }
   if (slotKey === "torsoType") return { ...p.torso };
   if (slotKey === "legType") return unionRects(p.legL, p.legR, p.footL, p.footR);
-  if (slotKey === "armType" || slotKey === "arms") {
+  if (slotKey === "armType" || slotKey === "arms" || slotKey === "weaponType") {
     const b = unionRects(p.armL, p.armR);
     b.y -= 18; b.h += 18; // room for the weapon emblem above the hands
     return b;
@@ -240,14 +238,13 @@ function buildPreviewRobot(slotKey, typeId, colors) {
     flapFx: 0,
     magnetFx: 0,
     drillAngle: 0.75,
-    cogAngle: 0.9,
     colors: { ...colors },
     parts: {},
   };
   if (slotKey === "legType") r.legType = typeId;
   else if (slotKey === "headType") r.headType = typeId;
   else if (slotKey === "torsoType") r.torsoType = typeId;
-  else if (slotKey === "armType") r.armType = typeId;
+  else if (slotKey === "armType" || slotKey === "weaponType") r.armType = typeId;
   updateRobotParts(r);
   return r;
 }
@@ -259,7 +256,7 @@ function drawPreviewPart(r, slotKey) {
   if (slotKey === "headType") drawRobotHead(r, p, col, cx);
   else if (slotKey === "torsoType") drawRobotTorso(r, p, col, cx);
   else if (slotKey === "legType") drawRobotLegs(r, p, col);
-  else if (slotKey === "armType" || slotKey === "arms") drawRobotArms(r, p, col);
+  else if (slotKey === "armType" || slotKey === "arms" || slotKey === "weaponType") drawRobotArms(r, p, col);
 }
 
 function drawPreviewPartLite(r, slotKey) {
@@ -281,6 +278,11 @@ export function colorsFromAccent(accent) {
 }
 
 export function drawPartPreview(targetCtx, slotKey, typeId, cx, cy, maxSize, colors, opts = {}) {
+  // Prefer the sprite art so thumbnails match the robots on court.
+  if (spriteModeEnabled() && spritesReady()
+      && drawSpritePartPreview(targetCtx, slotKey, typeId, cx, cy, maxSize, opts.side ?? -1)) {
+    return;
+  }
   useCtx(targetCtx, () => {
     const r = buildPreviewRobot(slotKey, typeId, colors);
     const view = partViewBounds(r, slotKey);
@@ -296,6 +298,10 @@ export function drawPartPreview(targetCtx, slotKey, typeId, cx, cy, maxSize, col
 }
 
 export function drawRobotFigure(targetCtx, r, floorY) {
+  if (spriteModeEnabled() && spritesReady()) {
+    drawSpriteRobot(targetCtx, r, floorY);
+    return;
+  }
   useCtx(targetCtx, () => drawRobot(r, floorY));
 }
 function drawSpringCoil(x, yTop, yBot, amp) {
@@ -418,143 +424,8 @@ function drawStandardTorso(p, col, cx, r) {
   drawChestCore(cx, p.torso, teamColor(r));
 }
 
-function drawCog(cx, cy, radius, angle, teeth = 8) {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(angle);
-
-  ctx.fillStyle = "#7a8490";
-  ctx.beginPath();
-  for (let i = 0; i < teeth; i++) {
-    const a0 = (i / teeth) * Math.PI * 2;
-    const a1 = ((i + 0.35) / teeth) * Math.PI * 2;
-    const a2 = ((i + 0.65) / teeth) * Math.PI * 2;
-    const a3 = ((i + 1) / teeth) * Math.PI * 2;
-    const inner = radius * 0.62;
-    const outer = radius;
-    if (i === 0) ctx.moveTo(Math.cos(a0) * inner, Math.sin(a0) * inner);
-    ctx.lineTo(Math.cos(a1) * outer, Math.sin(a1) * outer);
-    ctx.lineTo(Math.cos(a2) * outer, Math.sin(a2) * outer);
-    ctx.lineTo(Math.cos(a3) * inner, Math.sin(a3) * inner);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = "#a8b0ba";
-  ctx.beginPath();
-  ctx.arc(0, 0, radius * 0.28, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "rgba(0,0,0,0.35)";
-  ctx.beginPath();
-  ctx.arc(0, 0, radius * 0.12, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.restore();
-}
-
-function drawHeavyTorso(p, col, cx, r) {
-  const t = p.torso;
-  drawPart(t.x, t.y, t.w, t.h, 10, col.torso, r);
-
-  ctx.strokeStyle = shadeColor(col.torso, -40);
-  ctx.lineWidth = 2;
-  roundRect(t.x + 3, t.y + 3, t.w - 6, t.h - 6, 8);
-  ctx.stroke();
-
-  ctx.fillStyle = "#2a3038";
-  const bandH = 5;
-  for (const by of [t.y + 16, t.y + t.h * 0.45, t.y + t.h - 22]) {
-    roundRect(t.x + 6, by, t.w - 12, bandH, 2);
-    ctx.fill();
-  }
-  drawChestCore(cx, t, teamColor(r));
-}
-
-function drawLightTorso(p, col, cx) {
-  const t = p.torso;
-  const pad = 5;
-  const ix = t.x + pad;
-  const iy = t.y + pad;
-  const iw = t.w - pad * 2;
-  const ih = t.h - pad * 2;
-
-  ctx.fillStyle = "rgba(6,10,18,0.72)";
-  roundRect(ix, iy, iw, ih, 9);
-  ctx.fill();
-
-  const beamFace = "#b8c0c8";
-  const beamEdge = "#6d7680";
-  const beamShadow = "#434a54";
-  const joint = "#9aa3ad";
-
-  ctx.strokeStyle = beamEdge;
-  ctx.lineWidth = 2;
-  roundRect(t.x + 2, t.y + 2, t.w - 4, t.h - 4, 11);
-  ctx.stroke();
-
-  function beamRect(x, y, w, h) {
-    ctx.fillStyle = beamShadow;
-    ctx.fillRect(x + 1, y + 1, w, h);
-    ctx.fillStyle = beamFace;
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = beamEdge;
-    if (w >= h) ctx.fillRect(x, y, w, 1);
-    else ctx.fillRect(x, y, 1, h);
-  }
-
-  const postW = 5;
-  const left = ix + 2;
-  const right = ix + iw - postW - 2;
-  const top = iy + 3;
-  const bottom = iy + ih - 8;
-  const midY = iy + ih * 0.48;
-
-  beamRect(left, top, postW, bottom - top);
-  beamRect(right, top, postW, bottom - top);
-  beamRect(left, top, right - left + postW, 4);
-  beamRect(left, midY - 2, right - left + postW, 4);
-  beamRect(left, bottom - 4, right - left + postW, 4);
-
-  ctx.strokeStyle = beamEdge;
-  ctx.lineWidth = 3;
-  ctx.lineCap = "square";
-  ctx.beginPath();
-  ctx.moveTo(left + postW + 2, top + 6);
-  ctx.lineTo(right - 2, bottom - 8);
-  ctx.moveTo(right + postW - 2, top + 6);
-  ctx.lineTo(left + 2, bottom - 8);
-  ctx.stroke();
-
-  ctx.strokeStyle = shadeColor(col.torso, -10);
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(cx, top + 8);
-  ctx.lineTo(cx, bottom - 10);
-  ctx.stroke();
-
-  for (const [jx, jy] of [
-    [left, top], [right, top], [left, midY - 2], [right, midY - 2],
-    [left, bottom - 4], [right, bottom - 4], [cx - 2, midY - 2],
-  ]) {
-    ctx.fillStyle = joint;
-    ctx.beginPath();
-    ctx.arc(jx + (jx === cx - 2 ? 2 : postW / 2), jy + 2, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-function drawLowCoGTorso(r, p, col, cx) {
-  drawStandardTorsoShell(p, col, r);
-  drawCog(cx, p.torso.y + 29, 11, r.cogAngle);
-}
-
 function drawRobotTorso(r, p, col, cx) {
-  switch (r.torsoType) {
-    case "heavy": drawHeavyTorso(p, col, cx, r); break;
-    case "light": drawLightTorso(p, col, cx); break;
-    case "lowCoG": drawLowCoGTorso(r, p, col, cx); break;
-    default: drawStandardTorso(p, col, cx, r); break;
-  }
+  drawStandardTorso(p, col, cx, r);
 }
 
 function drawRobot(r, floorY) {
@@ -663,19 +534,6 @@ function drawRobotHead(r, p, col, cx) {
   const eyeOpen = r.eyeBlink > 0 ? 0.3 : 1;
   const accent = headAccent(r);
 
-  if (r.headType === "dome") {
-    ctx.beginPath();
-    ctx.ellipse(head.x + head.w / 2, head.y + head.h - 2, head.w / 2, head.h / 2 + 2, 0, Math.PI, 0);
-    const dg = ctx.createLinearGradient(head.x, head.y, head.x, head.y + head.h);
-    dg.addColorStop(0, shadeColor(col.head, 28));
-    dg.addColorStop(1, col.head);
-    ctx.fillStyle = dg;
-    ctx.fill();
-    drawHeadAccentRing(cx, head.y + head.h * 0.55, head.w * 0.52, head.h * 0.48, accent);
-    drawNeonVisor(head.x + 8, head.y + head.h * 0.35, head.w - 16, 10, eyeOpen, accent);
-    return;
-  }
-
   if (r.headType === "magnet") {
     drawCartoonMagnetHead(r, head, col, cx);
     return;
@@ -683,11 +541,6 @@ function drawRobotHead(r, p, col, cx) {
 
   if (r.headType === "drill") {
     drawDrillHead(r, head, col, cx);
-    return;
-  }
-
-  if (r.headType === "satellite") {
-    drawSatelliteDishHead(r, head, col, cx);
     return;
   }
 
@@ -714,219 +567,99 @@ function drawRobotHead(r, p, col, cx) {
 }
 
 function drawDrillHead(r, head, col, cx) {
+  // The whole head IS the drill: banded housing with the visor at the bottom,
+  // fluted cone rising to a point above it.
   const housing = col.head;
   const housingDark = shadeColor(housing, -28);
   const housingLight = shadeColor(housing, 18);
   const metal = "#8a929e";
   const metalDark = "#555d6a";
-  const bitCol = "#c8cdd6";
-
-  const centerY = head.y + head.h * 0.52;
-  const bodyW = 28;
-  const bodyH = 22;
-  const face = r.facing;
+  const accent = headAccent(r);
+  const eyeOpen = r.eyeBlink > 0 ? 0.3 : 1;
   const dashing = Math.abs(r.vx) > HEAD_TYPES.drill.dashMinVx;
-  const bitLen = dashing ? 22 : 16;
 
-  ctx.save();
-  ctx.translate(cx, centerY);
-  ctx.scale(face, 1);
+  const baseY = head.y + head.h;          // neck line
+  const ringH = head.h * 0.52;            // housing ring holding the visor
+  const ringY = baseY - ringH;
+  const ringW = head.w * 0.82;
+  const coneH = head.h * 0.95;            // cone rises above the box, like the sprite
+  const coneW = ringW * 0.78;
+  const coneTop = ringY - coneH;
 
-  // Pistol grip into torso
+  // Neck collar into the torso
   ctx.fillStyle = housingDark;
-  roundRect(-5, 4, 10, 14, 3);
-  ctx.fill();
-  ctx.fillStyle = housing;
-  roundRect(-4, 5, 8, 12, 2);
+  roundRect(cx - 5, baseY - 4, 10, 8, 3);
   ctx.fill();
 
-  // Main housing
-  const bodyGrad = ctx.createLinearGradient(-bodyW / 2, -bodyH / 2, bodyW / 2, bodyH / 2);
-  bodyGrad.addColorStop(0, housingLight);
-  bodyGrad.addColorStop(0.5, housing);
-  bodyGrad.addColorStop(1, housingDark);
-  ctx.fillStyle = bodyGrad;
-  roundRect(-bodyW / 2, -bodyH / 2, bodyW, bodyH, 6);
+  // Fluted cone
+  const coneGrad = ctx.createLinearGradient(cx - coneW / 2, coneTop, cx + coneW / 2, ringY);
+  coneGrad.addColorStop(0, housingLight);
+  coneGrad.addColorStop(0.55, housing);
+  coneGrad.addColorStop(1, housingDark);
+  ctx.beginPath();
+  ctx.moveTo(cx, coneTop);
+  ctx.lineTo(cx + coneW / 2, ringY + 2);
+  ctx.lineTo(cx - coneW / 2, ringY + 2);
+  ctx.closePath();
+  ctx.fillStyle = coneGrad;
   ctx.fill();
   ctx.strokeStyle = housingDark;
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // Top vent slots
-  ctx.fillStyle = "rgba(0,0,0,0.2)";
-  for (let i = 0; i < 3; i++) {
-    ctx.fillRect(-8 + i * 5, -7, 3, 5);
-  }
-
-  // Trigger
-  ctx.fillStyle = metalDark;
-  roundRect(2, 2, 6, 8, 2);
-  ctx.fill();
-
-  // Chuck collar
-  ctx.fillStyle = metal;
-  roundRect(bodyW / 2 - 4, -6, 10, 12, 2);
-  ctx.fill();
-  ctx.fillStyle = metalDark;
-  ctx.fillRect(bodyW / 2 + 2, -4, 3, 8);
-
-  // Spinning drill bit
-  const chuckX = bodyW / 2 + 6;
+  // Spiral flute bands, scrolling with drillAngle so the cone reads as spinning
   ctx.save();
-  ctx.translate(chuckX, 0);
-  ctx.rotate(r.drillAngle);
-
-  // Fluted bit shaft
-  ctx.strokeStyle = bitCol;
-  ctx.lineWidth = 3;
-  ctx.lineCap = "round";
-  for (let i = 0; i < 2; i++) {
+  ctx.beginPath();
+  ctx.moveTo(cx, coneTop);
+  ctx.lineTo(cx + coneW / 2, ringY + 2);
+  ctx.lineTo(cx - coneW / 2, ringY + 2);
+  ctx.closePath();
+  ctx.clip();
+  const bands = 4;
+  const phase = (r.drillAngle / (Math.PI * 2)) % 1;
+  for (let i = 0; i < bands; i++) {
+    const t = (i + phase) / bands;              // 0 at tip, 1 at the base
+    const y = coneTop + coneH * t;
+    const halfW = (coneW / 2) * t;
+    ctx.strokeStyle = metal;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(0, -4);
-    ctx.lineTo(bitLen, 0);
-    ctx.lineTo(0, 4);
+    ctx.moveTo(cx - halfW, y + 2);
+    ctx.lineTo(cx + halfW, y - 1);
     ctx.stroke();
-    ctx.rotate(Math.PI / 2);
+    // orange hazard chip riding the band
+    if (halfW > 3) {
+      ctx.fillStyle = accent;
+      ctx.fillRect(cx + halfW * 0.35, y - 2, Math.max(2, halfW * 0.28), 3);
+    }
   }
+  ctx.restore();
 
-  // Bit tip
+  // Bright tip
   ctx.fillStyle = "#eef1f5";
   ctx.beginPath();
-  ctx.moveTo(bitLen - 2, -3);
-  ctx.lineTo(bitLen + 5, 0);
-  ctx.lineTo(bitLen - 2, 3);
+  ctx.moveTo(cx, coneTop);
+  ctx.lineTo(cx + coneW * 0.1, coneTop + coneH * 0.16);
+  ctx.lineTo(cx - coneW * 0.1, coneTop + coneH * 0.16);
   ctx.closePath();
   ctx.fill();
 
-  // Motion blur ring while spinning
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(2, 0, bitLen * 0.45, 0, Math.PI * 2);
-  ctx.stroke();
+  // Housing ring + visor face
+  drawPart(cx - ringW / 2, ringY, ringW, ringH, 6, housing, r, accent);
+  ctx.fillStyle = metalDark;
+  ctx.fillRect(cx - ringW / 2 + 2, ringY + 1, ringW - 4, 2);
+  drawNeonVisor(cx - ringW / 2 + 5, ringY + ringH * 0.3, ringW - 10, ringH * 0.42,
+    eyeOpen, accent);
+  drawHeadAccentRing(cx, ringY + ringH * 0.55, ringW * 0.52, ringH * 0.5, accent);
 
-  ctx.restore();
-
-  // Spark flecks when dashing
+  // Spark flecks off the tip when dashing
   if (dashing) {
-    ctx.fillStyle = "rgba(255,200,80,0.7)";
+    ctx.fillStyle = "rgba(255,200,80,0.75)";
     for (let i = 0; i < 3; i++) {
       const a = r.drillAngle * 2 + i * 2.1;
       ctx.beginPath();
-      ctx.arc(chuckX + bitLen + 4, Math.sin(a) * 5, 1.5, 0, Math.PI * 2);
+      ctx.arc(cx + Math.sin(a) * 5, coneTop - 3, 1.5, 0, Math.PI * 2);
       ctx.fill();
-    }
-  } else if (r.eyeBlink > 0) {
-    ctx.strokeStyle = "rgba(255,220,120,0.6)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(chuckX + 4, -6);
-    ctx.lineTo(chuckX + bitLen + 6, 0);
-    ctx.lineTo(chuckX + 4, 6);
-    ctx.stroke();
-  }
-
-  ctx.restore();
-}
-
-function drawSatelliteDishHead(r, head, col, cx) {
-  const dishCol = col.head;
-  const dishDark = shadeColor(dishCol, -30);
-  const dishLight = shadeColor(dishCol, 22);
-  const metal = "#7a8494";
-  const metalDark = "#505868";
-
-  const mountY = head.y + head.h - 5;
-  const rimY = head.y + head.h * 0.42;
-  const dishRx = head.w * 0.46;
-  const depth = 16 + HEAD_TYPES.satellite.dishAbove * 0.35;
-
-  // Mast arm into the torso
-  ctx.strokeStyle = metalDark;
-  ctx.lineWidth = 4;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.moveTo(cx, mountY + 2);
-  ctx.lineTo(cx, rimY + 4);
-  ctx.stroke();
-  ctx.strokeStyle = metal;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(cx, mountY);
-  ctx.lineTo(cx, rimY + 2);
-  ctx.stroke();
-
-  // Back support strut
-  ctx.strokeStyle = metalDark;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(cx - 6, rimY + 2);
-  ctx.lineTo(cx - dishRx + 6, rimY - 2);
-  ctx.stroke();
-
-  // Parabolic dish bowl
-  ctx.beginPath();
-  ctx.moveTo(cx - dishRx, rimY);
-  ctx.quadraticCurveTo(cx, rimY - depth, cx + dishRx, rimY);
-  ctx.lineTo(cx + dishRx - 3, rimY + 4);
-  ctx.quadraticCurveTo(cx, rimY - depth + 8, cx - dishRx + 3, rimY + 4);
-  ctx.closePath();
-  const bowlGrad = ctx.createLinearGradient(cx, rimY - depth, cx, rimY + 4);
-  bowlGrad.addColorStop(0, dishLight);
-  bowlGrad.addColorStop(0.45, dishCol);
-  bowlGrad.addColorStop(1, dishDark);
-  ctx.fillStyle = bowlGrad;
-  ctx.fill();
-  ctx.strokeStyle = dishDark;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  // Rim highlight
-  ctx.strokeStyle = "rgba(255,255,255,0.35)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(cx - dishRx + 4, rimY + 1);
-  ctx.quadraticCurveTo(cx, rimY - depth + 2, cx + dishRx - 4, rimY + 1);
-  ctx.stroke();
-
-  // Concentric signal rings on the dish
-  ctx.strokeStyle = "rgba(255,255,255,0.12)";
-  ctx.lineWidth = 1;
-  for (let i = 1; i <= 3; i++) {
-    const t = i / 4;
-    ctx.beginPath();
-    ctx.moveTo(cx - dishRx * t, rimY + 1);
-    ctx.quadraticCurveTo(cx, rimY - depth * t, cx + dishRx * t, rimY + 1);
-    ctx.stroke();
-  }
-
-  // LNB feed arm + receiver box
-  const armLen = 14;
-  const lnbX = cx + r.facing * armLen;
-  const lnbY = rimY - depth * 0.45;
-  ctx.strokeStyle = metal;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(cx + r.facing * 4, rimY - depth * 0.35);
-  ctx.lineTo(lnbX, lnbY);
-  ctx.stroke();
-  ctx.fillStyle = "#3a4048";
-  roundRect(lnbX - 4, lnbY - 3, 8, 6, 2);
-  ctx.fill();
-  ctx.fillStyle = "#66ff88";
-  ctx.beginPath();
-  ctx.arc(lnbX + r.facing * 3, lnbY, 2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Signal ping on ball hit
-  if (r.eyeBlink > 0) {
-    const t = r.eyeBlink / 0.12;
-    ctx.strokeStyle = `rgba(102,255,136,${0.35 + t * 0.45})`;
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 2; i++) {
-      ctx.beginPath();
-      ctx.arc(lnbX + r.facing * 6, lnbY - 2, 6 + i * 8, -0.8, 0.8);
-      ctx.stroke();
     }
   }
 }
