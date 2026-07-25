@@ -28,6 +28,9 @@ export { W, H, FLOOR_Y, PHYSICS_STEP };
 export const audioEvents = [];
 
 function emitAudio(type, data = {}) {
+  // The menu demo plays behind the UI — it stays silent so it never competes
+  // with the menu music or the navigation blips.
+  if (attractActive) return;
   audioEvents.push({ type, ...data });
 }
 
@@ -52,6 +55,66 @@ export let lotteryTimer = 0;
 export let lotteryTick = 0;
 let rallyIndex = 0;
 
+// ---- Attract mode ----
+/**
+ * The title/menu screens run a CPU-vs-CPU rally behind the UI. It borrows the
+ * real match loop — same physics, AI, serve timing — but keeps its own phase so
+ * `state` stays on the screen the player is actually looking at, and it never
+ * scores, so the demo match never ends.
+ */
+export let attractActive = false;
+/** @type {"serve"|"play"|"point"} */
+let attractPhase = "serve";
+const ATTRACT_POINT_DELAY = 1.1;
+
+/** Match phase driving the simulation — the demo runs one of its own. */
+function phase() {
+  return attractActive ? attractPhase : state;
+}
+
+function setPhase(next) {
+  if (attractActive) attractPhase = next;
+  else state = next;
+}
+
+export function startAttract() {
+  if (attractActive) return;
+  attractActive = true;
+  attractPhase = "serve";
+  resetPositions();
+  servingSide = matchRandom() < 0.5 ? -1 : 1;
+  setupServePhase();
+}
+
+export function stopAttract() {
+  if (!attractActive) return;
+  attractActive = false;
+  attractPhase = "serve";
+  ball.live = false;
+  ball.lastHitBy = null;
+  ball.magnetHold = null;
+  ball.smashBy = null;
+  cpuServeTimer = 0;
+  serveCharging = false;
+  serveCharge = 0;
+  for (const r of robots) {
+    r.moveDir = 0;
+    r.jumpHeld = false; r.jumpPrevHeld = false;
+    r.attackHeld = false; r.attackPrevHeld = false;
+  }
+  resetPositions();
+}
+
+/** Rally over: no score, no winner — just reset and serve from the other side. */
+function endAttractRally(scorer) {
+  ball.live = false;
+  ball.magnetHold = null;
+  ball.smashBy = null;
+  attractPhase = "point";
+  messageTimer = ATTRACT_POINT_DELAY;
+  servingSide = scorer === 0 ? 1 : -1;
+}
+
 /** Local seat index (0/1) when gameMode === "online". */
 export let onlineLocalSeat = 0;
 /** Host runs physics; guest applies snapshots. */
@@ -72,6 +135,7 @@ export function setOnlineStatus(text) {
 }
 
 export function enterSearching() {
+  stopAttract();
   gameMode = null;
   onlineStatus = "Searching for opponent…";
   state = "searching";
@@ -158,10 +222,11 @@ function setupServePhase() {
   ball.smashBy = null;
   ball.x = servingSide < 0 ? W * 0.25 : W * 0.75;
   ball.y = (FLOOR_Y - ROBOT_H) - 60;
-  state = "serve";
+  setPhase("serve");
   serveCharging = false;
   serveCharge = 0;
-  cpuServeTimer = (gameMode === "1p" && servingSide > 0) ? 0.9 : 0;
+  // Both demo robots serve themselves; a real match only auto-serves for the CPU.
+  cpuServeTimer = attractActive || (gameMode === "1p" && servingSide > 0) ? 0.9 : 0;
 }
 
 function enterServePhase() {
@@ -339,6 +404,9 @@ export function resetPositions() {
 
 export function prepareServe() {
   resetPositions();
+  // The demo never rolls the lottery — it would hijack the screen, and the parts
+  // on show belong to whatever the player set up in the Robot Lab.
+  if (attractActive) { setupServePhase(); return; }
   if (rallyIndex === 0) {
     rallyIndex++;
     setupServePhase();
@@ -357,7 +425,7 @@ export function serveBall(charge) {
   ball.spin = 0;
   serveCharging = false;
   serveCharge = 0;
-  state = "play";
+  setPhase("play");
   emitAudio("serve_launch", { charge });
 }
 
@@ -366,6 +434,7 @@ export function serveBall(charge) {
  * @param {{ seed?: number, localSeat?: number }} [opts]
  */
 export function startGame(mode, opts = {}) {
+  stopAttract();
   gameMode = mode;
   score[0] = 0; score[1] = 0;
   winner = null;
@@ -392,6 +461,7 @@ export function toMenu() {
   state = "menu";
   winner = null;
   pauseFromState = null;
+  startAttract();
 }
 
 /** Leave the title/attract screen and open the main menu. */
@@ -473,6 +543,7 @@ export function leaveSubmenu() {
 }
 
 export function awardPoint(scorer) {
+  if (attractActive) { endAttractRally(scorer); return; }
   score[scorer]++;
   ball.live = false;
   ball.magnetHold = null;
@@ -668,7 +739,7 @@ export function updateAttack(r, dt) {
   const pressed = r.attackHeld && !r.attackPrevHeld;
   r.attackPrevHeld = r.attackHeld;
 
-  if (!r.attack && pressed && state === "play" && r.attackCooldown <= 0) startAttack(r);
+  if (!r.attack && pressed && phase() === "play" && r.attackCooldown <= 0) startAttack(r);
 
   const at = r.attack;
   if (!at) return;
@@ -1043,19 +1114,22 @@ export function predictBallX(hitY, maxSteps) {
   return x;
 }
 
+/** Drives either robot — every net-relative test is mirrored by `r.side`. */
 export function aiControl(r) {
   const center = r.x + r.w / 2;
-  const homeX = W * 0.72;
-  const courtMin = NET.x + NET.w + r.w / 2 + 4;
-  const courtMax = W - r.w / 2 - 6;
+  const homeX = r.side < 0 ? W * 0.28 : W * 0.72;
+  const courtMin = r.side < 0 ? r.w / 2 + 6 : NET.x + NET.w + r.w / 2 + 4;
+  const courtMax = r.side < 0 ? NET.x - r.w / 2 - 4 : W - r.w / 2 - 6;
 
   let targetX = homeX;
-  const ballHeadingHere = ball.live && (ball.vx > 0 || ball.x > W / 2 - 40);
+  // Positive = the ball is on this robot's half, measured from the net.
+  const fromNet = (ball.x - W / 2) * r.side;
+  const ballHeadingHere = ball.live && (ball.vx * r.side > 0 || fromNet > -40);
 
   if (ball.live && ballHeadingHere) {
     let px = predictBallX(r.y + 12, 420);
     px = Math.max(courtMin, Math.min(courtMax, px));
-    targetX = px + 6;
+    targetX = px + 6 * r.side;
   }
   targetX = Math.max(courtMin, Math.min(courtMax, targetX));
 
@@ -1064,19 +1138,26 @@ export function aiControl(r) {
 
   const dx = Math.abs(ball.x - center);
   const inReachV = ball.y < r.y + 24 && ball.y > r.y - 150;
-  const onMySide = ball.x > W / 2 - 30;
+  const onMySide = fromNet > -30;
   r.jumpHeld = ball.live && r.onGround && onMySide && dx < 66 &&
                inReachV && ball.vy > -40;
   r.attackHeld = ball.live && onMySide && r.attackCooldown <= 0 && !r.attack &&
                  dx < 140 && ball.y > r.y - 130 && ball.y < r.y + r.h;
 }
 
+/** Screens where the player's keys drive the UI, never the robots. */
+const UI_STATES = new Set([
+  "title", "menu", "credits", "lottery", "controls", "settings", "pause",
+  "searching", "disconnect",
+]);
+
 export function readInput(keys, controlMap) {
-  if (
-    state === "title" || state === "menu" || state === "lottery" ||
-    state === "controls" || state === "settings" || state === "pause" ||
-    state === "searching" || state === "disconnect"
-  ) {
+  if (UI_STATES.has(state)) {
+    // Behind the menu, both robots are on autopilot playing the demo match.
+    if (attractActive) {
+      for (const r of robots) aiControl(r);
+      return;
+    }
     for (const r of robots) { r.moveDir = 0; r.jumpHeld = false; r.attackHeld = false; }
     return;
   }
@@ -1299,7 +1380,7 @@ export function extrapolateVisual(dt) {
 
 export function tickServe(dt) {
   if (state === "pause") return;
-  if (state === "point") {
+  if (phase() === "point") {
     messageTimer -= dt;
     if (messageTimer <= 0) prepareServe();
   }
@@ -1307,10 +1388,10 @@ export function tickServe(dt) {
     lotteryTimer -= dt;
     if (lotteryTimer <= 0) enterServePhase();
   }
-  if (state === "serve" && serveCharging) {
+  if (phase() === "serve" && serveCharging) {
     serveCharge = Math.min(1, serveCharge + dt / SERVE_CHARGE_TIME);
   }
-  if (state === "serve" && cpuServeTimer > 0) {
+  if (phase() === "serve" && cpuServeTimer > 0) {
     serveCharge = Math.min(0.75, serveCharge + dt * (0.75 / 0.9));
     cpuServeTimer -= dt;
     if (cpuServeTimer <= 0) serveBall(0.75);
@@ -1320,8 +1401,8 @@ export function tickServe(dt) {
 export function tickPhysics() {
   if (state === "pause") return;
   for (const r of robots) updateRobot(r, PHYSICS_STEP);
-  if (state === "play") updateBall(PHYSICS_STEP);
-  else if (state === "serve") {
+  if (phase() === "play") updateBall(PHYSICS_STEP);
+  else if (phase() === "serve") {
     const s = servingSide < 0 ? P1 : P2;
     ball.x = s.x + s.w / 2;
     ball.y = s.y - 60;
