@@ -1,21 +1,21 @@
 /** Robot Lab — in-game customization panel (neon DOM UI). */
-import { P1, P2, robots } from "../engine/game.js";
+import { P1, P2, robots, applyItems } from "../engine/game.js";
 import { COLOR_PRESETS } from "../data/theme.js";
-import { HEAD_TYPES } from "../data/heads.js";
-import { TORSO_TYPES } from "../data/torsos.js";
-import { ARM_TYPES } from "../data/arms.js";
+import { ACCESSORIES, WEAPONS } from "../data/items.js";
 
-const LEG_TYPES = [
-  { id: "normal", label: "Robot" },
-  { id: "power", label: "Power" },
-  { id: "rocket", label: "Rocket" },
-];
+function itemOptions(registry) {
+  return Object.entries(registry).map(([id, t]) => ({ id, label: t.label }));
+}
 
 const PART_SECTIONS = [
-  { key: "headType", label: "Head", options: () => Object.entries(HEAD_TYPES).map(([id, t]) => ({ id, label: t.label })) },
-  { key: "torsoType", label: "Torso", options: () => Object.entries(TORSO_TYPES).map(([id, t]) => ({ id, label: t.label })) },
-  { key: "armType", label: "Arms", options: () => Object.entries(ARM_TYPES).map(([id, t]) => ({ id, label: t.label })) },
-  { key: "legType", label: "Legs", options: () => LEG_TYPES },
+  // Accessories can be cleared back to an all-standard body; a weapon cannot —
+  // clearing one just means carrying the starter, which is itself an option.
+  {
+    key: "accessory",
+    label: "Accessory",
+    options: () => [{ id: "", label: "None" }].concat(itemOptions(ACCESSORIES)),
+  },
+  { key: "weapon", label: "Weapon", options: () => itemOptions(WEAPONS) },
 ];
 
 const COLOR_PARTS = ["head", "torso", "arms", "legs"];
@@ -50,8 +50,9 @@ function swatchGrid(robot, playerIdx, part) {
 }
 
 function partButtons(robot, playerIdx, section) {
+  const current = robot[section.key] ?? "";
   return section.options().map((o) =>
-    `<button type="button" class="part-tile${robot[section.key] === o.id ? " active" : ""}" data-player="${playerIdx}" data-slot="${section.key}" data-type="${o.id}">${o.label}</button>`,
+    `<button type="button" class="part-tile${current === o.id ? " active" : ""}" data-player="${playerIdx}" data-slot="${section.key}" data-type="${o.id}">${o.label}</button>`,
   ).join("");
 }
 
@@ -87,7 +88,9 @@ function renderLab() {
   });
   el.querySelectorAll(".part-tile").forEach((btn) => {
     btn.addEventListener("click", () => {
-      robots[Number(btn.dataset.player)][btn.dataset.slot] = btn.dataset.type;
+      const robot = robots[Number(btn.dataset.player)];
+      robot[btn.dataset.slot] = btn.dataset.type || null;
+      applyItems(robot);
       renderLab();
     });
   });

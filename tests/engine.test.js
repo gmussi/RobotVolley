@@ -4,8 +4,8 @@ import {
 } from "../src/data/constants.js";
 import {
   ball, score, makeRobot, updateRobotParts, predictBallX,
-  serveBall, awardPoint, resetPositions, robots,
-  collideBallRobot, resolveBallRobotContact, getHeadSpec, getTorsoSpec, getArmSpec,
+  serveBall, awardPoint, resetPositions, resetRobots, robots,
+  collideBallRobot, getHeadSpec, getTorsoSpec, getArmSpec, applyItems,
   updateBall, updateRobot, updateAttack, collideBallAttack, PHYSICS_STEP, state,
   planPartLottery, commitPartLottery, prepareServe, startGame, lotteryResults, lotteryTick,
   tickServe, LOTTERY_TOTAL_DURATION,
@@ -15,6 +15,9 @@ import {
 import { HEAD_TYPES } from "../src/data/heads.js";
 import { TORSO_TYPES } from "../src/data/torsos.js";
 import { ARM_TYPES } from "../src/data/arms.js";
+import {
+  ACCESSORY_IDS, WEAPON_IDS, DEFAULT_WEAPON, WEAPONS, itemPreviewSlot,
+} from "../src/data/items.js";
 
 describe("constants", () => {
   it("arena dimensions are fixed", () => {
@@ -44,26 +47,6 @@ describe("robots", () => {
     expect(r.parts.torso.w).toBeGreaterThan(0);
   });
 
-  it("sizes dome head wider than standard", () => {
-    const r = makeRobot(-1);
-    r.headType = "dome";
-    updateRobotParts(r);
-    expect(r.parts.head.w).toBe(HEAD_TYPES.dome.w);
-    expect(r.parts.head.w).toBeGreaterThan(HEAD_TYPES.standard.w);
-  });
-
-  it("extends satellite head upward for dish reach", () => {
-    const r = makeRobot(-1);
-    r.headType = "standard";
-    updateRobotParts(r);
-    const standardTop = r.parts.head.y;
-
-    r.headType = "satellite";
-    updateRobotParts(r);
-    expect(r.parts.head.y).toBeLessThan(standardTop);
-    expect(r.parts.head.h).toBe(HEAD_TYPES.satellite.h + HEAD_TYPES.satellite.dishAbove);
-  });
-
   it("defaults to standard head type", () => {
     const r = makeRobot(+1);
     expect(r.headType).toBe("standard");
@@ -82,33 +65,8 @@ describe("robots", () => {
     expect(getTorsoSpec(r)).toBe(TORSO_TYPES.standard);
   });
 
-  it("lowCoG torso sits lower than standard", () => {
-    const standard = makeRobot(-1);
-    standard.torsoType = "standard";
-    updateRobotParts(standard);
-
-    const low = makeRobot(-1);
-    low.torsoType = "lowCoG";
-    updateRobotParts(low);
-
-    expect(low.parts.torso.w).toBe(standard.parts.torso.w);
-    expect(low.parts.torso.y).toBeGreaterThan(standard.parts.torso.y);
-  });
-
-  it("heavy torso reduces jump velocity", () => {
-    const heavy = makeRobot(-1);
-    heavy.torsoType = "heavy";
-    heavy.jumpHeld = true;
-    heavy.jumpPrevHeld = false;
-    updateRobot(heavy, PHYSICS_STEP);
-
-    const light = makeRobot(-1);
-    light.torsoType = "light";
-    light.jumpHeld = true;
-    light.jumpPrevHeld = false;
-    updateRobot(light, PHYSICS_STEP);
-
-    expect(Math.abs(light.vy)).toBeGreaterThan(Math.abs(heavy.vy));
+  it("exposes exactly one torso type", () => {
+    expect(Object.keys(TORSO_TYPES)).toEqual(["standard"]);
   });
 });
 
@@ -176,45 +134,95 @@ describe("head collisions", () => {
     expect(ball.magnetHold).toEqual({ side: -1, timer: HEAD_TYPES.magnet.carryTime });
   });
 
-  it("dome head bounces higher than standard on top fall", () => {
-    const dome = makeRobot(-1);
-    dome.headType = "dome";
-    placeBallOnHead(dome);
-    collideBallRobot(dome);
-    const domeVy = ball.vy;
+  /** Drop the ball onto one side of the head: -1 = left, +1 = right. */
+  function placeBallOnHeadSide(r, side) {
+    updateRobotParts(r);
+    ball.live = true;
+    ball.magnetHold = null;
+    ball.spin = 0;
+    const head = r.parts.head;
+    ball.x = side < 0 ? head.x : head.x + head.w;
+    ball.y = head.y - ball.r + 3;
+    ball.vx = 0;
+    ball.vy = 180;
+    r.vx = 0;
+    r.vy = 0;
+    r.onGround = true;
+  }
 
-    const standard = makeRobot(-1);
-    standard.headType = "standard";
-    placeBallOnHead(standard);
-    collideBallRobot(standard);
-    expect(Math.abs(domeVy)).toBeGreaterThan(Math.abs(ball.vy));
-  });
-
-  it("drill head shoves harder when dashing", () => {
+  it("drill head always launches sideways at full speed", () => {
     const r = makeRobot(-1);
     r.headType = "drill";
-    placeBallOnHead(r);
-    r.vx = 0;
-    collideBallRobot(r);
-    const idleVx = ball.vx;
 
-    placeBallOnHead(r);
-    r.vx = 300;
-    r.facing = 1;
+    placeBallOnHeadSide(r, +1);
+    expect(collideBallRobot(r)).toBe(true);
+    expect(Math.hypot(ball.vx, ball.vy)).toBeCloseTo(HEAD_TYPES.drill.launchSpeed, 5);
+    expect(ball.vx).toBeGreaterThan(0);   // struck on the right -> travels right
+    expect(ball.vy).toBeLessThan(0);      // with a little lift
+    // Sideways, not a lob: horizontal speed dominates.
+    expect(Math.abs(ball.vx)).toBeGreaterThan(Math.abs(ball.vy) * 2);
+
+    placeBallOnHeadSide(r, -1);
     collideBallRobot(r);
-    expect(ball.vx).toBeGreaterThan(idleVx + 200);
+    expect(ball.vx).toBeLessThan(0);      // struck on the left -> travels left
   });
 
-  it("satellite resolves torso separately from head", () => {
+  it("drill launch ignores incoming speed and robot motion", () => {
     const r = makeRobot(-1);
-    r.headType = "satellite";
-    updateRobotParts(r);
-    ball.x = r.parts.torso.x + r.parts.torso.w / 2;
-    ball.y = r.parts.torso.y + r.parts.torso.h / 2;
-    ball.vx = 0;
-    ball.vy = -120;
-    const contact = resolveBallRobotContact(r);
-    expect(contact?.part).toBe("torso");
+    r.headType = "drill";
+
+    placeBallOnHeadSide(r, +1);
+    ball.vy = 40;                          // barely moving
+    collideBallRobot(r);
+    const slow = { vx: ball.vx, vy: ball.vy };
+
+    placeBallOnHeadSide(r, +1);
+    ball.vy = 900;                         // slammed down
+    r.vx = 300;
+    collideBallRobot(r);
+    expect(ball.vx).toBeCloseTo(slow.vx, 5);
+    expect(ball.vy).toBeCloseTo(slow.vy, 5);
+  });
+
+  it("drill skims the ball over the net from mid-half", () => {
+    // The calibration behind HEAD_TYPES.drill.launchAngleDeg: a robot at the
+    // middle of its own half, struck on the right of the head, just clears the
+    // net. Uses the shared robots — updateBall() collides against those, not
+    // against a locally built one.
+    const r = robots[0];
+    r.accessory = "drill";
+    r.weapon = DEFAULT_WEAPON;
+    r.x = W * 0.25 - ROBOT_W / 2;
+    r.y = FLOOR_Y - r.h;
+    r.vx = 0; r.vy = 0; r.onGround = true;
+    applyItems(r);
+    robots[1].x = W - ROBOT_W - 6;          // park the opponent clear of the flight
+    robots[1].y = FLOOR_Y - robots[1].h;
+    updateRobotParts(robots[1]);
+
+    placeBallOnHeadSide(r, +1);
+    collideBallRobot(r);
+
+    let clearance = Infinity;
+    let netBounce = false;
+    let crossed = false;
+    for (let i = 0; i < 400; i++) {
+      const vxBefore = ball.vx;
+      const xBefore = ball.x;
+      updateBall(PHYSICS_STEP);
+      if (ball.x + ball.r > NET.x && ball.x - ball.r < NET.x + NET.w) {
+        clearance = Math.min(clearance, NET.top - (ball.y + ball.r));
+      }
+      if (vxBefore > 0 && ball.vx < 0 && xBefore < NET.x + NET.w + 40) netBounce = true;
+      if (ball.x - ball.r > NET.x + NET.w) { crossed = true; break; }
+      if (!ball.live) break;
+    }
+
+    expect(netBounce).toBe(false);
+    expect(crossed).toBe(true);
+    // "Exactly above the net": clears the near top corner, but only just.
+    expect(clearance).toBeGreaterThan(0);
+    expect(clearance).toBeLessThan(8);
   });
 
   it("releases magnet hold after carry timer", () => {
@@ -233,40 +241,114 @@ describe("head collisions", () => {
 });
 
 describe("part lottery", () => {
-  it("plans a different part option per robot without applying immediately", () => {
+  it("plans an item per robot without applying immediately", () => {
     const left = robots[0];
     const right = robots[1];
-    left.headType = "standard";
-    left.torsoType = "standard";
-    left.legType = "normal";
-    right.headType = "standard";
-    right.torsoType = "standard";
-    right.legType = "normal";
+    left.accessory = null;
+    left.weapon = DEFAULT_WEAPON;
+    right.accessory = null;
+    right.weapon = DEFAULT_WEAPON;
+    applyItems(left);
+    applyItems(right);
 
-    // Calls per robot, in order: slot pick, option pick, reel cycles.
-    // With 4 part slots, slot index = floor(random * 4): 0 -> head, 0.5 -> legs.
+    // Calls per robot, in order: category pick, item pick, reel cycles.
+    // Two categories, so index = floor(random * 2): 0 -> accessory, 0.5 -> weapon.
     const random = vi.spyOn(Math, "random")
-      .mockReturnValueOnce(0) // P1 head slot
-      .mockReturnValueOnce(0.99) // P1 pick last head option
+      .mockReturnValueOnce(0) // P1 accessory category
+      .mockReturnValueOnce(0.99) // P1 pick last accessory
       .mockReturnValueOnce(0.5) // P1 reel cycles
-      .mockReturnValueOnce(0.5) // P2 leg slot
-      .mockReturnValueOnce(0.99) // P2 pick last leg option
+      .mockReturnValueOnce(0.5) // P2 weapon category
+      .mockReturnValueOnce(0.99) // P2 pick last weapon
       .mockReturnValueOnce(0.5); // P2 reel cycles
 
     planPartLottery();
 
-    expect(left.headType).toBe("standard");
-    expect(right.legType).toBe("normal");
-    expect(lotteryResults[0].slotName).toBe("head");
-    expect(lotteryResults[0].newType).not.toBe("standard");
-    expect(lotteryResults[1].slotName).toBe("feet");
-    expect(lotteryResults[1].newType).not.toBe("normal");
+    expect(left.accessory).toBeNull();
+    expect(right.weapon).toBe(DEFAULT_WEAPON);
+    expect(lotteryResults[0].kind).toBe("accessory");
+    expect(ACCESSORY_IDS).toContain(lotteryResults[0].newType);
+    expect(lotteryResults[1].kind).toBe("weapon");
+    expect(WEAPON_IDS).toContain(lotteryResults[1].newType);
 
     commitPartLottery();
-    expect(left.headType).not.toBe("standard");
-    expect(right.legType).not.toBe("normal");
+    expect(left.accessory).toBe(lotteryResults[0].newType);
+    expect(right.weapon).toBe(lotteryResults[1].newType);
 
     random.mockRestore();
+  });
+
+  it("carries one accessory at a time, reverting the previous slot", () => {
+    const r = robots[0];
+    r.accessory = "magnet";
+    r.weapon = DEFAULT_WEAPON;
+    applyItems(r);
+    expect(r.headType).toBe("magnet");
+    expect(r.legType).toBe("normal");
+
+    // A leg accessory takes over; the head falls back to the standard part.
+    r.accessory = "rocket";
+    applyItems(r);
+    expect(r.legType).toBe("rocket");
+    expect(r.headType).toBe("standard");
+  });
+
+  it("keeps the body standard when only a weapon is carried", () => {
+    const r = robots[0];
+    r.accessory = null;
+    r.weapon = "axe";
+    applyItems(r);
+    expect(r.headType).toBe("standard");
+    expect(r.legType).toBe("normal");
+    expect(r.armType).toBe("axe");
+  });
+
+  it("carries an accessory and a weapon at the same time", () => {
+    const r = robots[0];
+    r.accessory = "drill";
+    r.weapon = "ninjaStar";
+    applyItems(r);
+    expect(r.headType).toBe("drill");
+    expect(r.armType).toBe("ninjaStar");
+  });
+
+  it("starts every robot carrying the starter weapon", () => {
+    // The weapon slot is never empty, so the HUD always has an icon to show.
+    expect(makeRobot(-1).weapon).toBe(DEFAULT_WEAPON);
+    robots[0].weapon = "axe";
+    robots[1].weapon = "ninjaStar";
+    resetRobots();
+    for (const r of robots) {
+      expect(r.weapon).toBe(DEFAULT_WEAPON);
+      expect(r.armType).toBe(DEFAULT_WEAPON);
+      expect(r.accessory).toBeNull();
+    }
+  });
+
+  it("puts the starter weapon in the lottery pool", () => {
+    expect(WEAPON_IDS).toContain(DEFAULT_WEAPON);
+    expect(WEAPONS[DEFAULT_WEAPON].label).toBeTruthy();
+
+    // Carrying a weapon, the starter must be reachable again by a later roll.
+    robots[0].weapon = "axe";
+    robots[1].weapon = "axe";
+    applyItems(robots[0]);
+    let sawStarter = false;
+    for (let i = 0; i < 300 && !sawStarter; i++) {
+      planPartLottery();
+      for (const pick of lotteryResults) {
+        expect(pick.options.map((o) => o.id)).toContain(
+          pick.kind === "weapon" ? DEFAULT_WEAPON : pick.newType,
+        );
+        if (pick.kind === "weapon" && pick.newType === DEFAULT_WEAPON) sawStarter = true;
+      }
+    }
+    expect(sawStarter).toBe(true);
+  });
+
+  it("previews the starter weapon as prop art, not a bare arm", () => {
+    // "armType" + "hand" resolves to the arm sprite; the weapon slot must not.
+    expect(itemPreviewSlot("weapon", DEFAULT_WEAPON)).toBe("weaponType");
+    expect(itemPreviewSlot("weapon", "axe")).toBe("weaponType");
   });
 
   it("skips lottery on the opening rally", () => {
@@ -286,10 +368,8 @@ describe("part lottery", () => {
   it("resets robot parts when a new game starts", () => {
     const [left, right] = robots;
     left.headType = "drill";
-    left.torsoType = "heavy";
     left.legType = "rocket";
     right.headType = "magnet";
-    right.torsoType = "light";
     right.legType = "power";
     updateRobotParts(left);
     updateRobotParts(right);

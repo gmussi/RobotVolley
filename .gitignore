@@ -10,6 +10,8 @@ coverage/
 tools/.env
 server/.wrangler/
 tools/style_ref.png
+tools/robot/refs/style-explore/
+tools/robot/refs/style-explore-comical/
 reference/
 release/
 steam_appid.txt

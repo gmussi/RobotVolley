@@ -98,10 +98,8 @@ Procedural canvas drawing (no sprite sheets). All parts share:
 | Part | Accent |
 |------|--------|
 | Standard | Team color |
-| Dome | `#7dd3fc` (ice blue) |
 | Magnet | `#c084fc` (purple) |
 | Drill | `#fb923c` (orange) |
-| Satellite | `#4ade80` (green) |
 
 ## Environment
 

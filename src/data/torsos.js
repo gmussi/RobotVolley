@@ -1,56 +1,23 @@
-/** Robot torso loadouts — weight/mobility multipliers and hitbox offsets. */
-
-const BASE = {
-  jumpMul: 1,
-  moveSpeedMul: 1,
-  groundAccelMul: 1,
-  airAccelMul: 1,
-  airGravityMul: 1,
-  squashMul: 1,
-  torsoXOff: 0,
-  torsoYOff: 0,
-  torsoWExtra: 0,
-  torsoHExtra: 0,
-};
+/**
+ * Robot torso loadout. The torso is no longer a swappable part — every robot uses
+ * the standard chassis — so this is a single entry kept for the engine's spec
+ * lookup (mobility multipliers and hitbox offsets), not a menu of choices.
+ */
 
 export const TORSO_TYPES = {
   standard: {
     label: "Standard",
     description: "Balanced mobility",
-    ...BASE,
-  },
-  heavy: {
-    label: "Heavy",
-    description: "Tanky on ground, sluggish in air",
-    ...BASE,
-    jumpMul: 0.85,
-    moveSpeedMul: 0.92,
-    groundAccelMul: 1.15,
-    airAccelMul: 0.90,
-    squashMul: 1.35,
-  },
-  light: {
-    label: "Light",
-    description: "Floaty and agile in air",
-    ...BASE,
-    jumpMul: 1.10,
-    moveSpeedMul: 1.05,
-    groundAccelMul: 0.90,
-    airAccelMul: 1.10,
-    airGravityMul: 0.95,
-    squashMul: 0.75,
-  },
-  lowCoG: {
-    label: "Low CoG",
-    description: "Stable, lower center with spinning counterweight",
-    ...BASE,
-    jumpMul: 0.95,
-    moveSpeedMul: 0.95,
-    groundAccelMul: 1.10,
-    airAccelMul: 0.85,
-    squashMul: 1.10,
-    torsoYOff: 8,
-    torsoHExtra: -6,
+    jumpMul: 1,
+    moveSpeedMul: 1,
+    groundAccelMul: 1,
+    airAccelMul: 1,
+    airGravityMul: 1,
+    squashMul: 1,
+    torsoXOff: 0,
+    torsoYOff: 0,
+    torsoWExtra: 0,
+    torsoHExtra: 0,
   },
 };
 

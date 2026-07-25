@@ -15,6 +15,7 @@ import { drawControlsScreen } from "./controlsScreen.js";
 import { drawCreditsScreen } from "./creditsScreen.js";
 import { drawPauseOverlay } from "./pause.js";
 import { drawRobotFigure, drawPartPreview } from "./robotDraw.js";
+import { itemPreviewSlot } from "../data/items.js";
 import {
   arenaBgImage, getStadiumComposite, logoImage, logoVisualAnchor,
 } from "./art.js";
@@ -385,11 +386,11 @@ function isAttackReady(r) {
 
 function drawRobotPiecesHUD(robot, side, cy, slotSize, gap) {
   const accent = side < 0 ? "#ff5a5f" : "#29b6f6";
+  // The body is always standard apart from the one accessory, so the HUD shows
+  // what the robot is carrying rather than every part.
   const slots = [
-    { key: "headType", typeId: robot.headType },
-    { key: "torsoType", typeId: robot.torsoType },
-    { key: "armType", typeId: robot.armType },
-    { key: "legType", typeId: robot.legType },
+    { kind: "accessory", id: robot.accessory },
+    { kind: "weapon", id: robot.weapon },
   ];
   const count = slots.length;
   const rowW = count * slotSize + (count - 1) * gap;
@@ -423,15 +424,25 @@ function drawHudPieceSlot(robot, slot, x, cy, size) {
   ctx.lineWidth = 1;
   ctx.stroke();
 
+  if (!slot.id) {
+    // Empty slot — a dash reads clearer than an unrelated standard-part icon.
+    ctx.fillStyle = "rgba(255,255,255,0.28)";
+    ctx.font = fontBody(16, 700);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("–", x + size / 2, cy);
+    return;
+  }
+
   drawPartPreview(
     ctx,
-    slot.key,
-    slot.typeId ?? "normal",
+    itemPreviewSlot(slot.kind, slot.id),
+    slot.id,
     x + size / 2,
     cy,
     size,
     robot.colors,
-    { lite: true },
+    { lite: true, side: robot.side },
   );
 }
 

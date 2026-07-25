@@ -12,9 +12,13 @@ import {
   POWER_JUMP_V, ROCKET_FLAP_V, ROCKET_MAX_FLAPS, BALL_R, NET_BOUNCE,
   PHYSICS_STEP, DEFAULT_COLORS,
 } from "../data/constants.js";
-import { HEAD_TYPES, HEAD_TYPE_IDS } from "../data/heads.js";
-import { TORSO_TYPES, TORSO_TYPE_IDS } from "../data/torsos.js";
-import { ARM_TYPES, ARM_TYPE_IDS } from "../data/arms.js";
+import { HEAD_TYPES } from "../data/heads.js";
+import { TORSO_TYPES } from "../data/torsos.js";
+import { ARM_TYPES } from "../data/arms.js";
+import {
+  ACCESSORIES, ACCESSORY_IDS, WEAPON_IDS,
+  SLOT_FIELD, STANDARD_PART, BARE_HANDS, DEFAULT_WEAPON, itemLabel, itemDescription,
+} from "../data/items.js";
 import { codeFor } from "../data/controls.js";
 import { setMatchSeed, clearMatchSeed, matchRandom, matchRandomInt } from "./rng.js";
 
@@ -83,18 +87,11 @@ export const LOTTERY_SPIN_DURATION = 3;
 export const LOTTERY_HOLD_DURATION = 1;
 export const LOTTERY_TOTAL_DURATION = LOTTERY_SPIN_DURATION + LOTTERY_HOLD_DURATION;
 
-const LEG_TYPES = {
-  normal: { label: "Robot", description: "Normal jump" },
-  power: { label: "Power", description: "Jump higher" },
-  rocket: { label: "Rocket", description: "Many small jumps — tap repeatedly, like Flappy Bird" },
-};
-const LEG_TYPE_IDS = Object.keys(LEG_TYPES);
-
-const PART_SLOTS = [
-  { key: "headType", ids: HEAD_TYPE_IDS, labels: HEAD_TYPES },
-  { key: "torsoType", ids: TORSO_TYPE_IDS, labels: TORSO_TYPES },
-  { key: "legType", ids: LEG_TYPE_IDS, labels: LEG_TYPES },
-  { key: "armType", ids: ARM_TYPE_IDS, labels: ARM_TYPES },
+// A lottery roll gives either an accessory or a weapon, drawn from that
+// category's whole pool.
+const ITEM_KINDS = [
+  { kind: "accessory", ids: ACCESSORY_IDS, field: "accessory" },
+  { kind: "weapon", ids: WEAPON_IDS, field: "weapon" },
 ];
 
 function pickRandomOther(ids, current) {
@@ -103,39 +100,37 @@ function pickRandomOther(ids, current) {
   return pool[matchRandomInt(pool.length)];
 }
 
-function partSlotName(key) {
-  if (key === "headType") return "head";
-  if (key === "torsoType") return "torso";
-  if (key === "armType") return "arms";
-  return "feet";
-}
-
-function partTypeLabel(slot, typeId) {
-  const info = slot.labels[typeId];
-  return typeof info === "string" ? info : info?.label ?? typeId;
-}
-
-function partTypeDescription(slot, typeId) {
-  const info = slot.labels[typeId];
-  return typeof info === "string" ? "" : info?.description ?? "";
+/**
+ * Project the carried items onto the part fields the physics and renderers
+ * read. Only the accessory's own slot is non-standard — that is what makes an
+ * accessory in a new slot revert the previous one.
+ */
+export function applyItems(r) {
+  const slot = ACCESSORIES[r.accessory]?.slot;
+  for (const [slotName, field] of Object.entries(SLOT_FIELD)) {
+    r[field] = slotName === slot ? r.accessory : STANDARD_PART[slotName];
+  }
+  // Weapons drive the attack only; the arms keep their standard art.
+  r.armType = r.weapon ?? BARE_HANDS;
+  updateRobotParts(r);
 }
 
 export function planPartLottery() {
   lotteryResults = robots.map((r) => {
-    const slot = PART_SLOTS[matchRandomInt(PART_SLOTS.length)];
-    const oldType = r[slot.key];
-    const newType = pickRandomOther(slot.ids, oldType);
+    const category = ITEM_KINDS[matchRandomInt(ITEM_KINDS.length)];
+    const oldType = r[category.field];
+    const newType = pickRandomOther(category.ids, oldType);
     return {
-      slotKey: slot.key,
-      slotName: partSlotName(slot.key),
+      kind: category.kind,
+      slotName: category.kind,
       oldType,
       newType,
-      oldLabel: partTypeLabel(slot, oldType),
-      newLabel: partTypeLabel(slot, newType),
-      newDescription: partTypeDescription(slot, newType),
-      options: slot.ids.map((id) => ({
+      oldLabel: itemLabel(category.kind, oldType),
+      newLabel: itemLabel(category.kind, newType),
+      newDescription: itemDescription(category.kind, newType),
+      options: category.ids.map((id) => ({
         id,
-        label: partTypeLabel(slot, id),
+        label: itemLabel(category.kind, id),
       })),
       reelCycles: 4 + matchRandom() * 3,
     };
@@ -146,8 +141,10 @@ export function commitPartLottery() {
   for (let i = 0; i < robots.length; i++) {
     const pick = lotteryResults[i];
     if (!pick) continue;
-    robots[i][pick.slotKey] = pick.newType;
-    updateRobotParts(robots[i]);
+    const r = robots[i];
+    if (pick.kind === "weapon") r.weapon = pick.newType;
+    else r.accessory = pick.newType;
+    applyItems(r);
   }
   lotteryTick++;
   emitAudio("lottery_land");
@@ -284,6 +281,10 @@ export function makeRobot(side) {
     moveDir: 0,
     jumpHeld: false,
     jumpPrevHeld: false,
+    // Carried items are the source of truth; the *Type fields below are
+    // projected from them by applyItems().
+    accessory: null,
+    weapon: DEFAULT_WEAPON,
     legType: "normal",
     headType: "standard",
     torsoType: "standard",
@@ -294,7 +295,6 @@ export function makeRobot(side) {
     flapFx: 0,
     magnetFx: 0,
     drillAngle: 0,
-    cogAngle: 0,
     attackCooldown: 0,
     attackHeld: false,
     attackPrevHeld: false,
@@ -312,15 +312,13 @@ export const P2 = robots[1];
 
 export function resetRobots() {
   for (const r of robots) {
-    r.legType = "normal";
-    r.headType = "standard";
-    r.torsoType = "standard";
-    r.armType = "hand";
+    r.accessory = null;
+    r.weapon = DEFAULT_WEAPON;
     r.flapsUsed = 0;
     r.magnetFx = 0;
     r.attack = null;
     r.attackCooldown = 0;
-    updateRobotParts(r);
+    applyItems(r);
   }
   lotteryResults = [null, null];
   lotteryTimer = 0;
@@ -615,7 +613,6 @@ export function updateRobot(r, dt) {
   r.flapFx = Math.max(0, r.flapFx - dt);
   r.magnetFx = Math.max(0, r.magnetFx - dt);
   if (r.headType === "drill") r.drillAngle += dt * 22;
-  if (r.torsoType === "lowCoG") r.cogAngle += dt * 3;
   updateAttack(r, dt);
   updateRobotParts(r);
 }
@@ -874,6 +871,25 @@ export function collideBallRobot(r, opts = {}) {
     return true;
   }
 
+  // The drill head never bounces the ball — every head touch is a fixed
+  // full-speed sideways fling. Handled before the generic restitution so it
+  // also skips the incoming-speed cap below: the launch speed is the point.
+  if (part === "head" && r.headType === "drill") {
+    const spec = HEAD_TYPES.drill;
+    // Away from whichever side of the head was struck; a dead-centre hit
+    // follows the robot's facing so the ball never stalls straight up.
+    const offset = cx - (r.x + r.w / 2);
+    const dir = offset === 0 ? (r.facing < 0 ? -1 : 1) : Math.sign(offset);
+    const rad = (spec.launchAngleDeg * Math.PI) / 180;
+    ball.vx = dir * spec.launchSpeed * Math.cos(rad);
+    ball.vy = -spec.launchSpeed * Math.sin(rad);
+    ball.spin = dir * 6;
+    ball.lastHitBy = r.side;
+    r.eyeBlink = 0.12;
+    emitAudio("drill_shove");
+    return true;
+  }
+
   const incomingSpeed = Math.hypot(ball.vx, ball.vy);
   const preVy = ball.vy;
   const isHeadHit = part === "head";
@@ -883,29 +899,20 @@ export function collideBallRobot(r, opts = {}) {
   if (topFall) {
     restitution = r.onGround ? TOP_FALL_RESTITUTION_GROUND : TOP_FALL_RESTITUTION_AIR;
   }
-  if (isHeadHit && r.headType === "dome" && topFall) {
-    restitution += HEAD_TYPES.dome.restitutionBonus;
-  }
-  if (part === "torso" && r.headType === "satellite") {
-    restitution *= HEAD_TYPES.satellite.torsoRestitutionMul;
-  }
-
   const j = -(1 + restitution) * velAlongNormal;
   ball.vx += j * nx;
   ball.vy += j * ny;
   ball.vx += r.vx * 0.33;
   ball.vy += r.vy * 0.28;
 
-  let minBounceVy = TOP_HEAD_MIN_BOUNCE_VY;
-  if (isHeadHit && r.headType === "dome") minBounceVy = HEAD_TYPES.dome.minBounceVy;
+  const minBounceVy = TOP_HEAD_MIN_BOUNCE_VY;
 
   if (isHeadHit) {
     const offset = (cx - (r.x + r.w / 2)) / (r.w / 2);
     ball.spin = offset * 6 + r.vx * 0.008;
 
     if (topFall) {
-      const lateralBase = r.headType === "dome" ? 60 : 90;
-      ball.vx += offset * lateralBase;
+      ball.vx += offset * 90;
       if (Math.abs(r.vx) > 50) ball.vx += r.vx * 0.55;
 
       const maxUp = Math.max(minBounceVy, preVy * (r.onGround
@@ -915,11 +922,6 @@ export function collideBallRobot(r, opts = {}) {
     } else {
       ball.vx += offset * 150;
     }
-  }
-
-  if (isHeadHit && r.headType === "drill" && Math.abs(r.vx) > HEAD_TYPES.drill.shoveMinVx) {
-    ball.vx += r.facing * HEAD_TYPES.drill.shoveBoost;
-    emitAudio("drill_shove");
   }
 
   const newSpeed = Math.hypot(ball.vx, ball.vy);
@@ -1122,10 +1124,8 @@ export function readLocalOnlineInput(keys) {
 export function getRobotLoadout(seat) {
   const r = robots[seat];
   return {
-    headType: r.headType,
-    torsoType: r.torsoType,
-    legType: r.legType,
-    armType: r.armType,
+    accessory: r.accessory,
+    weapon: r.weapon,
     colors: { ...r.colors },
   };
 }
@@ -1133,12 +1133,11 @@ export function getRobotLoadout(seat) {
 export function applyRobotLoadout(seat, loadout) {
   if (!loadout) return;
   const r = robots[seat];
-  if (loadout.headType) r.headType = loadout.headType;
-  if (loadout.torsoType) r.torsoType = loadout.torsoType;
-  if (loadout.legType) r.legType = loadout.legType;
-  if (loadout.armType) r.armType = loadout.armType;
+  // Items are nullable, so presence — not truthiness — decides an overwrite.
+  if ("accessory" in loadout) r.accessory = loadout.accessory ?? null;
+  if ("weapon" in loadout) r.weapon = loadout.weapon ?? DEFAULT_WEAPON;
   if (loadout.colors) r.colors = { ...r.colors, ...loadout.colors };
-  updateRobotParts(r);
+  applyItems(r);
   lotteryTick++;
 }
 
@@ -1166,16 +1165,13 @@ function serializeRobot(r) {
     moveDir: r.moveDir,
     jumpHeld: r.jumpHeld,
     attackHeld: r.attackHeld,
-    headType: r.headType,
-    torsoType: r.torsoType,
-    legType: r.legType,
-    armType: r.armType,
+    accessory: r.accessory,
+    weapon: r.weapon,
     flapsUsed: r.flapsUsed,
     squash: r.squash,
     flapFx: r.flapFx,
     magnetFx: r.magnetFx,
     drillAngle: r.drillAngle,
-    cogAngle: r.cogAngle,
     attackCooldown: r.attackCooldown,
     attack: serializeAttack(r.attack),
     colors: { ...r.colors },
@@ -1244,16 +1240,14 @@ export function applySnapshot(snap) {
     r.moveDir = src.moveDir;
     r.jumpHeld = src.jumpHeld;
     r.attackHeld = src.attackHeld;
-    r.headType = src.headType;
-    r.torsoType = src.torsoType;
-    r.legType = src.legType;
-    r.armType = src.armType;
+    r.accessory = src.accessory ?? null;
+    r.weapon = src.weapon ?? DEFAULT_WEAPON;
+    applyItems(r);
     r.flapsUsed = src.flapsUsed;
     r.squash = src.squash;
     r.flapFx = src.flapFx;
     r.magnetFx = src.magnetFx;
     r.drillAngle = src.drillAngle;
-    r.cogAngle = src.cogAngle;
     r.attackCooldown = src.attackCooldown;
     if (src.colors) {
       r.colors.head = src.colors.head;
