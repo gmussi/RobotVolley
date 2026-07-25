@@ -69,6 +69,30 @@ function blinkFrame(eyeBlink) {
   return phase < 0.28 || phase > 0.72 ? 1 : 2;
 }
 
+// Drill spin strips: cone detail scrolled around a vertical axis (see
+// tools/robot/gen_drill_spin.py). Named head-*-spin.webp so the blink glob
+// above (head-<letters>.webp) never picks them up.
+const spinUrls = import.meta.glob("../assets/robot/anim/*/head-*-spin.webp", {
+  eager: true,
+  import: "default",
+});
+const SPIN = { p1: {}, p2: {} };
+for (const [path, url] of Object.entries(spinUrls)) {
+  const m = path.match(/anim\/(p1|p2)\/head-([A-Za-z]+)-spin\.webp$/);
+  if (!m) continue;
+  const img = new Image();
+  img.src = url;
+  SPIN[m[1]][m[2]] = img;
+}
+
+const SPIN_FRAMES = 8;
+
+/** Frame index from the engine's continuous drillAngle (radians). */
+function spinFrame(drillAngle) {
+  const t = ((drillAngle / (Math.PI * 2)) % 1 + 1) % 1;
+  return Math.floor(t * SPIN_FRAMES) % SPIN_FRAMES;
+}
+
 export function spritesReady() {
   return totalCount > 0 && readyCount === totalCount;
 }
@@ -309,6 +333,7 @@ export function drawSpriteRobot(ctx, r, floorY) {
       : SK[slot];
 
     // Mid-blink, swap the head for the matching frame of its blink strip.
+    // Otherwise a drill head plays its spin strip from drillAngle.
     let frames = 1, frameIdx = 0;
     if (base === "head" && r.eyeBlink > 0) {
       const strip = BLINK[team][r.headType];
@@ -316,6 +341,13 @@ export function drawSpriteRobot(ctx, r, floorY) {
         src = strip;
         frames = BLINK_FRAMES;
         frameIdx = blinkFrame(r.eyeBlink);
+      }
+    } else if (base === "head" && r.headType === "drill") {
+      const strip = SPIN[team].drill;
+      if (ok(strip)) {
+        src = strip;
+        frames = SPIN_FRAMES;
+        frameIdx = spinFrame(r.drillAngle || 0);
       }
     }
     drawPiece(ctx, src, sk, r, ov, flip, frames, frameIdx);

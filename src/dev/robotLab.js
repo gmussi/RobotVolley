@@ -21,6 +21,7 @@ function bot(cx, floorTop, over = {}) {
     onGround: true,
     squash: 0,
     eyeBlink: 0,
+    drillAngle: 0,
     legType: "normal",
     torsoType: "standard",
     headType: "standard",
@@ -41,9 +42,10 @@ let blinkT = 0;
 function frame() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // periodic blink across all bots
+  // periodic blink across all bots; drillAngle matches the engine's ~22 rad/s
   blinkT += 1;
   const blink = blinkT % 140 < 8 ? 0.12 : 0;
+  const drillAngle = (performance.now() / 1000) * 22;
 
   const floorA = 200;
   const floorB = 430;
@@ -59,7 +61,9 @@ function frame() {
   label("P2 tinted", x, floorA + 26);
   x += 150;
   for (const h of heads) {
-    drawSpriteRobot(ctx, bot(x, floorA - BOX.h, { headType: h, eyeBlink: blink }), floorA);
+    drawSpriteRobot(ctx, bot(x, floorA - BOX.h, {
+      headType: h, eyeBlink: blink, drillAngle,
+    }), floorA);
     label(h, x, floorA + 26);
     x += 150;
   }
@@ -81,7 +85,8 @@ function frame() {
   }
   x += 40;
   drawSpriteRobot(ctx, bot(x, floorC - BOX.h, {
-    headType: "drill", legType: "power", armType: "axe", eyeBlink: blink,
+    headType: "drill", legType: "power", armType: "axe",
+    eyeBlink: blink, drillAngle,
   }), floorC);
   label("mix (P1)", x, floorC + 26);
   x += 160;
