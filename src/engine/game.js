@@ -9,7 +9,7 @@ import {
   TOP_HEAD_MIN_BOUNCE_VY, TOP_HEAD_MAX_UP_FRAC_GROUND, TOP_HEAD_MAX_UP_FRAC_AIR,
   HIT_SPEED_GAIN, BALL_MAX_SPEED, NET, ROBOT_W, ROBOT_H, MOVE_SPEED,
   MOVE_ACCEL, JUMP_V, AIR_ACCEL, ARM_OVERHANG, COURT_GAP, HEAD_TOP_OFFSET,
-  POWER_JUMP_V, ROCKET_FLAP_V, ROCKET_MAX_FLAPS, BALL_R, NET_BOUNCE,
+  POWER_JUMP_V, ROCKET_FLAP_V, ROCKET_MAX_FLAPS, BALL_R, BALL_SPIN_VISUAL_RATE, NET_BOUNCE,
   PHYSICS_STEP, DEFAULT_COLORS,
 } from "../data/constants.js";
 import { HEAD_TYPES } from "../data/heads.js";
@@ -38,7 +38,7 @@ function emitAudio(type, data = {}) {
 export const score = [0, 0];
 export const ball = {
   x: W * 0.25, y: 150, vx: 0, vy: 0, r: BALL_R,
-  spin: 0, live: false, lastHitBy: null, magnetHold: null, portalHold: null, smashBy: null,
+  spin: 0, rot: 0, live: false, lastHitBy: null, magnetHold: null, portalHold: null, smashBy: null,
 };
 
 export let state = "title";
@@ -218,7 +218,7 @@ export function commitPartLottery() {
 
 function setupServePhase() {
   ball.live = false;
-  ball.vx = 0; ball.vy = 0; ball.spin = 0;
+  ball.vx = 0; ball.vy = 0; ball.spin = 0; ball.rot = 0;
   ball.lastHitBy = null;
   ball.magnetHold = null;
   ball.portalHold = null;
@@ -1161,6 +1161,7 @@ export function updateBall(dt) {
 
   ball.vy += BALL_GRAVITY * dt;
   ball.vx += ball.spin * 12 * dt;
+  ball.rot += ball.spin * BALL_SPIN_VISUAL_RATE * dt;
   ball.spin *= Math.pow(0.2, dt);
 
   const prevX = ball.x, prevY = ball.y;

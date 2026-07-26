@@ -2,7 +2,7 @@
  * Canvas renderer. Reads engine state; never mutates rules.
  */
 import {
-  W, H, FLOOR_Y, WIN_SCORE, SERVE_CHARGE_FLOOR, NET,
+  W, H, FLOOR_Y, WIN_SCORE, SERVE_CHARGE_FLOOR, NET, BALL_SPIN_VISUAL_RATE,
 } from "../data/constants.js";
 import {
   ball, score, state, gameMode, servingSide, serveCharge,
@@ -294,6 +294,8 @@ function drawBall() {
 
   ctx.save();
   ctx.translate(ball.x, ball.y);
+  const spinRot = ball.rot + ball.spin * BALL_SPIN_VISUAL_RATE * renderRemainder;
+  if (spinRot) ctx.rotate(spinRot);
   const g = ctx.createRadialGradient(-8, -8, 4, 0, 0, ball.r);
   g.addColorStop(0, "#fff3c0");
   g.addColorStop(1, "#f2b705");

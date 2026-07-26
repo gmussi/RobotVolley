@@ -52,6 +52,8 @@ export const ROCKET_FLAP_V = 620;
 export const ROCKET_MAX_FLAPS = 3;
 
 export const BALL_R = 22;
+/** Radians per second of on-ball rotation per unit of physics spin. */
+export const BALL_SPIN_VISUAL_RATE = 0.85;
 export const NET_BOUNCE = 0.7;
 
 export const PHYSICS_STEP = 1 / 120;
