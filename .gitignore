@@ -24,3 +24,5 @@ steam_appid.txt
 .held.png
 .row.png
 .tmp-*.png
+AuthKey_*.p8
+*.p8

@@ -1,9 +1,10 @@
 # Steam Release — M5: Packaging, Signing & Store
 
-**Status as of 2026-07-26: M1–M4 complete. M5 partially complete** — desktop
-builds, CI, SteamPipe VDF templates, TURN relay, and music licensing are done.
-Remaining: macOS signing (Apple account), Steam partner steps (App ID), store
-page, and legal docs (publisher name). See **Hard blockers** below.
+**Status as of 2026-07-26: M1–M4 complete. M5 nearly complete on the code/infra
+side.** Done: desktop builds, CI, SteamPipe VDF templates, TURN relay, music
+licensing, **macOS signed + notarized builds locally** (Developer ID + App Store
+Connect API key). Remaining: GitHub signing secrets for CI, Steam partner review
+(App ID), store page, legal docs. See **Hard blockers** and next steps below.
 
 This file is the handoff doc for M5 — read it fresh in a new session to resume
 without re-deriving context. It assumes the reader has no memory of prior
@@ -21,6 +22,8 @@ irrelevant to reproduce here; what matters for M5 is the state below.
 - Platforms v1: **Windows + macOS** (no Linux/Steam Deck).
 - Online: existing WebRTC + Cloudflare matchmaker + Metered.ca TURN relay.
 - Controllers: full Gamepad API + rebinding UI + Steam Input config.
+- macOS notarization: **App Store Connect API key** (Option B), Team key with
+  Issuer ID — see `docs/MACOS_SIGNING.md`.
 
 ## What's already done (M1–M4) — don't redo this
 
@@ -39,157 +42,109 @@ irrelevant to reproduce here; what matters for M5 is the state below.
   480)** placeholders for testing), Steam Input action manifest
   (`steam/controller_config/game_actions_480.vdf`).
 - **TURN relay**: Metered.ca credentials wired via `.env` (local) and GitHub
-  Actions vars/secrets (`VITE_TURN_URL`, `VITE_TURN_USERNAME`,
-  `VITE_TURN_CREDENTIAL`). Baked into web and desktop builds. Still worth
+  Actions vars/secrets. Baked into web and desktop builds. Still worth
   smoke-testing online from two different networks before launch.
-- **Desktop app icons**: `tools/build_desktop_icons.mjs` generates
-  `build/icon.icns` + `build/icon.ico` from `public/icon-512.png` (macOS
-  `sips`/`iconutil` for icns, hand-packed PNG-in-ICO for ico — no image-lib
-  dependency). Already wired into `electron-builder`'s `mac.icon`/`win.icon` in
-  `package.json`. **Verified with a real packaged build** — icon embeds
-  correctly in the `.app`.
-- **Credits screen**: `src/ui/creditsScreen.js` + `src/data/credits.js`,
-  reached via a footer link on the main menu (not a list item). Contains
-  *verified* attributions (music: Pixabay Content License; fonts: SIL OFL 1.1;
-  Electron: MIT).
-- **Music licensing**: match tracks verified under Pixabay Content License.
-  See `docs/MUSIC_LICENSES.md`. Source MP3s in `src/assets/audio/sources/`;
-  menu/stinger/SFX are procedural/original.
-- **Quit**: desktop-only "QUIT" item on the main menu, wired to
-  `app.quit()` via IPC.
-- **Build config exists** in `package.json`'s `"build"` block: `appId`,
-  `productName`, `directories.output = "release"`,
-  `directories.buildResources = "build"`, `mac.target = ["dir"]`,
-  `win.target = ["dir"]`, icons wired. `npm run electron:build` works today
-  and produces an **unsigned** `release/mac-arm64/Robot Volley.app` (verified
-  by actually launching it and inspecting `Info.plist`).
-- Verification harness: `electron/smoke*.cjs` (boot, save round-trip, Steam
-  graceful degradation, quit IPC) + `npm test`. Run all of these after any M5
-  change that touches `electron/main.cjs`, `electron/preload.cjs`, or
-  `package.json`'s build config.
+- **Desktop app icons**: `build/icon.icns` + `build/icon.ico` committed; wired
+  into `electron-builder`. Verified in packaged builds.
+- **Credits screen**: verified attributions (music: Pixabay; fonts: SIL OFL;
+  Electron: MIT). See `docs/MUSIC_LICENSES.md`.
+- **Quit**: desktop-only "QUIT" item on the main menu, wired to `app.quit()`.
+- **Verification harness**: `electron/smoke*.cjs` + `npm test`. Run after any
+  change to `electron/main.cjs`, `electron/preload.cjs`, or `package.json`
+  `"build"` block.
 
 ## M5 done — don't redo this
 
 - **Windows + macOS builds** — `win.target` / `mac.target` are `["dir"]`
   (unpacked folders for SteamPipe). Verified locally and via CI
-  (`.github/workflows/desktop-build.yml` → `release/win-unpacked`,
-  `release/mac-arm64/Robot Volley.app`).
-- **CI desktop matrix** — `.github/workflows/desktop-build.yml` matrixes
-  `windows-latest` + `macos-latest`, runs `npm ci` → `npm run electron:build`
-  → uploads artifacts. macOS job runs all four `electron/smoke*.cjs` harnesses.
-  TURN + matchmaking env vars passed into the build step. Icons committed in
-  `build/` — CI does not regenerate them.
+  (`.github/workflows/desktop-build.yml`).
+- **CI desktop matrix** — matrixes `windows-latest` + `macos-latest`, uploads
+  artifacts. macOS job runs smoke harnesses. TURN + matchmaking env vars passed
+  into build. **CI macOS builds are unsigned until GitHub signing secrets are
+  added** (see Step 2 below).
 - **SteamPipe VDF templates** — `steam/build/` (`*_TEMPLATE.vdf` + `README.md`).
-  Copy and fill in real App/depot IDs once the Steam app exists.
+- **macOS signing + notarization (local)** — verified 2026-07-26:
+  - Developer ID Application cert in Keychain
+  - App Store Connect **Team** API key (`AuthKey_<KEY_ID>.p8` must match
+    `APPLE_API_KEY_ID`; Individual keys return 401 for notarization)
+  - `build/entitlements.mac*.plist`, `package.json` `hardenedRuntime` +
+    `notarize: true`
+  - `npm run electron:build` with `.env` → `spctl -a -vvv` reports
+    `accepted` / `Notarized Developer ID`
+  - Full setup: [`docs/MACOS_SIGNING.md`](./MACOS_SIGNING.md)
 
 ## Hard blockers (need the user, not more code)
 
 1. **Steam account under review** (as of 2026-07-23) — cannot create the real
-   Steam app, cannot get a real App ID, cannot upload to SteamPipe, cannot set
-   up the store page, until this clears.
-2. **No Apple Developer account** — macOS code signing + notarization is
-   blocked without one ($99/yr). Without signing, Gatekeeper will block the
-   `.app` for end users even distributed via Steam (Steam does not bypass
-   Gatekeeper). Required before a real macOS release.
-3. **No real developer/publisher name established** — the credits screen and
-   any EULA/legal docs need a real name/entity for copyright lines. Ask the
-   user rather than inventing one.
+   Steam app, App ID, SteamPipe upload, or store page until this clears.
+2. **Publisher name / legal entity for store docs** — credits screen, EULA, and
+   privacy policy need the real developer/publisher name (likely the CNPJ org
+   used on Steam). Ask the user; do not invent one.
 
 ## M5 remaining work
 
-### Step 2 — macOS signing + notarization (blocked on Apple Developer account)
+### Step 2 — macOS signing in CI (optional but recommended)
 
-Once the account exists:
-- Get a "Developer ID Application" certificate (for direct distribution outside
-  the Mac App Store — this is the right cert type for Steam).
-- Add signing config to `package.json`'s `mac` block: `hardenedRuntime: true`,
-  `entitlements`/`entitlementsInherit` (Electron apps typically need
-  `com.apple.security.cs.allow-jit` etc. — see electron-builder's Apple docs),
-  and either `CSC_LINK`/`CSC_KEY_PASSWORD` env vars or explicit `identity`.
-- Notarization: electron-builder can automate this via `afterSign` hook +
-  Apple's `notarytool`, needs `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` (or API
-  key), `APPLE_TEAM_ID` env vars. Add a `notarize.js` afterSign script (common
-  pattern: `@electron/notarize` package).
-- Add signing secrets to GitHub Actions so CI can produce signed macOS builds.
-- Re-verify with the existing smoke tests + a real launched `.app` after
-  signing (Gatekeeper should no longer block it — test with `spctl -a -vvv
-  "release/.../Robot Volley.app"`).
+Local signed + notarized builds work. To get **signed macOS artifacts from CI**:
+
+1. Export Developer ID cert as `.p12` from Keychain Access.
+2. Add GitHub Actions **secrets**:
+   - `APPLE_API_KEY_P8` — contents of the Team `.p8` file
+   - `APPLE_API_KEY_ID` — must match filename (e.g. `4ZJVDMV9UZ`)
+   - `APPLE_API_ISSUER` — Issuer UUID from App Store Connect
+   - `CSC_LINK` — base64 `.p12`
+   - `CSC_KEY_PASSWORD` — `.p12` export password
+
+Workflow already writes the API key to a temp file before `electron:build`.
 
 ### Step 3 — SteamPipe upload (blocked on Steam App ID)
 
-Once the Steam app exists and has an App ID:
-1. Update `steam_appid.txt` (gitignored, dev-only) and rename
-   `steam/controller_config/game_actions_480.vdf` →
-   `game_actions_<real-app-id>.vdf`, and swap `STEAM_IDS` values in
-   `src/platform/achievements.js` from the Spacewar placeholders to the real
-   achievement API names defined in the Steamworks partner backend.
-2. Create one **depot** per platform (Windows, macOS) in the Steamworks
-   partner site.
-3. Copy VDF templates from `steam/build/` and fill in real App/depot IDs.
-4. First upload is manual (`steamcmd +login <user> +run_app_build
-   <path-to-vdf> +quit`) to validate before automating in CI.
+Once the Steam app exists:
+1. Update `steam_appid.txt` (gitignored) and rename
+   `game_actions_480.vdf` → `game_actions_<real-app-id>.vdf`; swap `STEAM_IDS`
+   in `src/platform/achievements.js`.
+2. Create Windows + macOS depots in Steamworks partner site.
+3. Copy VDF templates from `steam/build/`, fill in real App/depot IDs.
+4. First upload manual via `steamcmd +run_app_build …`.
 
-Optional later: automated SteamPipe upload on tagged releases (needs a Steam
-**build account** + Steam Guard handling).
+Upload paths:
+- Windows: `release/win-unpacked/`
+- macOS: `release/mac-arm64/Robot Volley.app` (signed + notarized build)
 
 ### Step 5 — Steam store page (blocked on Steam App ID)
 
-- Reuse `docs/STORE_COPY.md` (tagline, short/long description, keywords, press
-  blurb — already written) and `docs/ART_BIBLE.md` (visual identity/colors) as
-  source material.
-- Capture store screenshots with the existing tool:
-  `npm run dev` (or `electron:preview`) then
-  `node tools/capture_store_shots.mjs http://localhost:5173` (needs
-  `npm install -D playwright && npx playwright install chromium` first per the
-  script's own header comment).
-- Complete Steam's **content survey**, age rating (IARC questionnaire), system
-  requirements, and required legal docs (Step 6) in the partner site.
+- Source copy: `docs/STORE_COPY.md`, visuals: `docs/ART_BIBLE.md`
+- Screenshots: `npm run dev` → `node tools/capture_store_shots.mjs http://localhost:5173`
+  (needs `playwright` + chromium — see script header)
+- Complete content survey, IARC age rating, system requirements in partner site
 
 ### Step 6 — Legal / compliance (blocked on publisher name)
 
-- **EULA + privacy policy**: online mode transmits IP for P2P WebRTC and does
-  GeoIP-based proximity matchmaking (see `server/src/matchmaker.js`) — this
-  must be disclosed. No draft exists yet; needs the real developer/publisher
-  name (Hard blocker #3) before it can be written.
-- **Third-party licenses**: fonts, music, and Electron are covered by the
-  in-game Credits screen. Still needed: audit remaining npm dependencies
-  (`package.json` devDependencies — most are build-time only and don't ship,
-  but double-check `steamworks.js` and anything actually bundled into the
-  Electron app for license notice requirements) and produce a NOTICES file if
-  warranted.
+- **EULA + privacy policy** — disclose WebRTC P2P (IP) and GeoIP matchmaking
+  (`server/src/matchmaker.js`). Needs publisher name.
+- **NOTICES audit** — optional; fonts/music/Electron in Credits. Double-check
+  `steamworks.js` if bundled into shipped app.
 
-### Optional (not required for Steam)
+### Pre-launch smoke tests (no blocker, should do before release)
 
-- NSIS installer (`win.target: ["nsis", "dir"]`) for non-Steam distribution.
+- [ ] Online match from **two different networks** (TURN relay verification)
+- [ ] Launch signed `.app` on a clean Mac (not your dev machine)
+- [ ] Windows build on a real Windows machine (or CI artifact)
+- [ ] Click-through: menu → match → online → quit
 
 ## Verification checklist for any M5 change
 
-Run after touching `electron/main.cjs`, `electron/preload.cjs`, or the
-`package.json` `"build"` block:
-
 ```bash
-npm run build && npm test                         # vitest suite must pass
-npm run electron:smoke                            # all four headless harnesses
-npm run electron:build                              # real packaged build
-# then actually launch the produced .app / .exe and click through:
-# title -> menu -> a match -> pause -> quit
+npm run build && npm test
+npm run electron:smoke                            # unset ELECTRON_RUN_AS_NODE if needed
+npm run electron:build                              # ~15–20 min with notarization
+spctl -a -vvv "release/mac-arm64/Robot Volley.app"  # expect: accepted, Notarized Developer ID
 ```
 
-For macOS-specific packaging checks:
-```bash
-file "release/mac-arm64/Robot Volley.app/Contents/Resources/icon.icns"
-grep -A1 CFBundleIconFile "release/mac-arm64/Robot Volley.app/Contents/Info.plist"
-spctl -a -vvv "release/mac-arm64/Robot Volley.app"   # Gatekeeper check (will fail until signed)
-```
+Remember to `rm -rf release/` after manual verification — gitignored.
 
-Remember to `rm -rf release/` after manual verification — it's gitignored and
-shouldn't be committed.
-
-**Cursor/IDE note:** If `npm run electron:smoke` fails with
-`Cannot read properties of undefined (reading 'on')` on `ipcMain`, check that
-`ELECTRON_RUN_AS_NODE` is **not** set in the shell (Cursor's agent terminal
-sometimes sets it). Run `unset ELECTRON_RUN_AS_NODE` first, or use an external
-terminal.
+**Cursor/IDE note:** If `npm run electron:smoke` fails on `ipcMain`, run
+`unset ELECTRON_RUN_AS_NODE` first.
 
 ## Quick reference: files most relevant to M5
 
@@ -197,11 +152,11 @@ terminal.
 |---|---|
 | Packaging config | `package.json` (`"build"` block) |
 | Window/lifecycle | `electron/main.cjs` |
-| Icons | `tools/build_desktop_icons.mjs`, `build/icon.icns`, `build/icon.ico` |
-| Steam achievements/App ID | `electron/steam.cjs`, `src/platform/achievements.js`, `steam_appid.txt` (gitignored) |
-| Steam Input | `steam/controller_config/game_actions_480.vdf`, `steam/README.md` |
+| Icons | `build/icon.icns`, `build/icon.ico` |
+| macOS signing | `docs/MACOS_SIGNING.md`, `build/entitlements.mac*.plist` |
+| Steam achievements/App ID | `electron/steam.cjs`, `src/platform/achievements.js` |
+| Steam Input | `steam/controller_config/game_actions_480.vdf` |
 | Store copy | `docs/STORE_COPY.md`, `docs/ART_BIBLE.md` |
-| TURN config | `src/net/webrtc.js`, `.env.example`, README "Online multiplayer" section |
-| CI | `.github/workflows/deploy.yml` (web), `.github/workflows/desktop-build.yml` (desktop) |
+| CI | `.github/workflows/desktop-build.yml` |
 | SteamPipe VDFs | `steam/build/` |
-| Credits / licensing | `src/ui/creditsScreen.js`, `src/data/credits.js`, `docs/MUSIC_LICENSES.md` |
+| Credits / licensing | `src/data/credits.js`, `docs/MUSIC_LICENSES.md` |
