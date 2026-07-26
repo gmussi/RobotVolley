@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — Robot Volley</title>
+  <link rel="stylesheet" href="legal.css">
+</head>
+<body>
+  <main>
+    <header>
+      <p class="game">Robot Volley</p>
+      <h1>Privacy Policy</h1>
+      <p class="meta">
+        <strong>Effective date:</strong> July 26, 2026<br>
+        <strong>Publisher:</strong> G. P. S. MUSSI LTDA<br>
+        <strong>Contact:</strong> <a href="mailto:contact@guilhermemussi.com">contact@guilhermemussi.com</a>
+      </p>
+    </header>
+
+    <p>
+      This Privacy Policy explains how <strong>Robot Volley</strong> (“the Game”, “we”, “us”)
+      handles information when you play the browser version, the desktop (Steam) version, or
+      use online multiplayer.
+    </p>
+    <p>We do <strong>not</strong> require an account to play. We do <strong>not</strong> sell your personal data.</p>
+
+    <h2>1. Summary</h2>
+    <table>
+      <thead>
+        <tr><th>Activity</th><th>Data involved</th><th>Stored by us?</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Playing offline / local modes</td><td>Settings on your device</td><td>No server storage</td></tr>
+        <tr><td>Online matchmaking</td><td>Approximate location, session ID</td><td>In memory only, deleted when you disconnect</td></tr>
+        <tr><td>Online gameplay</td><td>IP addresses, game inputs (via WebRTC)</td><td>Peer-to-peer; not stored on our servers</td></tr>
+        <tr><td>Steam (desktop)</td><td>Achievements, optional cloud save</td><td>Valve (Steam), not our servers</td></tr>
+      </tbody>
+    </table>
+
+    <h2>2. Information stored on your device</h2>
+    <p>The Game saves preferences locally so your settings persist between sessions:</p>
+    <ul>
+      <li>Audio volume levels</li>
+      <li>Control bindings and accessibility options (colorblind mode, reduced motion)</li>
+      <li>Unlocked achievement progress (also synced to Steam on the desktop build when available)</li>
+    </ul>
+    <p><strong>Where it is stored</strong></p>
+    <ul>
+      <li><strong>Web / browser:</strong> your browser’s <code>localStorage</code> on your device.</li>
+      <li><strong>Desktop (Steam):</strong> a JSON save file in the app’s user data folder. When Steam Cloud is enabled for the Game, Valve may sync this file across your Steam devices.</li>
+    </ul>
+    <p>We do not receive this data unless you contact us for support and choose to share it.</p>
+
+    <h2>3. Online multiplayer</h2>
+    <p>When you choose <strong>Online Match</strong>, the Game connects to services so you can find an opponent and play in real time.</p>
+
+    <h3>3.1 Matchmaking server</h3>
+    <p>We operate a matchmaking service hosted on <strong>Cloudflare Workers</strong>. When you connect:</p>
+    <ul>
+      <li>Cloudflare derives <strong>approximate geographic information</strong> from your connection (country, nearest data center, and coarse latitude/longitude). We use this only to pair you with a nearby opponent.</li>
+      <li>The server assigns a <strong>random session player ID</strong> (UUID). It exists only while your connection is open.</li>
+      <li>The server <strong>relays WebRTC signaling messages</strong> (connection offers, answers, and ICE candidates) between you and your matched opponent so a direct connection can be established.</li>
+    </ul>
+    <p><strong>We do not</strong> log chat, gameplay, or signaling content to disk. Session data lives in server memory and is <strong>deleted when you disconnect</strong> or the session ends.</p>
+
+    <h3>3.2 Peer-to-peer gameplay (WebRTC)</h3>
+    <p>Once matched, gameplay data (inputs, game state snapshots) is sent <strong>directly between players</strong> over encrypted WebRTC data channels.</p>
+    <p>During connection setup, <strong>IP addresses and network information</strong> may be exchanged between players (and with relay infrastructure below). This is required for real-time multiplayer and is standard for WebRTC games.</p>
+    <p>We do <strong>not</strong> record or store the contents of your matches on our servers.</p>
+
+    <h3>3.3 NAT traversal (STUN / TURN)</h3>
+    <p>To connect players behind firewalls or strict networks, the Game may use:</p>
+    <ul>
+      <li><strong>Google public STUN</strong> (<code>stun.l.google.com</code>) — helps discover network paths. Google operates this service; their privacy practices apply to that traffic.</li>
+      <li><strong>Optional TURN relay</strong> (e.g. Metered.ca, when configured in the build) — if a direct peer connection fails, game packets may route through a third-party relay. The relay provider may process IP addresses and traffic metadata according to its own policy.</li>
+    </ul>
+
+    <h2>4. Steam (desktop version)</h2>
+    <p>If you launch the Game through the <strong>Steam client</strong>:</p>
+    <ul>
+      <li><strong>Valve Corporation</strong> processes your Steam account data under the <a href="https://store.steampowered.com/subscriber_agreement/">Steam Subscriber Agreement</a> and <a href="https://store.steampowered.com/privacy_agreement/">Steam Privacy Policy</a>.</li>
+      <li>The Game may read your <strong>Steam display name and Steam ID</strong> locally to confirm Steam is running and to unlock <strong>achievements</strong>. This information is <strong>not sent to our matchmaking servers</strong>.</li>
+      <li><strong>Steam Cloud</strong> (if enabled) syncs your local save file via Valve’s infrastructure.</li>
+    </ul>
+
+    <h2>5. Web version hosting</h2>
+    <p>The browser build is hosted on <strong>GitHub Pages</strong>. GitHub may collect standard web server logs (IP address, browser type, request time) as described in <a href="https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement">GitHub’s Privacy Statement</a>.</p>
+
+    <h2>6. What we do not collect</h2>
+    <p>We do <strong>not</strong> intentionally collect:</p>
+    <ul>
+      <li>Real names, email addresses, or phone numbers through the Game itself</li>
+      <li>Payment information (Steam handles purchases)</li>
+      <li>Precise GPS location</li>
+      <li>Analytics or advertising identifiers</li>
+      <li>Voice chat or user-generated text content (the Game has no chat)</li>
+    </ul>
+
+    <h2>7. Children</h2>
+    <p>The Game is a general-audience arcade sports title. We do not knowingly collect personal information from children. If you believe a child has provided us personal information, contact us at <a href="mailto:contact@guilhermemussi.com">contact@guilhermemussi.com</a> and we will delete it.</p>
+
+    <h2>8. Your rights (including LGPD)</h2>
+    <p>If you are in <strong>Brazil</strong> or another jurisdiction with data-protection laws, you may have the right to confirm, access, correct, delete, or restrict processing of your personal data, and to withdraw consent where applicable.</p>
+    <p>Because online sessions are ephemeral and not stored, we typically cannot retrieve a past matchmaking session after it ends. Contact <a href="mailto:contact@guilhermemussi.com">contact@guilhermemussi.com</a> with your request; we will respond within a reasonable time as required by applicable law.</p>
+
+    <h2>9. Data retention</h2>
+    <table>
+      <thead><tr><th>Data</th><th>Retention</th></tr></thead>
+      <tbody>
+        <tr><td>Local save file</td><td>Until you delete it or uninstall the Game</td></tr>
+        <tr><td>Matchmaking session</td><td>Until disconnect (in-memory only)</td></tr>
+        <tr><td>WebRTC gameplay</td><td>Not retained by us</td></tr>
+        <tr><td>Support emails</td><td>As long as needed to resolve your request</td></tr>
+      </tbody>
+    </table>
+
+    <h2>10. Security</h2>
+    <p>We use industry-standard practices for our matchmaking service (encrypted WebSocket, minimal data collection). No online transmission is 100% secure; play online at your own discretion.</p>
+
+    <h2>11. Changes</h2>
+    <p>We may update this policy. The “Effective date” at the top will change. Continued use of the Game after an update means you accept the revised policy.</p>
+
+    <h2>12. Contact</h2>
+    <p>
+      <strong>G. P. S. MUSSI LTDA</strong><br>
+      Email: <a href="mailto:contact@guilhermemussi.com">contact@guilhermemussi.com</a><br>
+      Country: Brazil
+    </p>
+    <p>For Steam-specific data practices, contact Valve directly.</p>
+
+    <footer>
+      <p><a href="eula.html">End User License Agreement</a></p>
+    </footer>
+  </main>
+</body>
+</html>

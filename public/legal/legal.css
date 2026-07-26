@@ -1,0 +1,113 @@
+/* Robot Volley — legal pages (GitHub Pages / static host) */
+:root {
+  color-scheme: dark light;
+  --bg: #0f1419;
+  --text: #e8eaed;
+  --muted: #9aa0a6;
+  --accent: #ffd54a;
+  --link: #7cb8ff;
+  --border: #2a3340;
+  --code-bg: #1a2230;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f8f9fa;
+    --text: #1a1a1a;
+    --muted: #5f6368;
+    --accent: #b8860b;
+    --link: #1a73e8;
+    --border: #dadce0;
+    --code-bg: #eef1f5;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text);
+  background: var(--bg);
+}
+
+main {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.game {
+  margin: 0 0 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+h1 {
+  margin: 0 0 1rem;
+  font-size: 1.75rem;
+  line-height: 1.25;
+}
+
+h2 {
+  margin: 2rem 0 0.75rem;
+  font-size: 1.15rem;
+}
+
+h3 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+p, ul { margin: 0.75rem 0; }
+
+ul { padding-left: 1.35rem; }
+
+li { margin: 0.35rem 0; }
+
+a { color: var(--link); }
+
+code {
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--code-bg);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  margin: 1rem 0;
+}
+
+th, td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+th { background: var(--code-bg); }
+
+.caps {
+  font-size: 0.92rem;
+}
+
+footer {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.95rem;
+}

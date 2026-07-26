@@ -17,6 +17,7 @@ architecture decisions and the original phased plan (workstreams A–K) are
 irrelevant to reproduce here; what matters for M5 is the state below.
 
 **Decisions already locked (do not re-litigate):**
+
 - Wrapper: Electron.
 - Platforms v1: **Windows + macOS** (no Linux/Steam Deck).
 - Online: existing WebRTC + Cloudflare matchmaker + Metered.ca TURN relay.
@@ -37,8 +38,7 @@ irrelevant to reproduce here; what matters for M5 is the state below.
   (`src/ui/controlsScreen.js`) + persisted bindings (`src/data/controls.js`).
 - **Steam integration**: `electron/steam.cjs` wraps `steamworks.js` — graceful
   no-op when Steam isn't running, achievements (`src/platform/achievements.js`,
-  logical keys mapped to Steam API names, currently pointed at **Spacewar (App
-  480)** placeholders for testing), Steam Input action manifest
+  logical keys mapped to Steam API names, currently pointed at **Spacewar (App 480)** placeholders for testing), Steam Input action manifest
   (`steam/controller_config/game_actions_480.vdf`).
 - **TURN relay**: Metered.ca credentials wired via `.env` (local) and GitHub
   Actions vars/secrets. Baked into web and desktop builds. Still worth
@@ -75,9 +75,8 @@ irrelevant to reproduce here; what matters for M5 is the state below.
 
 1. **Steam account under review** (as of 2026-07-23) — cannot create the real
    Steam app, App ID, SteamPipe upload, or store page until this clears.
-2. **Publisher name / legal entity for store docs** — credits screen, EULA, and
-   privacy policy need the real developer/publisher name (likely the CNPJ org
-   used on Steam). Ask the user; do not invent one.
+2. **Publisher name / legal entity for store docs** — **G. P. S. MUSSI LTDA**
+   (`contact@guilhermemussi.com`). EULA + privacy policy: [`docs/legal/`](./legal/README.md).
 
 ## M5 remaining work
 
@@ -90,6 +89,7 @@ Trigger **Desktop build** workflow (or push to `main`) and download
 ### Step 3 — SteamPipe upload (blocked on Steam App ID)
 
 Once the Steam app exists:
+
 1. Update `steam_appid.txt` (gitignored) and rename
    `game_actions_480.vdf` → `game_actions_<real-app-id>.vdf`; swap `STEAM_IDS`
    in `src/platform/achievements.js`.
@@ -98,6 +98,7 @@ Once the Steam app exists:
 4. First upload manual via `steamcmd +run_app_build …`.
 
 Upload paths:
+
 - Windows: `release/win-unpacked/`
 - macOS: `release/mac-arm64/Robot Volley.app` (signed + notarized build)
 
@@ -108,10 +109,11 @@ Upload paths:
   (needs `playwright` + chromium — see script header)
 - Complete content survey, IARC age rating, system requirements in partner site
 
-### Step 6 — Legal / compliance (blocked on publisher name)
+### Step 6 — Legal / compliance
 
-- **EULA + privacy policy** — disclose WebRTC P2P (IP) and GeoIP matchmaking
-  (`server/src/matchmaker.js`). Needs publisher name.
+- **EULA + privacy policy** — ready at [`docs/legal/`](./legal/README.md) and
+  `public/legal/` (publisher: G. P. S. MUSSI LTDA). Push to `main` for GitHub
+  Pages URLs on the Steam store page.
 - **NOTICES audit** — optional; fonts/music/Electron in Credits. Double-check
   `steamworks.js` if bundled into shipped app.
 
@@ -138,15 +140,15 @@ Remember to `rm -rf release/` after manual verification — gitignored.
 
 ## Quick reference: files most relevant to M5
 
-| Concern | File(s) |
-|---|---|
-| Packaging config | `package.json` (`"build"` block) |
-| Window/lifecycle | `electron/main.cjs` |
-| Icons | `build/icon.icns`, `build/icon.ico` |
-| macOS signing | `docs/MACOS_SIGNING.md`, `build/entitlements.mac*.plist` |
-| Steam achievements/App ID | `electron/steam.cjs`, `src/platform/achievements.js` |
-| Steam Input | `steam/controller_config/game_actions_480.vdf` |
-| Store copy | `docs/STORE_COPY.md`, `docs/ART_BIBLE.md` |
-| CI | `.github/workflows/desktop-build.yml`, [`GITHUB_ACTIONS.md`](./GITHUB_ACTIONS.md) |
-| SteamPipe VDFs | `steam/build/` |
-| Credits / licensing | `src/data/credits.js`, `docs/MUSIC_LICENSES.md` |
+| Concern                   | File(s)                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| Packaging config          | `package.json` (`"build"` block)                                                  |
+| Window/lifecycle          | `electron/main.cjs`                                                               |
+| Icons                     | `build/icon.icns`, `build/icon.ico`                                               |
+| macOS signing             | `docs/MACOS_SIGNING.md`, `build/entitlements.mac*.plist`                          |
+| Steam achievements/App ID | `electron/steam.cjs`, `src/platform/achievements.js`                              |
+| Steam Input               | `steam/controller_config/game_actions_480.vdf`                                    |
+| Store copy                | `docs/STORE_COPY.md`, `docs/ART_BIBLE.md`                                         |
+| CI                        | `.github/workflows/desktop-build.yml`, [`GITHUB_ACTIONS.md`](./GITHUB_ACTIONS.md) |
+| SteamPipe VDFs            | `steam/build/`                                                                    |
+| Credits / licensing       | `src/data/credits.js`, `docs/MUSIC_LICENSES.md`                                   |
