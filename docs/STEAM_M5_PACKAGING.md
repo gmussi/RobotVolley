@@ -1,10 +1,9 @@
 # Steam Release — M5: Packaging, Signing & Store
 
-**Status as of 2026-07-26: M1–M4 complete. M5 nearly complete on the code/infra
-side.** Done: desktop builds, CI, SteamPipe VDF templates, TURN relay, music
-licensing, **macOS signed + notarized builds locally** (Developer ID + App Store
-Connect API key). Remaining: GitHub signing secrets for CI, Steam partner review
-(App ID), store page, legal docs. See **Hard blockers** and next steps below.
+**Status as of 2026-07-26: M1–M4 complete. M5 infra complete** — desktop builds,
+CI (signed macOS via GitHub secrets), SteamPipe VDF templates, TURN, music
+licensing, local + CI signing/notarization wired. **Blocked on Steam partner
+review** (App ID), store page, and legal docs (publisher name).
 
 This file is the handoff doc for M5 — read it fresh in a new session to resume
 without re-deriving context. It assumes the reader has no memory of prior
@@ -59,10 +58,8 @@ irrelevant to reproduce here; what matters for M5 is the state below.
   (unpacked folders for SteamPipe). Verified locally and via CI
   (`.github/workflows/desktop-build.yml`).
 - **CI desktop matrix** — matrixes `windows-latest` + `macos-latest`, uploads
-  artifacts. macOS job runs smoke harnesses. TURN + matchmaking env vars passed
-  → uploads artifacts. macOS job runs smoke harnesses. TURN + matchmaking env vars passed
-  into build. **Apple notarization secrets on GitHub; CSC (code-sign `.p12`) still
-  pending** — see `docs/GITHUB_ACTIONS.md`.
+  artifacts. macOS: signed + notarized when GitHub secrets set (see
+  `docs/GITHUB_ACTIONS.md`). Smoke harnesses on macOS job.
 - **SteamPipe VDF templates** — `steam/build/` (`*_TEMPLATE.vdf` + `README.md`).
 - **macOS signing + notarization (local)** — verified 2026-07-26:
   - Developer ID Application cert in Keychain
@@ -84,17 +81,11 @@ irrelevant to reproduce here; what matters for M5 is the state below.
 
 ## M5 remaining work
 
-### Step 2 — macOS signing in CI
+### Step 2 — macOS signing in CI — done
 
-**GitHub secrets configured (2026-07-26):** `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`,
-`APPLE_API_ISSUER` — see [`docs/GITHUB_ACTIONS.md`](./GITHUB_ACTIONS.md).
-
-**Still manual:** `CSC_LINK` + `CSC_KEY_PASSWORD` (export Developer ID `.p12` from
-Keychain Access — automated export was blocked by macOS Keychain prompt). Until
-those are set, CI macOS artifacts are unsigned; local signed+notarized builds work
-via Keychain + `.env`.
-
-Local setup: [`docs/MACOS_SIGNING.md`](./MACOS_SIGNING.md).
+All secrets configured — see [`docs/GITHUB_ACTIONS.md`](./GITHUB_ACTIONS.md).
+Trigger **Desktop build** workflow (or push to `main`) and download
+`robot-volley-mac-arm64` artifact to confirm signed + notarized output.
 
 ### Step 3 — SteamPipe upload (blocked on Steam App ID)
 

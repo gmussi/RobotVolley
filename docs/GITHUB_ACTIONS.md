@@ -21,20 +21,13 @@ GitHub Settings → Secrets and variables → Actions — never commit them.
 | `APPLE_API_KEY_P8` | Full contents of Team `AuthKey_4ZJVDMV9UZ.p8` (notarization) | Yes |
 | `APPLE_API_KEY_ID` | `4ZJVDMV9UZ` — must match `.p8` filename | Yes |
 | `APPLE_API_ISSUER` | App Store Connect Issuer UUID (Team key) | Yes |
-| `CSC_LINK` | Base64 or raw `.p12` of **Developer ID Application** cert (CI code signing) | **No** — export manually from Keychain Access |
-| `CSC_KEY_PASSWORD` | Password used when exporting `.p12` | **No** |
+| `CSC_LINK` | Base64-encoded `.p12` of **Developer ID Application** cert | Yes |
+| `CSC_KEY_PASSWORD` | Password used when exporting `.p12` | Yes |
 
-### CSC secrets (still manual)
+### CSC secrets
 
-CI macOS builds will **sign + notarize only when `CSC_LINK` exists**. Until then,
-CI produces unsigned macOS artifacts; local `npm run electron:build` on your Mac
-uses Keychain and works.
-
-To finish CI signing:
-
-1. Keychain Access → **Developer ID Application: …** → Export → `.p12`
-2. `gh secret set CSC_LINK < path/to/export.p12`
-3. `gh secret set CSC_KEY_PASSWORD --body "your-export-password"`
+Configured 2026-07-26. CI macOS job should produce signed + notarized artifacts when
+`desktop-build.yml` runs on `macos-latest`.
 
 ### Apple API key notes
 
