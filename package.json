@@ -12,6 +12,7 @@
     "electron:dev": "concurrently -k -n vite,electron \"cross-env PORT=5173 vite\" \"wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .\"",
     "electron:preview": "npm run build && electron .",
     "electron:build": "npm run build && electron-builder",
+    "electron:smoke": "electron electron/smoke.cjs && electron electron/smoke-save.cjs && electron electron/smoke-steam.cjs && electron electron/smoke-quit.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "genart": "python3 tools/genart.py",

@@ -1,0 +1,12 @@
+"DepotBuildConfig"
+{
+	"DepotID" "REPLACE_MAC_DEPOT_ID"
+	"ContentRoot" "..\..\release\mac-arm64\"
+	"FileMapping"
+	{
+		"LocalPath" "Robot Volley.app"
+		"DepotPath" "."
+		"recursive" "1"
+	}
+	"FileExclusion" "*.pdb"
+}

@@ -1,6 +1,8 @@
 # Steam Release — M5: Packaging, Signing & Store
 
-**Status as of 2026-07-24: M1–M4 complete and verified. M5 not started.**
+**Status as of 2026-07-26: M1–M4 complete and verified. M5 in progress** — Steps 1
+(unblocked), 3 (VDF templates), and 4 (CI desktop matrix) done locally; Steps 2,
+5, and 6 remain blocked on user/partner accounts (see Hard blockers).
 This file is the handoff doc for M5 — read it fresh in a new session to resume
 without re-deriving context. It assumes the reader has no memory of prior
 sessions; everything needed to continue is below or linked.
@@ -71,10 +73,10 @@ irrelevant to reproduce here; what matters for M5 is the state below.
    blocked without one ($99/yr). Without signing, Gatekeeper will block the
    `.app` for end users even distributed via Steam (Steam does not bypass
    Gatekeeper). This is required before a real macOS release, not optional.
-3. **No TURN server/credentials supplied yet** — online play works today via
-   STUN only; NAT-restricted players will fail to connect until a real relay
-   is configured. Not strictly required to *package* the app, but should
-   happen before launch.
+3. ~~**No TURN server/credentials supplied yet**~~ **Configured (2026-07-26)** —
+   Metered.ca relay wired via `.env` locally and GitHub Actions vars/secrets
+   (`VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`). Still
+   worth smoke-testing online from two different networks before launch.
 4. **Music/SFX licensing unverified** — `docs/STORE_COPY.md` already flags:
    *"Verify commercial rights for all music in `src/assets/audio/` before paid
    store release. Untracked root MP3s must be licensed or removed."* Two loose
@@ -90,11 +92,10 @@ irrelevant to reproduce here; what matters for M5 is the state below.
 
 ### Step 1 — Windows build (no blocker, can do now)
 - `win.target` is currently `["dir"]` (unpacked folder — correct for
-  SteamPipe, which wants raw files per depot, not an installer). Verify this
-  actually builds on Windows: either use a Windows machine/VM, or rely on the
-  CI matrix (Step 4) since electron-builder's `dir` target for `win` can cross-build
-  from macOS in many cases but isn't guaranteed — **must verify on a real
-  Windows target or CI runner**, don't assume.
+  SteamPipe, which wants raw files per depot, not an installer). **Verified
+  via CI** (`.github/workflows/desktop-build.yml` → `windows-latest` →
+  `release/win-unpacked`). macOS build verified locally
+  (`release/mac-arm64/Robot Volley.app`).
 - Decide whether to *also* produce an NSIS installer (`win.target: ["nsis",
   "dir"]`) for non-Steam distribution (e.g. a direct-download version on the
   studio's own site). Not needed for Steam itself.
@@ -124,31 +125,20 @@ Once the Steam app exists and has an App ID:
    achievement API names defined in the Steamworks partner backend.
 2. Create one **depot** per platform (Windows, macOS) in the Steamworks
    partner site.
-3. Add `steamcmd` + app/depot **VDF build scripts** under a new top-level
-   `steam/build/` dir (not yet created) — e.g. `app_build_<id>.vdf` and
-   `depot_build_<win-depot-id>.vdf` / `depot_build_<mac-depot-id>.vdf`,
-   pointing at `release/win-unpacked` and `release/mac-arm64/Robot Volley.app`
-   respectively (adjust paths to match whatever electron-builder actually
-   outputs at that time).
+3. ~~Add `steamcmd` + app/depot **VDF build scripts**~~ **Done** — template
+   VDFs live in `steam/build/` (`*_TEMPLATE.vdf` + `README.md`). Copy and
+   fill in real App/depot IDs once the Steam app exists.
 4. First upload is manual (`steamcmd +login <user> +run_app_build
    <path-to-vdf> +quit`) to validate before automating in CI.
 
 ### Step 4 — CI matrix for desktop builds (no blocker, can do now)
-- Extend `.github/workflows/` with a new workflow (or add jobs to
-  `deploy.yml`) matrixed on `windows-latest` + `macos-latest`, each running
-  `npm ci` → `npm run genart:desktop-icons` (macOS runner only, needs
-  `sips`/`iconutil` — **skip or pre-generate icons for the Windows job**, see
-  note below) → `npm run electron:build` → upload artifacts.
-- **Icon generation gotcha**: `tools/build_desktop_icons.mjs`'s `.icns` step
-  is macOS-only (shells out to `sips`/`iconutil`); the `.ico` step is
-  cross-platform (pure Node). Either (a) commit `build/icon.icns` +
-  `build/icon.ico` to the repo (simplest — they're small, ~120KB combined,
-  and only need regenerating when the source icon changes) so CI never needs
-  to regenerate them, or (b) only run the icon script on the macOS runner and
-  make sure `build/icon.ico` is available to the Windows job too (e.g. upload
-  as an artifact between jobs). **Recommendation: commit `build/` to git** —
-  check whether that already happened; if `build/` is still untracked,
-  `git add build/` to lock in the current icons.
+- ~~Extend `.github/workflows/`~~ **Done** — `.github/workflows/desktop-build.yml`
+  matrixes `windows-latest` + `macos-latest`, runs `npm ci` →
+  `npm run electron:build` → uploads artifacts (`robot-volley-win-unpacked`,
+  `robot-volley-mac-arm64`). macOS job also runs the four `electron/smoke*.cjs`
+  harnesses.
+- **Icons**: `build/icon.icns` + `build/icon.ico` are committed — CI does not
+  need to regenerate them.
 - macOS signing (Step 2) needs secrets (`CSC_LINK`, `APPLE_ID`, etc.) added as
   GitHub Actions secrets before the CI job can sign — until then, CI should
   produce unsigned builds (fine for internal testing, not for release).
@@ -189,11 +179,8 @@ Run after touching `electron/main.cjs`, `electron/preload.cjs`, or the
 `package.json` `"build"` block:
 
 ```bash
-npm run build && npm test                         # 41 tests must pass
-npx electron electron/smoke.cjs                    # boot, 0 console errors, 0 external requests
-npx electron electron/smoke-save.cjs                # save round-trip
-npx electron electron/smoke-steam.cjs               # graceful without Steam running
-npx electron electron/smoke-quit.cjs                # quit IPC reaches main
+npm run build && npm test                         # vitest suite must pass
+npm run electron:smoke                            # all four headless harnesses
 npm run electron:build                              # real packaged build
 # then actually launch the produced .app / .exe and click through:
 # title -> menu -> a match -> pause -> quit
@@ -209,6 +196,12 @@ spctl -a -vvv "release/mac-arm64/Robot Volley.app"   # Gatekeeper check (will fa
 Remember to `rm -rf release/` after manual verification — it's gitignored and
 shouldn't be committed.
 
+**Cursor/IDE note:** If `npm run electron:smoke` fails with
+`Cannot read properties of undefined (reading 'on')` on `ipcMain`, check that
+`ELECTRON_RUN_AS_NODE` is **not** set in the shell (Cursor's agent terminal
+sometimes sets it). Run `unset ELECTRON_RUN_AS_NODE` first, or use an external
+terminal.
+
 ## Quick reference: files most relevant to M5
 
 | Concern | File(s) |
@@ -220,5 +213,6 @@ shouldn't be committed.
 | Steam Input | `steam/controller_config/game_actions_480.vdf`, `steam/README.md` |
 | Store copy | `docs/STORE_COPY.md`, `docs/ART_BIBLE.md` |
 | TURN config | `src/net/webrtc.js`, `.env.example`, README "Online multiplayer" section |
-| CI | `.github/workflows/deploy.yml` (currently web-only; needs the M5 desktop matrix) |
+| CI | `.github/workflows/deploy.yml` (web), `.github/workflows/desktop-build.yml` (desktop) |
+| SteamPipe VDFs | `steam/build/` |
 | Credits / licensing | `src/ui/creditsScreen.js`, `src/data/credits.js`, this doc's Blockers section |

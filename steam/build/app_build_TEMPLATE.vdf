@@ -1,0 +1,15 @@
+"AppBuild"
+{
+	"AppID" "REPLACE_APP_ID"
+	"Desc" "Robot Volley — REPLACE_BUILD_LABEL"
+	"Preview" "0"
+	"Local" "..\..\"
+	"SetLive" "default"
+	"ContentRoot" "..\..\"
+	"BuildOutput" "..\..\steam\build\output\"
+	"Depots"
+	{
+		"REPLACE_WIN_DEPOT_ID" "depot_build_REPLACE_WIN_DEPOT_ID.vdf"
+		"REPLACE_MAC_DEPOT_ID" "depot_build_REPLACE_MAC_DEPOT_ID.vdf"
+	}
+}

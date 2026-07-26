@@ -41,4 +41,8 @@ fine without any of it (Steam is optional at runtime).
 ## Depots / SteamPipe (M5)
 
 - One depot per platform (Windows, macOS). Upload the `electron-builder` `dir`
-  output via `steamcmd` + app/depot VDF build scripts (added in M5).
+  output via `steamcmd` + app/depot VDF build scripts in `steam/build/`.
+- See [`build/README.md`](./build/README.md) for template VDFs and upload steps.
+- CI produces unsigned builds on every push to `main` — see
+  `.github/workflows/desktop-build.yml` (artifacts: `robot-volley-win-unpacked`,
+  `robot-volley-mac-arm64`).

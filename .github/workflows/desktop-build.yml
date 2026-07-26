@@ -1,0 +1,74 @@
+name: Desktop build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: mac-arm64
+            artifact_path: release/mac-arm64
+          - os: windows-latest
+            artifact: win-unpacked
+            artifact_path: release/win-unpacked
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run electron:build
+        env:
+          VITE_MATCHMAKING_URL: ${{ vars.VITE_MATCHMAKING_URL }}
+          VITE_TURN_URL: ${{ vars.VITE_TURN_URL }}
+          VITE_TURN_USERNAME: ${{ vars.VITE_TURN_USERNAME }}
+          VITE_TURN_CREDENTIAL: ${{ secrets.VITE_TURN_CREDENTIAL }}
+          # Signing secrets (Step 2) — add when Apple Developer account exists.
+          # CSC_LINK: ${{ secrets.CSC_LINK }}
+          # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Smoke tests (macOS only)
+        if: matrix.os == 'macos-latest'
+        run: |
+          npx electron electron/smoke.cjs
+          npx electron electron/smoke-save.cjs
+          npx electron electron/smoke-steam.cjs
+          npx electron electron/smoke-quit.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: robot-volley-${{ matrix.artifact }}
+          path: ${{ matrix.artifact_path }}
+          retention-days: 14
