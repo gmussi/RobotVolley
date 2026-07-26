@@ -58,10 +58,16 @@ PARTS = [
      "a single short stubby ROBOT ARM only (right arm), a rounded upper segment and a "
      "simple rounded mitten-hand, a ball-joint shoulder nub at the top where it plugs "
      "into the torso. Just the one arm, vertical, hanging slightly."),
-    ("leg", "normal", "3:4",
-     "a single short stubby ROBOT LEG only (right leg), a small rounded thigh/shin and "
-     "a comically big chunky red-and-white athletic sneaker-boot at the bottom, a "
-     "ball-joint hip nub at the top where it plugs into the torso. Just the one leg."),
+    ("leg", "normal", "1:1",
+     "a single SHORT stubby ROBOT FOOT-LEG only (right side). The part is ALMOST "
+     "ENTIRELY a comically oversized chunky athletic sneaker-boot. CRITICAL COLOR: "
+     "the shoe UPPER must be bright CRIMSON-RED armor (#ff5a5f / #c23a4a) — NOT black, "
+     "NOT navy, NOT purple, NOT dark grey. Thick white sole, white toe cap, a few "
+     "horizontal white lace straps, thin gold eyelets, bright cyan neon rim on lit "
+     "edges. The boot fills ~85-90% of the sprite height. On top of the boot sits ONLY "
+     "a tiny silver ball-joint hip nub (no thigh shaft, no shin, no long pipe). Short "
+     "and wide, reads as a big red foot with a hip socket. Just the one foot-leg, "
+     "front view."),
 ]
 
 # Skeleton layout on a 760x940 canvas — socket rects (parts overlap at joints).

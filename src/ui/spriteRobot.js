@@ -139,11 +139,10 @@ const SK = {
   // replaced also hung its arms 4px outside the box (ARM_OVERHANG).
   armL:  { x: 0.045, y: 0.356, mw: 0.30, mh: 0.290, anchor: "top" },
   armR:  { x: 0.955, y: 0.356, mw: 0.30, mh: 0.290, anchor: "top" },
-  // Legs are anchored at the SOLE and fitted by width. The three leg sprites have
-  // very different heights (288 / 370 / 404 px), so a height fit rendered the
-  // taller power+rocket legs ~40% thinner than normal; fitting by width keeps
-  // limb thickness consistent and lets the extra length disappear behind the
-  // torso, while the foot always lands exactly on the floor line.
+  // Legs are anchored at the SOLE and fitted by width. Variants differ in height
+  // (short foot / tall spring / compact rocket), so a height fit would thin the
+  // taller ones; fitting by width keeps limb thickness consistent and lets extra
+  // length tuck behind the torso, while the sole always lands on the floor line.
   legL:  { x: 0.230, y: 1.0, mw: 0.226, mh: 0.60, anchor: "bottom" },
   legR:  { x: 0.770, y: 1.0, mw: 0.226, mh: 0.60, anchor: "bottom" },
   weapon:{ x: 0.86,  y: 0.74,  mw: 0.42, mh: 0.42,  anchor: "center" },
