@@ -54,4 +54,50 @@ CI macOS job produces signed + notarized artifacts when `desktop-build.yml` runs
 | `.github/workflows/deploy.yml` | `VITE_MATCHMAKING_URL`, `VITE_TURN_*` |
 | `.github/workflows/desktop-build.yml` | All above + Apple/CSC for macOS job |
 
+## Download latest desktop build
+
+Every successful **Desktop build** run on `main` uploads two artifacts (no GitHub
+Release required):
+
+| Artifact | Contents |
+|----------|----------|
+| `robot-volley-mac-arm64` | `Robot Volley.app` (signed + notarized when secrets are set) |
+| `robot-volley-win-unpacked` | `win-unpacked/` folder — run `Robot Volley.exe` inside it |
+
+Artifacts expire after **14 days**. You only need the latest run — no release
+history.
+
+### GitHub UI
+
+1. [Actions → Desktop build](https://github.com/gmussi/RobotVolley/actions/workflows/desktop-build.yml)
+2. Open the latest green run on `main`
+3. Scroll to **Artifacts** and download the zip for your platform
+
+To build on demand without pushing: **Actions → Desktop build → Run workflow** →
+branch `main`.
+
+### CLI (`gh`)
+
+Requires [GitHub CLI](https://cli.github.com/) logged in (`gh auth login`).
+
+```bash
+# Latest successful Desktop build on main
+RUN_ID=$(gh run list --workflow=desktop-build.yml --branch=main \
+  --status=success --limit=1 --json databaseId -q '.[0].databaseId')
+
+# Both platforms into ./downloads/
+gh run download "$RUN_ID" --dir ./downloads
+
+# macOS only
+gh run download "$RUN_ID" -n robot-volley-mac-arm64 --dir ./downloads
+
+# Windows only
+gh run download "$RUN_ID" -n robot-volley-win-unpacked --dir ./downloads
+```
+
+After download:
+
+- **macOS:** `open "./downloads/robot-volley-mac-arm64/Robot Volley.app"`
+- **Windows:** run `./downloads/robot-volley-win-unpacked/Robot Volley.exe`
+
 See also: [`MACOS_SIGNING.md`](./MACOS_SIGNING.md), [`STEAM_M5_PACKAGING.md`](./STEAM_M5_PACKAGING.md).
