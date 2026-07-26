@@ -47,9 +47,9 @@ irrelevant to reproduce here; what matters for M5 is the state below.
   `package.json`. **Verified with a real packaged build** — icon embeds
   correctly in the `.app`.
 - **Credits screen**: `src/ui/creditsScreen.js` + `src/data/credits.js`,
-  reached via a footer link on the main menu (not a list item). Contains only
-  *verified* attributions (fonts: SIL OFL 1.1; Electron: MIT). **Music/SFX
-  attribution is deliberately omitted** — see Blockers below.
+  reached via a footer link on the main menu (not a list item). Contains
+  *verified* attributions (music: Pixabay Content License; fonts: SIL OFL 1.1;
+  Electron: MIT).
 - **Quit**: desktop-only "QUIT" item on the main menu, wired to
   `app.quit()` via IPC.
 - **Build config exists** in `package.json`'s `"build"` block: `appId`,
@@ -77,13 +77,10 @@ irrelevant to reproduce here; what matters for M5 is the state below.
    Metered.ca relay wired via `.env` locally and GitHub Actions vars/secrets
    (`VITE_TURN_URL`, `VITE_TURN_USERNAME`, `VITE_TURN_CREDENTIAL`). Still
    worth smoke-testing online from two different networks before launch.
-4. **Music/SFX licensing unverified** — `docs/STORE_COPY.md` already flags:
-   *"Verify commercial rights for all music in `src/assets/audio/` before paid
-   store release. Untracked root MP3s must be licensed or removed."* Two loose
-   root MP3s (`moodmode-*.mp3`, `petrushkasound-*.mp3`) still exist in the repo
-   root — confirm their status and either license them properly or delete
-   them; they're already excluded from the shipped build but sitting in git
-   history/working tree is still a risk to clean up.
+4. ~~**Music/SFX licensing unverified**~~ **Verified (2026-07-26)** — match
+   tracks sourced from Pixabay (MoodMode + petrushkasound, Content License).
+   Menu/stinger/SFX are procedural/original. See `docs/MUSIC_LICENSES.md` and
+   in-game Credits. Root source MP3s remain in git as encoding masters.
 5. **No real developer/publisher name established** — the credits screen and
    any EULA/legal docs need a real name/entity for copyright lines. Ask the
    user rather than inventing one.
@@ -171,7 +168,7 @@ Once the Steam app exists and has an App ID:
   don't ship, but double-check `steamworks.js` and anything actually bundled
   into the Electron app for license notice requirements) and produce a
   NOTICES file if warranted.
-- **Music/SFX**: see Blocker 4 — must resolve before this step can close.
+- **Music/SFX**: verified — see `docs/MUSIC_LICENSES.md` and Credits screen.
 
 ## Verification checklist for any M5 change
 

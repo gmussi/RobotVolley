@@ -1,11 +1,17 @@
 /**
  * Credits — third-party attributions shown in-game.
  *
- * Only verified entries belong here. Music/SFX are intentionally NOT listed yet:
- * see docs/STORE_COPY.md's note to verify commercial rights for src/assets/audio/
- * before a paid release — add real attributions here once that's settled.
+ * Only verified entries belong here. See docs/MUSIC_LICENSES.md for track
+ * sourcing and license details.
  */
 export const CREDIT_SECTIONS = [
+  {
+    title: "Music",
+    entries: [
+      { name: "Technology Synth Pop", detail: "MoodMode — Pixabay Content License" },
+      { name: "Pop Synth Background Music", detail: "petrushkasound — Pixabay Content License" },
+    ],
+  },
   {
     title: "Fonts",
     entries: [

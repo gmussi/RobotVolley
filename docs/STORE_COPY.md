@@ -47,4 +47,9 @@ Robot Volley brings ICQ-era volleyball charm into a sleek neon stadium. Customiz
 
 ## Licensing notes
 
-Verify commercial rights for all music in `src/assets/audio/` before paid store release. Untracked root MP3s must be licensed or removed.
+**Music (verified 2026-07-26):** Match tracks `music_match_a` / `music_match_b` are
+from Pixabay (MoodMode, petrushkasound) under the
+[Pixabay Content License](https://pixabay.com/service/license-summary/) — free for
+commercial use when embedded in the game (not sold standalone). Menu music, victory
+stinger, and all SFX are original/procedural. Full mapping:
+[`docs/MUSIC_LICENSES.md`](./MUSIC_LICENSES.md).
