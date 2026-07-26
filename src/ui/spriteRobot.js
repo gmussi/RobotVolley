@@ -166,7 +166,22 @@ const OVERRIDE = {
 // as attached and the hand isn't swallowed by the torso silhouette.
 const Z = ["legL", "legR", "torso", "armL", "armR", "head", "weapon"];
 
-function drawPiece(ctx, src, sk, r, ov, mirror, frames = 1, frameIdx = 0) {
+/**
+ * Power-spring vertical scale. Only while rising (vy < 0) — a strong
+ * stretch/contract pulse; idle on the way down and on the ground.
+ */
+function powerLegVScale(r) {
+  if (r.legType !== "power" || r.onGround || !(r.vy < 0)) return 1;
+  const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 55);
+  return 0.65 + pulse * 1.05; // ~0.65 ↔ 1.70
+}
+
+/**
+ * @param {number} vScale  vertical scale multiplier
+ * @param {"sole"|"hip"} vPivot  "hip" keeps the rest top fixed and grows the
+ *   sole downward (visible spring stretch); "sole" keeps the sole planted.
+ */
+function drawPiece(ctx, src, sk, r, ov, mirror, frames = 1, frameIdx = 0, vScale = 1, vPivot = "sole") {
   const fullW = src.naturalWidth || src.width;
   const iw = fullW / frames;                  // one frame's width for a strip
   const ih = src.naturalHeight || src.height;
@@ -182,12 +197,15 @@ function drawPiece(ctx, src, sk, r, ov, mirror, frames = 1, frameIdx = 0) {
     mh *= ov[2];
   }
   const scale = Math.min(mw / iw, mh / ih);
-  const w = iw * scale, h = ih * scale;
+  const baseH = ih * scale;
+  const w = iw * scale, h = baseH * vScale;
   const x = cx - w / 2;
   let y;
   if (sk.anchor === "top") y = jointY;
-  else if (sk.anchor === "bottom") y = jointY - h;
-  else y = jointY - h / 2;
+  else if (sk.anchor === "bottom") {
+    // Hip pivot: top stays where the resting spring top was; sole extends down.
+    y = vPivot === "hip" ? jointY - baseH : jointY - h;
+  } else y = jointY - h / 2;
 
   if (mirror) {
     ctx.save();
@@ -198,6 +216,54 @@ function drawPiece(ctx, src, sk, r, ov, mirror, frames = 1, frameIdx = 0) {
   } else {
     ctx.drawImage(src, sx, 0, iw, ih, x, y, w, h);
   }
+}
+
+/** One-shot thruster burst under rocket soles while flapFx is active (up press). */
+function drawRocketFlames(ctx, r) {
+  if (r.legType !== "rocket" || !(r.flapFx > 0)) return;
+  // Ease out over the flapFx window so it fires once and dies.
+  const t = Math.min(1, r.flapFx / 0.18);
+  const strength = t * t;
+  const now = performance.now() / 1000;
+  const flicker = 0.85 + 0.15 * Math.sin(now * 48);
+
+  ctx.save();
+  for (const sk of [SK.legL, SK.legR]) {
+    const fx = r.x + sk.x * r.w;
+    const fy = r.y + r.h;
+    const phase = Math.sin(now * 60 + sk.x * 9);
+    const h = (18 + 10 * strength + 4 * phase) * flicker * strength;
+    const w = (9 + 6 * strength) * (0.9 + 0.1 * phase);
+
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = 0.7 * strength;
+    ctx.fillStyle = "#ff6a20";
+    ctx.beginPath();
+    ctx.moveTo(fx - w, fy);
+    ctx.lineTo(fx + w, fy);
+    ctx.lineTo(fx + phase * 1.5, fy + h);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalAlpha = 0.9 * strength;
+    ctx.fillStyle = "#ffb347";
+    ctx.beginPath();
+    ctx.moveTo(fx - w * 0.55, fy);
+    ctx.lineTo(fx + w * 0.55, fy);
+    ctx.lineTo(fx - phase, fy + h * 0.72);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalAlpha = strength;
+    ctx.fillStyle = "#fff3c0";
+    ctx.beginPath();
+    ctx.moveTo(fx - w * 0.28, fy);
+    ctx.lineTo(fx + w * 0.28, fy);
+    ctx.lineTo(fx + phase * 0.5, fy + h * 0.42);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawShadow(ctx, r, floorY) {
@@ -349,9 +415,13 @@ export function drawSpriteRobot(ctx, r, floorY) {
         frameIdx = spinFrame(r.drillAngle || 0);
       }
     }
-    drawPiece(ctx, src, sk, r, ov, flip, frames, frameIdx);
+    const vScale = base === "leg" ? powerLegVScale(r) : 1;
+    // Power spring grows from the hip so stretch is visible below the torso.
+    const vPivot = base === "leg" && r.legType === "power" && vScale !== 1 ? "hip" : "sole";
+    drawPiece(ctx, src, sk, r, ov, flip, frames, frameIdx, vScale, vPivot);
   }
 
+  drawRocketFlames(ctx, r);
   drawCorePulse(ctx, r);
   ctx.restore();
 }

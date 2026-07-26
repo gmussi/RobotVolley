@@ -325,16 +325,22 @@ function drawRobotLegs(r, p, col) {
   const light = shadeColor(legCol, 18);
 
   if (r.legType === "power") {
+    // Strong stretch/contract pulse only while rising; hip-fixed so sole extends.
+    let vScale = 1;
+    if (!r.onGround && r.vy < 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 55);
+      vScale = 0.65 + pulse * 1.05;
+    }
     for (const leg of [p.legL, p.legR]) {
       const cx = leg.x + leg.w / 2;
-      drawPart(leg.x - 4, leg.y, leg.w + 8, leg.h - 6, 7, legCol, r);
-      ctx.fillStyle = "rgba(0,0,0,0.22)";
-      roundRect(leg.x + 2, leg.y + 8, leg.w - 4, 10, 3);
+      const restH = leg.h - 2;
+      const yTop = leg.y + 2;                 // hip stays put
+      const sole = yTop + Math.max(10, restH * vScale);
+      ctx.fillStyle = "#c5cdd8";
+      ctx.beginPath();
+      ctx.arc(cx, yTop + 3, 4, 0, Math.PI * 2);
       ctx.fill();
-      drawSpringCoil(cx, leg.y + leg.h - 18, leg.y + leg.h - 4, 5);
-    }
-    for (const foot of [p.footL, p.footR]) {
-      drawAthleticBoot(foot, COLORS.accent);
+      drawSpringCoil(cx, yTop + 6, sole - 1, 6);
     }
     return;
   }
@@ -367,37 +373,46 @@ function drawRobotLegs(r, p, col) {
       ctx.lineTo(fx - 7, fy + 2);
       ctx.closePath();
       ctx.fill();
-      const idle = r.onGround ? 0.55 : 0.3;
-      ctx.fillStyle = `rgba(255,140,40,${idle})`;
-      ctx.shadowColor = "#ff8c28";
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.ellipse(fx, fy + 1, 5, 3, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
     }
+    // One-shot thruster burst on up-press (flapFx), then stop.
     if (r.flapFx > 0) {
-      const t = r.flapFx / 0.18;
+      const t = Math.min(1, r.flapFx / 0.18);
+      const strength = t * t;
+      const now = performance.now() / 1000;
+      const flicker = 0.85 + 0.15 * Math.sin(now * 48);
       for (const foot of [p.footL, p.footR]) {
         const fx = foot.x + foot.w / 2;
         const fy = foot.y + foot.h;
-        const flameH = 16 * t, flameW = 12 * t;
-        ctx.globalAlpha = t;
+        const phase = Math.sin(now * 60 + fx * 0.05);
+        const flameH = (18 + 10 * strength + 4 * phase) * flicker * strength;
+        const flameW = (9 + 6 * strength) * (0.9 + 0.1 * phase);
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        ctx.globalAlpha = 0.7 * strength;
+        ctx.fillStyle = "#ff6a20";
+        ctx.beginPath();
+        ctx.moveTo(fx - flameW, fy);
+        ctx.lineTo(fx + flameW, fy);
+        ctx.lineTo(fx + phase * 1.5, fy + flameH);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 0.9 * strength;
         ctx.fillStyle = "#ffb347";
         ctx.beginPath();
-        ctx.moveTo(fx - flameW / 2, fy + 2);
-        ctx.lineTo(fx + flameW / 2, fy + 2);
-        ctx.lineTo(fx, fy + 2 + flameH);
+        ctx.moveTo(fx - flameW * 0.55, fy);
+        ctx.lineTo(fx + flameW * 0.55, fy);
+        ctx.lineTo(fx - phase, fy + flameH * 0.72);
         ctx.closePath();
         ctx.fill();
+        ctx.globalAlpha = strength;
         ctx.fillStyle = "#fff3c0";
         ctx.beginPath();
-        ctx.moveTo(fx - flameW / 4, fy + 2);
-        ctx.lineTo(fx + flameW / 4, fy + 2);
-        ctx.lineTo(fx, fy + 2 + flameH * 0.55);
+        ctx.moveTo(fx - flameW * 0.28, fy);
+        ctx.lineTo(fx + flameW * 0.28, fy);
+        ctx.lineTo(fx + phase * 0.5, fy + flameH * 0.42);
         ctx.closePath();
         ctx.fill();
-        ctx.globalAlpha = 1;
+        ctx.restore();
       }
     }
     return;

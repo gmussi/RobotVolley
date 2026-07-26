@@ -75,6 +75,20 @@ function frame() {
     label("legs " + l, x, floorB + 26);
     x += 150;
   }
+  // Rising power spring pulse + one-shot rocket flap burst
+  const airY = floorB - BOX.h - 36;
+  drawSpriteRobot(ctx, bot(x, airY, {
+    legType: "power", onGround: false, vy: -800, eyeBlink: blink,
+  }), floorB);
+  label("spring rise", x, floorB + 26);
+  x += 150;
+  const flapDemo = (performance.now() / 1000) % 1.2 < 0.18
+    ? 0.18 - ((performance.now() / 1000) % 1.2)
+    : 0;
+  drawSpriteRobot(ctx, bot(x, airY, {
+    legType: "rocket", onGround: false, flapFx: flapDemo, eyeBlink: blink,
+  }), floorB);
+  label("rocket flap", x, floorB + 26);
 
   // Row 3: weapons + a fully-loaded mix
   x = 90;
