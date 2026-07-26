@@ -10,10 +10,10 @@ Verified **2026-07-26**. Match background tracks are sourced from Pixabay under 
 | `src/assets/audio/music_match_a.mp3` | Technology Synth Pop | MoodMode | [165429](https://pixabay.com/music/electronic-technology-synth-pop-165429/) |
 | `src/assets/audio/music_match_b.mp3` | Pop Synth Background Music | petrushkasound | [465681](https://pixabay.com/music/electronic-pop-synth-background-music-465681/) |
 
-Original downloads (repo root, encoding sources):
+Original downloads (encoding masters in `src/assets/audio/sources/`):
 
-- `moodmode-technology-synth-pop-165429.mp3`
-- `petrushkasound-pop-synth-background-music-465681.mp3`
+- `src/assets/audio/sources/moodmode-technology-synth-pop-165429.mp3`
+- `src/assets/audio/sources/petrushkasound-pop-synth-background-music-465681.mp3`
 
 Encoded for shipping via `tools/encode_match_music.sh` (128 kbps MP3).
 

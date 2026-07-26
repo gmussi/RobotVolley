@@ -36,8 +36,8 @@ Open the printed `localhost` URL. Pick **1 Player** (vs CPU), **2 Players**, or
 
 ### Serving
 
-- Before each rally, the server **holds** their serve key to **charge** force into
-  the ball, then **releases** to launch.
+- Before each rally, the server **holds** their attack / weapon key to **charge**
+  force into the ball, then **releases** to launch.
 - A longer charge means a faster, more aggressive serve (up to a 4-second full charge).
 - The ball hovers above the server's head during the serve phase and follows them
   if they jump.
@@ -71,8 +71,7 @@ Open the printed `localhost` URL. Pick **1 Player** (vs CPU), **2 Players**, or
 | Move left | `A` | `←` |
 | Move right | `D` | `→` |
 | Jump | `W` | `↑` |
-| Serve (hold) | `S` | `↓` |
-| Attack | `F` | `/` |
+| Attack / Serve (hold) | `F` | `/` |
 
 - **Space** — return to menu after a match ends.
 - **1 / 2** or click menu cards — pick game mode.

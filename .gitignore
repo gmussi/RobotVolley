@@ -16,3 +16,11 @@ reference/
 release/
 steam/build/output/
 steam_appid.txt
+
+# Local sprite/debug scratch PNGs (repo root)
+.axe*.png
+.face*.png
+.gun*.png
+.held.png
+.row.png
+.tmp-*.png

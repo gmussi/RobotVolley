@@ -1,7 +1,7 @@
 /**
  * Controls screen — interactive key rebinding for both players.
  *
- * Navigate the 2×5 grid (+ a reset button) with arrows/WASD or a gamepad
+ * Navigate the 2×4 grid (+ a reset button) with arrows/WASD or a gamepad
  * d-pad; confirm a row to capture the next keyboard key for that action.
  * During capture, gamepad-synthesized events (isTrusted === false) are ignored
  * so pressing a controller can't bind a menu key — rebinding is keyboard-only in
@@ -42,8 +42,7 @@ const ROWS = [
   { act: "left", label: "MOVE LEFT" },
   { act: "right", label: "MOVE RIGHT" },
   { act: "jump", label: "JUMP" },
-  { act: "serve", label: "SERVE", note: "hold to charge" },
-  { act: "attack", label: "ATTACK" },
+  { act: "attack", label: "ATTACK / SERVE", note: "hold to charge serve" },
 ];
 
 /** {onReset, col, row} — col is the player index (0/1), row indexes ROWS. */

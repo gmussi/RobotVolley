@@ -8,6 +8,8 @@
  *     after a rebind.
  *
  * Defaults match the original hardcoded scheme: P1 = WASD + F, P2 = arrows + `/`.
+ * Serve uses the attack key (hold to charge, release to launch) — no separate
+ * down/serve binding.
  */
 import { getJSON, setJSON } from "../platform/save.js";
 
@@ -18,13 +20,11 @@ export const ACTIONS = [
   { player: 0, act: "left", defaultCode: "KeyA", label: "Move Left" },
   { player: 0, act: "right", defaultCode: "KeyD", label: "Move Right" },
   { player: 0, act: "jump", defaultCode: "KeyW", label: "Jump" },
-  { player: 0, act: "serve", defaultCode: "KeyS", label: "Serve" },
-  { player: 0, act: "attack", defaultCode: "KeyF", label: "Attack" },
+  { player: 0, act: "attack", defaultCode: "KeyF", label: "Attack / Serve" },
   { player: 1, act: "left", defaultCode: "ArrowLeft", label: "Move Left" },
   { player: 1, act: "right", defaultCode: "ArrowRight", label: "Move Right" },
   { player: 1, act: "jump", defaultCode: "ArrowUp", label: "Jump" },
-  { player: 1, act: "serve", defaultCode: "ArrowDown", label: "Serve" },
-  { player: 1, act: "attack", defaultCode: "Slash", label: "Attack" },
+  { player: 1, act: "attack", defaultCode: "Slash", label: "Attack / Serve" },
 ];
 
 function keyOf(player, act) {

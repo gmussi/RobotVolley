@@ -27,6 +27,7 @@ import {
 } from "./neonUi.js";
 import { drawArenaEffects, drawProceduralArena } from "./stadiumDraw.js";
 import { colorblindMode } from "../data/accessibility.js";
+import { codeFor } from "../data/controls.js";
 
 let ctx;
 let renderRemainder = 0;
@@ -538,7 +539,10 @@ function drawBanner(vis = state) {
     }
     centerText(ctx, `${name} TO SERVE`,
       servingSide < 0 ? COLORS.p1 : COLORS.p2, 30, H * 0.32);
-    const key = gameMode === "online" ? "S" : (servingSide < 0 ? "S" : "↓");
+    const attackCode = codeFor(gameMode === "online" ? 0 : serverSeat, "attack");
+    const key = attackCode === "Slash" ? "/"
+      : attackCode?.startsWith("Key") ? attackCode.slice(3)
+      : attackCode || "ATK";
     const localServing = gameMode !== "online" || serverSeat === onlineLocalSeat;
     const servePrompt = serverIsCpu ? "serving…"
       : localServing

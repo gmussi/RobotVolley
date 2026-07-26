@@ -60,7 +60,7 @@ function readPad(pad) {
     down: down(BTN.DDOWN) || ly > DEADZONE,
     south: down(BTN.A), // jump / confirm
     east: down(BTN.B), // attack / back
-    west: down(BTN.X), // serve
+    west: down(BTN.X), // unused in gameplay (serve shares attack)
     start: down(BTN.START), // pause
   };
 }
@@ -127,7 +127,7 @@ export function pollGamepads(now) {
       edge(p, cur, pr, "left", codeFor(p, "left"));
       edge(p, cur, pr, "right", codeFor(p, "right"));
       edge(p, cur, pr, "south", codeFor(p, "jump"));
-      edge(p, cur, pr, "west", codeFor(p, "serve"));
+      // Attack doubles as serve (hold to charge on the serve screen).
       edge(p, cur, pr, "east", codeFor(p, "attack"));
       repeat[p] = null;
     }

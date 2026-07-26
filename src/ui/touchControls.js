@@ -45,8 +45,8 @@ function computeLayout() {
     stickCy: y,
     buttons: [
       { id: "jump", cx: W - pad - BTN_R * 3.2, cy: y, code: codeFor(0, "jump"), label: "↑" },
-      { id: "attack", cx: W - pad - BTN_R, cy: y - BTN_R * 1.4, code: codeFor(0, "attack"), label: "⚡" },
-      { id: "serve", cx: W - pad - BTN_R, cy: y + BTN_R * 0.6, code: codeFor(0, "serve"), label: "S" },
+      // Attack doubles as serve (hold to charge on the serve screen).
+      { id: "attack", cx: W - pad - BTN_R, cy: y, code: codeFor(0, "attack"), label: "⚡" },
     ],
   };
 }

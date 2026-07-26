@@ -150,7 +150,7 @@ export function showDisconnect(reason = "Opponent disconnected") {
 }
 
 export const LOTTERY_SPIN_DURATION = 3;
-export const LOTTERY_HOLD_DURATION = 1;
+export const LOTTERY_HOLD_DURATION = 2;
 export const LOTTERY_TOTAL_DURATION = LOTTERY_SPIN_DURATION + LOTTERY_HOLD_DURATION;
 
 // A lottery roll gives either an accessory or a weapon, drawn from that
@@ -570,7 +570,8 @@ export function awardPoint(scorer) {
 export function isServerKey(code, controlMap) {
   const ctrl = controlMap[code];
   const serverPlayer = servingSide < 0 ? 0 : 1;
-  return ctrl && ctrl.act === "serve" && ctrl.player === serverPlayer;
+  // Serve is the attack / weapon button (hold to charge, release to launch).
+  return ctrl && ctrl.act === "attack" && ctrl.player === serverPlayer;
 }
 
 function isLocalOnlineServer() {
@@ -582,7 +583,7 @@ function isLocalOnlineServer() {
 /** True when local online player uses P1 keybindings for serve. */
 function isOnlineServeKey(code, controlMap) {
   const ctrl = controlMap[code];
-  return ctrl && ctrl.act === "serve" && ctrl.player === 0;
+  return ctrl && ctrl.act === "attack" && ctrl.player === 0;
 }
 
 export function handleServeKeyDown(code, controlMap) {

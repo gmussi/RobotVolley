@@ -347,7 +347,7 @@ export function tickOnline(now, keys, dt = 0) {
     lastSentInput = input;
   }
 
-  const serveCode = codeFor(0, "serve");
+  const serveCode = codeFor(0, "attack");
   const down = keys.has(serveCode);
   const serverSeat = servingSide < 0 ? 0 : 1;
   if (serverSeat === onlineLocalSeat) {

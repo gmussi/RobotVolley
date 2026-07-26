@@ -80,7 +80,7 @@ irrelevant to reproduce here; what matters for M5 is the state below.
 4. ~~**Music/SFX licensing unverified**~~ **Verified (2026-07-26)** — match
    tracks sourced from Pixabay (MoodMode + petrushkasound, Content License).
    Menu/stinger/SFX are procedural/original. See `docs/MUSIC_LICENSES.md` and
-   in-game Credits. Root source MP3s remain in git as encoding masters.
+   in-game Credits. Source MP3s live in `src/assets/audio/sources/`.
 5. **No real developer/publisher name established** — the credits screen and
    any EULA/legal docs need a real name/entity for copyright lines. Ask the
    user rather than inventing one.
