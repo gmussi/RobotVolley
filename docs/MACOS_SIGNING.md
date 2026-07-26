@@ -118,7 +118,13 @@ Add **Secrets** (Settings → Secrets and variables → Actions):
 
 Export `.p12` from Keychain Access → Developer ID Application → Export.
 
-The macOS CI job writes `APPLE_API_KEY_P8` to a temp file and sets `APPLE_API_KEY` to that path before `npm run electron:build`.
+**Do not** upload the raw `.p12` to GitHub — encode it first:
+
+```bash
+base64 -i ~/path/to/DeveloperID.p12 | gh secret set CSC_LINK --repo gmussi/RobotVolley
+```
+
+The macOS CI job decodes that secret to a temp file before `npm run electron:build`.
 
 ## 6. Export for SteamPipe
 

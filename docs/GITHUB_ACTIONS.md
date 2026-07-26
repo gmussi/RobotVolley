@@ -26,8 +26,20 @@ GitHub Settings → Secrets and variables → Actions — never commit them.
 
 ### CSC secrets
 
-Configured 2026-07-26. CI macOS job should produce signed + notarized artifacts when
-`desktop-build.yml` runs on `macos-latest`.
+Configured 2026-07-26. **Important:** `CSC_LINK` must be **base64 text**, not the raw
+`.p12` binary. GitHub rejects non–UTF-8 secrets and the workflow fails at startup with:
+
+> The secret CSC_LINK referenced by this workflow is not properly UTF-8 encoded
+
+Re-set from your Mac:
+
+```bash
+base64 -i ~/path/to/DeveloperID.p12 | gh secret set CSC_LINK --repo gmussi/RobotVolley
+gh secret set CSC_KEY_PASSWORD --repo gmussi/RobotVolley
+```
+
+CI macOS job produces signed + notarized artifacts when `desktop-build.yml` runs on
+`macos-latest`.
 
 ### Apple API key notes
 
