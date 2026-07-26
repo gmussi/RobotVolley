@@ -132,13 +132,12 @@ const SK = {
   // reached 0.91 of the box and swallowed all but ~10px of leg. Head and arms
   // shift up with it so the neck and shoulder joints stay closed.
   torso: { x: 0.50,  y: 0.585, mw: 1.24, mh: 0.54,  anchor: "center" },
-  // y places the arm's own shoulder ball (at 0.268 of the sprite) on the torso's
-  // shoulder joint (0.489 of the robot box). x sits them beside the body rather
-  // than behind it — the torso renders nearly the full box width, so a socket at
-  // the painted joint (0.112) buries the whole arm; the procedural robot this
-  // replaced also hung its arms 4px outside the box (ARM_OVERHANG).
-  armL:  { x: 0.045, y: 0.356, mw: 0.30, mh: 0.290, anchor: "top" },
-  armR:  { x: 0.955, y: 0.356, mw: 0.30, mh: 0.290, anchor: "top" },
+  // y seats the arm's top socket nub (~0.06 of the sprite) in the torso's
+  // shoulder ball (~0.434 of the robot box). x hangs them beside the body —
+  // the torso paints nearly full-box width, so a socket at the painted joint
+  // (~0.097) buries the limb; nudge x inward if the nub still sits outside.
+  armL:  { x: 0.045, y: 0.413, mw: 0.36, mh: 0.348, anchor: "top" },
+  armR:  { x: 0.955, y: 0.413, mw: 0.36, mh: 0.348, anchor: "top" },
   // Legs are anchored at the SOLE and fitted by width. Variants differ in height
   // (short foot / tall spring / compact rocket), so a height fit would thin the
   // taller ones; fitting by width keeps limb thickness consistent and lets extra
