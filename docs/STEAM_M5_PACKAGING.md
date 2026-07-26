@@ -60,8 +60,9 @@ irrelevant to reproduce here; what matters for M5 is the state below.
   (`.github/workflows/desktop-build.yml`).
 - **CI desktop matrix** — matrixes `windows-latest` + `macos-latest`, uploads
   artifacts. macOS job runs smoke harnesses. TURN + matchmaking env vars passed
-  into build. **CI macOS builds are unsigned until GitHub signing secrets are
-  added** (see Step 2 below).
+  → uploads artifacts. macOS job runs smoke harnesses. TURN + matchmaking env vars passed
+  into build. **Apple notarization secrets on GitHub; CSC (code-sign `.p12`) still
+  pending** — see `docs/GITHUB_ACTIONS.md`.
 - **SteamPipe VDF templates** — `steam/build/` (`*_TEMPLATE.vdf` + `README.md`).
 - **macOS signing + notarization (local)** — verified 2026-07-26:
   - Developer ID Application cert in Keychain
@@ -83,19 +84,17 @@ irrelevant to reproduce here; what matters for M5 is the state below.
 
 ## M5 remaining work
 
-### Step 2 — macOS signing in CI (optional but recommended)
+### Step 2 — macOS signing in CI
 
-Local signed + notarized builds work. To get **signed macOS artifacts from CI**:
+**GitHub secrets configured (2026-07-26):** `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`,
+`APPLE_API_ISSUER` — see [`docs/GITHUB_ACTIONS.md`](./GITHUB_ACTIONS.md).
 
-1. Export Developer ID cert as `.p12` from Keychain Access.
-2. Add GitHub Actions **secrets**:
-   - `APPLE_API_KEY_P8` — contents of the Team `.p8` file
-   - `APPLE_API_KEY_ID` — must match filename (e.g. `4ZJVDMV9UZ`)
-   - `APPLE_API_ISSUER` — Issuer UUID from App Store Connect
-   - `CSC_LINK` — base64 `.p12`
-   - `CSC_KEY_PASSWORD` — `.p12` export password
+**Still manual:** `CSC_LINK` + `CSC_KEY_PASSWORD` (export Developer ID `.p12` from
+Keychain Access — automated export was blocked by macOS Keychain prompt). Until
+those are set, CI macOS artifacts are unsigned; local signed+notarized builds work
+via Keychain + `.env`.
 
-Workflow already writes the API key to a temp file before `electron:build`.
+Local setup: [`docs/MACOS_SIGNING.md`](./MACOS_SIGNING.md).
 
 ### Step 3 — SteamPipe upload (blocked on Steam App ID)
 
@@ -157,6 +156,6 @@ Remember to `rm -rf release/` after manual verification — gitignored.
 | Steam achievements/App ID | `electron/steam.cjs`, `src/platform/achievements.js` |
 | Steam Input | `steam/controller_config/game_actions_480.vdf` |
 | Store copy | `docs/STORE_COPY.md`, `docs/ART_BIBLE.md` |
-| CI | `.github/workflows/desktop-build.yml` |
+| CI | `.github/workflows/desktop-build.yml`, [`GITHUB_ACTIONS.md`](./GITHUB_ACTIONS.md) |
 | SteamPipe VDFs | `steam/build/` |
 | Credits / licensing | `src/data/credits.js`, `docs/MUSIC_LICENSES.md` |
