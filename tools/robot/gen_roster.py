@@ -103,6 +103,16 @@ PARTS = [
      "sitting on the very top of the rocket. IMPORTANT: there is NO sneaker, NO boot, "
      "NO separate thigh/shin armor — the short rocket itself is the whole leg. Must "
      "read clearly as a rocket at a glance. Front view. Just the one rocket-leg."),
+    ("leg", "tank", "16:9",
+     "a WIDE UNIFIED TANK-TREAD CHASSIS only — the entire bottom of the robot "
+     "becomes one continuous tank hull, NOT two separate legs or wheels. Front "
+     "view, very WIDE and SHORT (much wider than tall). A single armored hull "
+     "plate on top where the torso mounts, side skirts, three small road wheels "
+     "visible INSIDE the track loop, and one CONTINUOUS toothed rubber tread "
+     "belt wrapping the bottom with chunky rectangular tread blocks/teeth along "
+     "the ground contact edge. Bright CRIMSON-RED (#ff5a5f) armor, dark grey "
+     "tread teeth. IMPORTANT: this is ONE tank base/chassis, not a single leg, "
+     "not a pair of wheels — a full-width tank undercarriage."),
     # ---- WEAPONS (held props near the front hand) ----
     ("weapon", "axe", "1:1",
      "a small cartoon hand-AXE / hatchet game-item PROP only: short brown handle and a "
@@ -218,7 +228,7 @@ def catalog_sheet(cat, out_path):
     rows = [
         ("HEADS", "head", ["standard", "magnet", "drill"]),
         ("TORSOS", "torso", ["standard", "heavy", "light", "lowCoG"]),
-        ("LEGS", "leg", ["normal", "power", "rocket"]),
+        ("LEGS", "leg", ["normal", "power", "rocket", "tank"]),
         ("ARM", "arm", ["hand"]),
         ("WEAPONS", "weapon", ["axe", "ninjaStar", "portalGun"]),
     ]

@@ -6,6 +6,7 @@ import { ball, shadeColor, updateRobotParts } from "../engine/game.js";
 import { HEAD_TYPES } from "../data/heads.js";
 import { COLORS, GLOW, PART_ACCENTS } from "../data/theme.js";
 import { drawSpriteRobot, drawSpritePartPreview, spritesReady } from "./spriteRobot.js";
+import { drawTankBody, tankBodyRect, tankRoll } from "./tankChassis.js";
 
 /** Sprite renderer toggle. Default on; disable at runtime with
  *  localStorage.setItem("rv_spriteRobots","0") then reload. */
@@ -204,7 +205,10 @@ function partViewBounds(r, slotKey) {
     return b;
   }
   if (slotKey === "torsoType") return { ...p.torso };
-  if (slotKey === "legType") return unionRects(p.legL, p.legR, p.footL, p.footR);
+  if (slotKey === "legType") {
+    if (r.legType === "tank") return tankBodyRect(r);
+    return unionRects(p.legL, p.legR, p.footL, p.footR);
+  }
   if (slotKey === "armType" || slotKey === "arms" || slotKey === "weaponType") {
     const b = unionRects(p.armL, p.armR);
     b.y -= 18; b.h += 18; // room for the weapon emblem above the hands
@@ -323,6 +327,11 @@ function drawRobotLegs(r, p, col) {
   const legCol = col.legs;
   const dark = shadeColor(legCol, -30);
   const light = shadeColor(legCol, 18);
+
+  if (r.legType === "tank") {
+    drawTankBody(ctx, r, legCol, teamColor(r), tankRoll(r));
+    return;
+  }
 
   if (r.legType === "power") {
     // Strong stretch/contract pulse only while rising; hip-fixed so sole extends.
@@ -463,7 +472,7 @@ function drawRobot(r, floorY) {
 
   drawRobotLegs(r, p, col);
 
-  drawRobotTorso(r, p, col, cx);
+  if (r.legType !== "tank") drawRobotTorso(r, p, col, cx);
 
   drawRobotArms(r, p, col);
 

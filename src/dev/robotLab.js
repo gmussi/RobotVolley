@@ -70,7 +70,7 @@ function frame() {
 
   // Row 2: legs (the torso is fixed to the standard chassis)
   x = 90;
-  for (const l of ["normal", "power", "rocket"]) {
+  for (const l of ["normal", "power", "rocket", "tank"]) {
     drawSpriteRobot(ctx, bot(x, floorB - BOX.h, { legType: l, eyeBlink: blink }), floorB);
     label("legs " + l, x, floorB + 26);
     x += 150;

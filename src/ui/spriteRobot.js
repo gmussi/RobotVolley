@@ -8,6 +8,8 @@
  * cyan team color. A dedicated blue art set is the higher-quality follow-up.
  */
 import { GLOW } from "../data/theme.js";
+import { drawTankBody, tankBodyRect, tankRoll, tankRollState } from "./tankChassis.js";
+import ROLL from "../assets/robot/anim/tank-roll.json";
 
 // Two baked colorways — P1 crimson and P2 blue (tools/robot/gen_p2_set.py).
 // Baked rather than tinted at runtime: identical geometry across teams, exact
@@ -83,6 +85,23 @@ for (const [path, url] of Object.entries(spinUrls)) {
   const img = new Image();
   img.src = url;
   SPIN[m[1]][m[2]] = img;
+}
+
+// Rolling tread strips for the tank body: the pads travel around the belt loop
+// (see tools/robot/gen_tank_roll.py). The road wheels are not baked in — they
+// turn many pad pitches per revolution, so they could not share this loop, and
+// drawTankWheels spins them over the top instead.
+const rollUrls = import.meta.glob("../assets/robot/anim/*/leg-tank-roll.webp", {
+  eager: true,
+  import: "default",
+});
+const ROLL_ART = {};
+for (const [path, url] of Object.entries(rollUrls)) {
+  const m = path.match(/anim\/(p1|p2)\/leg-tank-roll\.webp$/);
+  if (!m) continue;
+  const img = new Image();
+  img.src = url;
+  ROLL_ART[m[1]] = img;
 }
 
 const SPIN_FRAMES = 8;
@@ -380,18 +399,87 @@ export function drawSpritePartPreview(ctx, slotKey, typeId, cx, cy, maxSize, sid
  */
 const LIMB_FLIP = { armL: false, armR: true, legL: true, legR: false };
 
+/**
+ * Spin the road wheels in place over the baked body.
+ *
+ * The 3/4 view foreshortens each wheel into an ellipse, so a plain rotation
+ * would sweep the art outside its own rim. Squashing to a circle, turning, and
+ * unsquashing is the same as rotating the wheel on its real axle: the matrix
+ * below is that sandwich, and it leaves the ellipse exactly where it was.
+ */
+function drawTankWheels(ctx, src, sx0, box, angle) {
+  const iw = src.naturalWidth / ROLL.frames;
+  const ih = src.naturalHeight;
+  for (const wheel of ROLL.wheels) {
+    const cx = box.x + wheel.x * box.w;
+    const cy = box.y + wheel.y * box.h;
+    const rx = wheel.rx * box.w;
+    const ry = wheel.ry * box.h;
+    const k = ry / rx;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.translate(cx, cy);
+    ctx.transform(cos, k * sin, -sin / k, cos, 0, 0);
+    ctx.drawImage(src,
+      sx0 + (wheel.x - wheel.rx) * iw, (wheel.y - wheel.ry) * ih,
+      wheel.rx * 2 * iw, wheel.ry * 2 * ih,
+      -rx, -ry, rx * 2, ry * 2);
+    ctx.restore();
+  }
+}
+
+function drawTankBodySprite(ctx, r, side, mirror) {
+  const team = side > 0 ? "p2" : "p1";
+  const roll = ROLL_ART[team];
+  const still = pick("leg", "tank", side);
+  const src = ok(roll) ? roll : still;
+  if (!ok(src)) {
+    const legCol = side > 0 ? "#29b6f6" : "#ff5a5f";
+    drawTankBody(ctx, r, legCol, side > 0 ? GLOW.p2 : GLOW.p1, tankRoll(r));
+    return;
+  }
+
+  const frameW = ok(roll) ? src.naturalWidth / ROLL.frames : src.naturalWidth;
+  const box = tankBodyRect(r, frameW / src.naturalHeight);
+  const dist = tankRoll(r);
+  const { frame, spin } = tankRollState(dist, box, ROLL);
+
+  ctx.save();
+  if (mirror) {
+    // Same pivot as drawPiece: reflect about the robot's centre line so the
+    // hull turns with the head instead of sliding sideways. The wheels ride
+    // inside this transform, so their positions mirror for free.
+    const cx = r.x + r.w / 2;
+    ctx.translate(cx, 0);
+    ctx.scale(-1, 1);
+    ctx.translate(-cx, 0);
+  }
+  const sx0 = ok(roll) ? frame * frameW : 0;
+  ctx.drawImage(src, sx0, 0, frameW, src.naturalHeight, box.x, box.y, box.w, box.h);
+  if (ok(roll) && ROLL.wheels.length) {
+    // Mirroring reverses the apparent spin, so flip the angle back.
+    drawTankWheels(ctx, src, sx0, box, mirror ? -spin : spin);
+  }
+  ctx.restore();
+}
+
 export function drawSpriteRobot(ctx, r, floorY) {
   const bodyFlip = !(r.facing < 0); // mirror the left-facing art to face right
   const side = r.side;
   // Thrown props leave the hand (projectile / portal); orb stay-in-hand attacks
   // keep their emblem. Match robotDraw's propGone so sprites don't double up.
   const propGone = r.attack && (r.attack.kind === "projectile" || r.attack.kind === "portal");
+  const isTank = r.legType === "tank";
   const srcs = {
-    legL: pick("leg", r.legType, side),
-    legR: pick("leg", r.legType, side),
+    legL: isTank ? null : pick("leg", r.legType, side),
+    legR: isTank ? null : pick("leg", r.legType, side),
     armL: pick("arm", "hand", side),
     armR: pick("arm", "hand", side),
-    torso: pick("torso", r.torsoType, side),
+    torso: isTank ? null : pick("torso", r.torsoType, side),
     head: pick("head", r.headType, side),
     weapon: !propGone && r.armType && r.armType !== "hand"
       ? pick("weapon", r.armType, side) : null,
@@ -409,7 +497,9 @@ export function drawSpriteRobot(ctx, r, floorY) {
   drawTeamGlow(ctx, r);
 
   const team = side > 0 ? "p2" : "p1";
+  if (isTank) drawTankBodySprite(ctx, r, side, bodyFlip);
   for (const slot of Z) {
+    if (isTank && (slot === "legL" || slot === "legR" || slot === "torso")) continue;
     let src = srcs[slot];
     if (!src) continue;
     const base = slot.replace(/[LR]$/, "");
@@ -454,6 +544,6 @@ export function drawSpriteRobot(ctx, r, floorY) {
   }
 
   drawRocketFlames(ctx, r);
-  drawCorePulse(ctx, r);
+  if (!isTank) drawCorePulse(ctx, r);
   ctx.restore();
 }

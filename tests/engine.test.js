@@ -1,11 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import {
   W, H, FLOOR_Y, WIN_SCORE, BALL_R, NET, ROBOT_W, BALL_MAX_SPEED,
+  MOVE_SPEED, JUMP_V, TANK_JUMP_V, TANK_MOVE_SPEED_MUL, POWER_JUMP_V,
 } from "../src/data/constants.js";
 import {
   ball, score, makeRobot, updateRobotParts, predictBallX,
   serveBall, awardPoint, resetPositions, resetRobots, robots,
-  collideBallRobot, getHeadSpec, getTorsoSpec, getArmSpec, applyItems,
+  collideBallRobot, getHeadSpec, getTorsoSpec, getLegSpec, getArmSpec, applyItems,
   updateBall, updateRobot, updateAttack, collideBallAttack, PHYSICS_STEP, state,
   planPartLottery, commitPartLottery, prepareServe, startGame, lotteryResults, lotteryTick,
   tickServe, LOTTERY_TOTAL_DURATION,
@@ -14,6 +15,7 @@ import {
 } from "../src/engine/game.js";
 import { HEAD_TYPES } from "../src/data/heads.js";
 import { TORSO_TYPES } from "../src/data/torsos.js";
+import { LEG_TYPES } from "../src/data/legs.js";
 import { ARM_TYPES } from "../src/data/arms.js";
 import {
   ACCESSORY_IDS, WEAPON_IDS, DEFAULT_WEAPON, WEAPONS, itemPreviewSlot,
@@ -67,6 +69,19 @@ describe("robots", () => {
 
   it("exposes exactly one torso type", () => {
     expect(Object.keys(TORSO_TYPES)).toEqual(["standard"]);
+  });
+
+  it("getLegSpec returns tank tread mobility", () => {
+    const r = makeRobot(-1);
+    r.legType = "tank";
+    expect(getLegSpec(r).jumpV).toBe(TANK_JUMP_V);
+    expect(getLegSpec(r).moveSpeedMul).toBe(TANK_MOVE_SPEED_MUL);
+  });
+
+  it("getLegSpec falls back to normal for unknown type", () => {
+    const r = makeRobot(-1);
+    r.legType = "unknown";
+    expect(getLegSpec(r)).toBe(LEG_TYPES.normal);
   });
 });
 
@@ -292,6 +307,23 @@ describe("part lottery", () => {
     expect(r.headType).toBe("standard");
   });
 
+  it("tank claims the torso as well as the legs, and gives both back", () => {
+    const r = robots[0];
+    r.accessory = "tank";
+    r.weapon = DEFAULT_WEAPON;
+    applyItems(r);
+    expect(r.legType).toBe("tank");
+    expect(r.torsoType).toBe("tank");
+    expect(r.headType).toBe("standard");
+    // An unknown torso keeps standard mobility — the tank's stats live on the legs.
+    expect(getTorsoSpec(r)).toBe(TORSO_TYPES.standard);
+
+    r.accessory = "drill";
+    applyItems(r);
+    expect(r.torsoType).toBe("standard");
+    expect(r.legType).toBe("normal");
+  });
+
   it("keeps the body standard when only a weapon is carried", () => {
     const r = robots[0];
     r.accessory = null;
@@ -309,6 +341,70 @@ describe("part lottery", () => {
     applyItems(r);
     expect(r.headType).toBe("drill");
     expect(r.armType).toBe("ninjaStar");
+  });
+
+  it("includes tank treads in the accessory pool", () => {
+    expect(ACCESSORY_IDS).toContain("tank");
+  });
+
+  it("tank tread accessory replaces legs and boosts walk speed", () => {
+    const normal = makeRobot(-1);
+    const tank = makeRobot(-1);
+    tank.accessory = "tank";
+    applyItems(tank);
+    expect(tank.legType).toBe("tank");
+
+    for (const r of [normal, tank]) {
+      r.x = 50;
+      r.onGround = true;
+      r.moveDir = 1;
+      r.vx = 0;
+    }
+    for (let i = 0; i < 8; i++) {
+      updateRobot(normal, 1 / 60);
+      updateRobot(tank, 1 / 60);
+    }
+    expect(tank.vx).toBeGreaterThan(normal.vx);
+    expect(tank.vx).toBeCloseTo(MOVE_SPEED * TANK_MOVE_SPEED_MUL, -1);
+  });
+
+  it("tank treads jump lower than normal legs", () => {
+    const dt = 1 / 120;
+    const normal = makeRobot(-1);
+    normal.onGround = true;
+    normal.jumpHeld = true;
+    normal.jumpPrevHeld = false;
+    updateRobot(normal, dt);
+
+    const tank = makeRobot(-1);
+    tank.legType = "tank";
+    tank.onGround = true;
+    tank.jumpHeld = true;
+    tank.jumpPrevHeld = false;
+    updateRobot(tank, dt);
+
+    expect(tank.vy).toBeGreaterThan(normal.vy);
+    expect(TANK_JUMP_V).toBeLessThan(JUMP_V);
+  });
+
+  it("power legs still jump higher than tank treads", () => {
+    const dt = 1 / 120;
+    const power = makeRobot(-1);
+    power.legType = "power";
+    power.onGround = true;
+    power.jumpHeld = true;
+    power.jumpPrevHeld = false;
+    updateRobot(power, dt);
+
+    const tank = makeRobot(-1);
+    tank.legType = "tank";
+    tank.onGround = true;
+    tank.jumpHeld = true;
+    tank.jumpPrevHeld = false;
+    updateRobot(tank, dt);
+
+    expect(power.vy).toBeLessThan(tank.vy);
+    expect(POWER_JUMP_V).toBeGreaterThan(TANK_JUMP_V);
   });
 
   it("starts every robot carrying the starter weapon", () => {

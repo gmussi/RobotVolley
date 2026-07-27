@@ -48,6 +48,8 @@ export const COURT_GAP = 2;
 export const HEAD_TOP_OFFSET = 2;
 
 export const POWER_JUMP_V = 1250;
+export const TANK_JUMP_V = 360;
+export const TANK_MOVE_SPEED_MUL = 1.35;
 export const ROCKET_FLAP_V = 620;
 export const ROCKET_MAX_FLAPS = 3;
 

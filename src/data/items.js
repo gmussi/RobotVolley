@@ -45,7 +45,24 @@ export const ACCESSORIES = {
   magnet: { label: "Magnet Head", slot: "head", description: HEAD_TYPES.magnet.description },
   power: { label: "Power Legs", slot: "legs", description: LEG_TYPES.power.description },
   rocket: { label: "Rocket Legs", slot: "legs", description: LEG_TYPES.rocket.description },
+  // The tank is one machine, so it takes the torso as well as the legs. The
+  // legs slot leads because that is where its art and its stats live.
+  tank: {
+    label: "Tank Body",
+    slots: ["legs", "torso"],
+    description: LEG_TYPES.tank.description,
+  },
 };
+
+/**
+ * Body slots an accessory occupies. Most replace a single part; the tank
+ * replaces the whole lower body, so entries may declare `slots` instead.
+ */
+export function accessorySlots(id) {
+  const entry = ACCESSORIES[id];
+  if (!entry) return [];
+  return entry.slots ?? [entry.slot];
+}
 
 export const WEAPONS = {
   hand: { label: "Energy Orb", description: ARM_TYPES.hand.description },
@@ -67,7 +84,7 @@ export const WEAPON_IDS = Object.keys(WEAPONS);
  */
 export function itemPreviewSlot(kind, id) {
   if (kind === "weapon") return "weaponType";
-  return SLOT_FIELD[ACCESSORIES[id]?.slot] ?? "headType";
+  return SLOT_FIELD[accessorySlots(id)[0]] ?? "headType";
 }
 
 export function itemLabel(kind, id) {

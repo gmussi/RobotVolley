@@ -9,14 +9,15 @@ import {
   TOP_HEAD_MIN_BOUNCE_VY, TOP_HEAD_MAX_UP_FRAC_GROUND, TOP_HEAD_MAX_UP_FRAC_AIR,
   HIT_SPEED_GAIN, BALL_MAX_SPEED, NET, ROBOT_W, ROBOT_H, MOVE_SPEED,
   MOVE_ACCEL, JUMP_V, AIR_ACCEL, ARM_OVERHANG, COURT_GAP, HEAD_TOP_OFFSET,
-  POWER_JUMP_V, ROCKET_FLAP_V, ROCKET_MAX_FLAPS, BALL_R, BALL_SPIN_VISUAL_RATE, NET_BOUNCE,
+  ROCKET_FLAP_V, ROCKET_MAX_FLAPS, BALL_R, BALL_SPIN_VISUAL_RATE, NET_BOUNCE,
   PHYSICS_STEP, DEFAULT_COLORS,
 } from "../data/constants.js";
 import { HEAD_TYPES } from "../data/heads.js";
 import { TORSO_TYPES } from "../data/torsos.js";
+import { LEG_TYPES } from "../data/legs.js";
 import { ARM_TYPES } from "../data/arms.js";
 import {
-  ACCESSORIES, ACCESSORY_IDS, WEAPON_IDS,
+  ACCESSORY_IDS, WEAPON_IDS, accessorySlots,
   SLOT_FIELD, STANDARD_PART, BARE_HANDS, DEFAULT_WEAPON, itemLabel, itemDescription,
 } from "../data/items.js";
 import { codeFor } from "../data/controls.js";
@@ -168,13 +169,13 @@ function pickRandomOther(ids, current) {
 
 /**
  * Project the carried items onto the part fields the physics and renderers
- * read. Only the accessory's own slot is non-standard — that is what makes an
+ * read. Only the accessory's own slots are non-standard — that is what makes an
  * accessory in a new slot revert the previous one.
  */
 export function applyItems(r) {
-  const slot = ACCESSORIES[r.accessory]?.slot;
+  const slots = accessorySlots(r.accessory);
   for (const [slotName, field] of Object.entries(SLOT_FIELD)) {
-    r[field] = slotName === slot ? r.accessory : STANDARD_PART[slotName];
+    r[field] = slots.includes(slotName) ? r.accessory : STANDARD_PART[slotName];
   }
   // Weapons drive the attack only; the arms keep their standard art.
   r.armType = r.weapon ?? BARE_HANDS;
@@ -304,6 +305,10 @@ export function getHeadSpec(r) {
 
 export function getTorsoSpec(r) {
   return TORSO_TYPES[r.torsoType] ?? TORSO_TYPES.standard;
+}
+
+export function getLegSpec(r) {
+  return LEG_TYPES[r.legType] ?? LEG_TYPES.normal;
 }
 
 export function getArmSpec(r) {
@@ -633,9 +638,10 @@ export function applyRemoteServe(action) {
 // ---- Robot physics ----
 export function updateRobot(r, dt) {
   const torso = getTorsoSpec(r);
+  const legs = getLegSpec(r);
   const accelMul = r.onGround ? torso.groundAccelMul : torso.airAccelMul;
   const accel = (r.onGround ? MOVE_ACCEL : AIR_ACCEL) * accelMul;
-  const target = r.moveDir * MOVE_SPEED * torso.moveSpeedMul;
+  const target = r.moveDir * MOVE_SPEED * torso.moveSpeedMul * legs.moveSpeedMul;
   if (r.vx < target) r.vx = Math.min(target, r.vx + accel * dt);
   else if (r.vx > target) r.vx = Math.max(target, r.vx - accel * dt);
   if (r.moveDir !== 0) r.facing = r.moveDir;
@@ -653,7 +659,7 @@ export function updateRobot(r, dt) {
       emitAudio("rocket_flap");
     }
   } else if (r.jumpHeld && r.onGround) {
-    const baseJump = r.legType === "power" ? POWER_JUMP_V : JUMP_V;
+    const baseJump = legs.jumpV ?? JUMP_V;
     r.vy = -baseJump * torso.jumpMul;
     r.onGround = false;
     r.squash = 0;

@@ -88,6 +88,7 @@ Before or during a match, customize each robot:
 | **Robot legs** | Normal jump — blocky legs with knee joint |
 | **Power legs** | Higher jump — thick hydraulic legs with gold springs and wide boots |
 | **Rocket legs** | Up to 3 flaps per ground touch — slim struts with thruster nozzles and flame bursts |
+| **Tank body** | Faster walk, lower jump — head mounts on a full tank hull with treads (replaces torso and legs) |
 | **Standard torso** | Balanced mobility — default chassis |
 | **Heavy torso** | Tanky on ground, sluggish in air — layered armor plates |
 | **Light torso** | Floaty and agile in air, slippery on ground — open metal beam frame |
