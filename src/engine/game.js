@@ -21,6 +21,7 @@ import {
   SLOT_FIELD, STANDARD_PART, BARE_HANDS, DEFAULT_WEAPON, itemLabel, itemDescription,
 } from "../data/items.js";
 import { codeFor } from "../data/controls.js";
+import { defaultLoadout, sanitizeCosmetics } from "../data/cosmetics.js";
 import { setMatchSeed, clearMatchSeed, matchRandom, matchRandomInt } from "./rng.js";
 
 export { W, H, FLOOR_Y, PHYSICS_STEP };
@@ -238,18 +239,61 @@ function enterServePhase() {
   setupServePhase();
 }
 
-export const menuOptions = [
-  { mode: "1p", label: "SINGLE PLAYER", disabled: false, x: 0, y: 0, w: 0, h: 0 },
-  { mode: "2p", label: "TWO PLAYERS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
-  { mode: null, action: "online", label: "ONLINE MATCH", disabled: false, x: 0, y: 0, w: 0, h: 0 },
-  { mode: null, action: "controls", label: "CONTROLS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
-  { mode: null, action: "settings", label: "SETTINGS", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+/**
+ * The landing screen (drawModeSelect) offers ONLINE PLAY vs OFFLINE PLAY;
+ * picking one fills `menuOptions` with the matching category below. Both
+ * categories carry CONTROLS and SETTINGS — those aren't specific to either.
+ */
+const ONLINE_MENU_ITEMS = [
+  { mode: null, action: "online", label: "ONLINE MATCH" },
+  { mode: null, action: "profile", label: "MY PROFILE" },
+  { mode: null, action: "leaderboard", label: "LEADERBOARD" },
+  { mode: null, action: "controls", label: "CONTROLS" },
+  { mode: null, action: "settings", label: "SETTINGS" },
+];
+const OFFLINE_MENU_ITEMS = [
+  { mode: "1p", label: "SINGLE PLAYER" },
+  { mode: "2p", label: "TWO PLAYERS" },
+  { mode: null, action: "controls", label: "CONTROLS" },
+  { mode: null, action: "settings", label: "SETTINGS" },
 ];
 
 /** Hit box for the title-menu footer's CREDITS link; filled in by render.js each draw. */
 export const creditsLink = { x: 0, y: 0, w: 0, h: 0 };
 
-// Single Player is highlighted by default.
+/** Filled in by setMenuMode(); never literally empty once the mode screen has run once. */
+export const menuOptions = [];
+/** "online" | "offline" — which category menuOptions currently holds. */
+export let menuMode = "offline";
+let currentMenuItems = OFFLINE_MENU_ITEMS;
+/** Desktop-only QUIT entry — set once by main.js at boot via setQuitEnabled(). */
+let quitEnabled = false;
+
+function buildMenuOptions(items) {
+  menuOptions.length = 0;
+  for (const item of items) {
+    menuOptions.push({ disabled: false, x: 0, y: 0, w: 0, h: 0, ...item });
+  }
+  if (quitEnabled) {
+    menuOptions.push({ mode: null, action: "quit", label: "QUIT", disabled: false, x: 0, y: 0, w: 0, h: 0 });
+  }
+}
+
+/** Called once at boot — QUIT only makes sense where there's a window to close. */
+export function setQuitEnabled(enabled) {
+  quitEnabled = enabled;
+  buildMenuOptions(currentMenuItems);
+}
+
+export function setMenuMode(mode) {
+  menuMode = mode === "online" ? "online" : "offline";
+  currentMenuItems = menuMode === "online" ? ONLINE_MENU_ITEMS : OFFLINE_MENU_ITEMS;
+  buildMenuOptions(currentMenuItems);
+  menuIndex = 0;
+}
+
+buildMenuOptions(currentMenuItems);
+
 export let menuIndex = 0;
 
 export function setMenuIndex(i) {
@@ -259,6 +303,42 @@ export function setMenuIndex(i) {
 export function menuMove(delta) {
   const n = menuOptions.length;
   menuIndex = (menuIndex + delta + n) % n;
+}
+
+// ---- Mode select (ONLINE PLAY / OFFLINE PLAY) — the true landing screen ----
+
+export const modeOptions = [
+  { target: "online", label: "ONLINE PLAY", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+  { target: "offline", label: "OFFLINE PLAY", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+];
+export let modeIndex = 0;
+
+export function setModeIndex(i) {
+  if (i >= 0 && i < modeOptions.length) modeIndex = i;
+}
+
+export function modeMove(delta) {
+  const n = modeOptions.length;
+  modeIndex = (modeIndex + delta + n) % n;
+}
+
+/** @returns {boolean} true if a category was actually entered. */
+export function modeSelectChoose() {
+  const o = modeOptions[modeIndex];
+  if (!o || o.disabled) return false;
+  setMenuMode(o.target);
+  state = "menu";
+  return true;
+}
+
+/** Leave the title/attract screen and open the ONLINE/OFFLINE choice. */
+export function enterModeSelect() {
+  state = "modeSelect";
+}
+
+/** Step back from the online/offline menu to the mode-select screen. */
+export function backToModeSelect() {
+  state = "modeSelect";
 }
 
 // Returns true if an actual game mode was started.
@@ -276,6 +356,16 @@ export function menuSelect() {
     state = "settings";
     return false;
   }
+  if (o.action === "profile") {
+    submenuReturnState = "menu";
+    state = "profile";
+    return false;
+  }
+  if (o.action === "leaderboard") {
+    submenuReturnState = "menu";
+    state = "leaderboard";
+    return false;
+  }
   if (o.action === "customize" || o.action === "online") {
     return false;
   }
@@ -284,9 +374,9 @@ export function menuSelect() {
   return true;
 }
 
-/** Credits is reached via a footer link on the title menu, not a list entry. */
+/** Credits is reached via a footer link on the mode-select screen, not a list entry. */
 export function enterCredits() {
-  submenuReturnState = "menu";
+  submenuReturnState = "modeSelect";
   state = "credits";
 }
 
@@ -373,6 +463,10 @@ export function makeRobot(side) {
     attackPrevHeld: false,
     attack: null,
     colors: { ...(side < 0 ? DEFAULT_COLORS.p1 : DEFAULT_COLORS.p2) },
+    // Purely visual, and separate from the items above on purpose: cosmetics
+    // never touch physics, so the lottery can reroll accessories all match
+    // without disturbing what the player chose to look like.
+    cosmetics: defaultLoadout(),
     parts: {},
   };
   updateRobotParts(r);
@@ -472,16 +566,11 @@ export function toMenu() {
   startAttract();
 }
 
-/** Leave the title/attract screen and open the main menu. */
-export function enterMenu() {
-  state = "menu";
-}
-
 // ---- Pause ----
 const PAUSABLE_STATES = new Set(["serve", "play", "lottery", "point"]);
 
 export let pauseFromState = null;
-/** @type {"menu"|"pause"} */
+/** @type {"menu"|"modeSelect"|"pause"} */
 export let submenuReturnState = "menu";
 
 export const pauseOptions = [
@@ -547,6 +636,7 @@ export function leaveSubmenu() {
   const back = submenuReturnState;
   submenuReturnState = "menu";
   if (back === "pause" && pauseFromState) state = "pause";
+  else if (back === "modeSelect") state = "modeSelect";
   else state = "menu";
 }
 
@@ -1304,6 +1394,7 @@ export function getRobotLoadout(seat) {
     accessory: r.accessory,
     weapon: r.weapon,
     colors: { ...r.colors },
+    cosmetics: { ...r.cosmetics },
   };
 }
 
@@ -1314,7 +1405,16 @@ export function applyRobotLoadout(seat, loadout) {
   if ("accessory" in loadout) r.accessory = loadout.accessory ?? null;
   if ("weapon" in loadout) r.weapon = loadout.weapon ?? DEFAULT_WEAPON;
   if (loadout.colors) r.colors = { ...r.colors, ...loadout.colors };
+  // Sanitized because this also runs on the *remote* peer's loadout: without
+  // it a modified client could hand us arbitrary slot values to render.
+  if (loadout.cosmetics) r.cosmetics = sanitizeCosmetics(loadout.cosmetics);
   applyItems(r);
+  lotteryTick++;
+}
+
+/** Dress a seat from the signed-in player's profile. */
+export function applyRobotCosmetics(seat, cosmetics) {
+  robots[seat].cosmetics = sanitizeCosmetics(cosmetics);
   lotteryTick++;
 }
 
@@ -1353,6 +1453,7 @@ function serializeRobot(r) {
     attackCooldown: r.attackCooldown,
     attack: serializeAttack(r.attack),
     colors: { ...r.colors },
+    cosmetics: { ...r.cosmetics },
   };
 }
 
@@ -1422,6 +1523,9 @@ export function applySnapshot(snap) {
     r.attackHeld = src.attackHeld;
     r.accessory = src.accessory ?? null;
     r.weapon = src.weapon ?? DEFAULT_WEAPON;
+    // Host-authoritative, and sanitized for the same reason as in
+    // applyRobotLoadout — snapshots arrive from the peer, not from us.
+    if (src.cosmetics) r.cosmetics = sanitizeCosmetics(src.cosmetics);
     applyItems(r);
     r.flapsUsed = src.flapsUsed;
     r.squash = src.squash;

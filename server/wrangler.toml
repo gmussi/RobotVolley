@@ -10,3 +10,16 @@ class_name = "Matchmaker"
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Matchmaker"]
+
+# Accounts, stats, unlocks and leaderboards. These need cross-player queries,
+# which is why they live in D1 rather than in the Durable Object's storage.
+[[d1_databases]]
+binding = "DB"
+database_name = "robot-volley-db"
+database_id = "a4bbe4f5-fb9e-4467-9ff5-fcba80e1b605"
+
+# Secrets (set with `npx wrangler secret put <NAME>`, never commit them):
+#   JWT_SIGNING_KEY    — signs session JWTs
+#   DEVICE_SIGNING_KEY — signs anonymous device refresh tokens
+#   STEAM_WEB_API_KEY  — Steamworks publisher key for ticket verification
+#   STEAM_APP_ID       — the app id tickets are validated against

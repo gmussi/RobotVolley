@@ -101,6 +101,7 @@ if (!app.requestSingleInstanceLock()) {
   // Safe no-op when Steam isn't running.
   steam.tryInit();
   ipcMain.handle("steam:status", () => ({ available: steam.isAvailable(), player: steam.getPlayer() }));
+  ipcMain.handle("steam:auth-ticket", () => steam.getAuthTicket());
   ipcMain.handle("steam:unlock", (_event, apiName) => steam.unlockAchievement(apiName));
   ipcMain.handle("steam:is-unlocked", (_event, apiName) => steam.isAchievementUnlocked(apiName));
   ipcMain.handle("steam:clear", (_event, apiName) => steam.clearAchievement(apiName));

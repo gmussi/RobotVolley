@@ -66,6 +66,26 @@ function getPlayer() {
   }
 }
 
+/**
+ * Mint a session ticket proving this Steam user owns the app, as a hex string.
+ *
+ * Only the Steamworks Web API can tell our server whether a ticket is genuine,
+ * so this is just the "please issue one" half — verification happens in
+ * server/src/auth/providers/steam.js. Returns null whenever Steam is absent, so
+ * the caller falls back to the anonymous device identity.
+ */
+async function getAuthTicket() {
+  if (!available) return null;
+  try {
+    const ticket = await client.auth.getSessionTicket();
+    const bytes = ticket.getBytes();
+    return Buffer.from(bytes).toString("hex");
+  } catch (err) {
+    console.warn("[steam] auth ticket failed:", err?.message ?? err);
+    return null;
+  }
+}
+
 /** Unlock (activate) an achievement by its Steam API name. Returns success. */
 function unlockAchievement(apiName) {
   if (!available || !apiName) return false;
@@ -100,6 +120,7 @@ module.exports = {
   tryInit,
   isAvailable,
   getPlayer,
+  getAuthTicket,
   unlockAchievement,
   isAchievementUnlocked,
   clearAchievement,

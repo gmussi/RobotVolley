@@ -11,11 +11,13 @@ import "@fontsource/rajdhani/latin-700.css";
 import "./styles/main.css";
 import { CONTROL } from "./data/controls.js";
 import {
-  PHYSICS_STEP, state, menuOptions, menuIndex, lotteryTick, creditsLink,
+  PHYSICS_STEP, state, menuOptions, menuIndex, menuMode, lotteryTick, creditsLink,
+  modeOptions, modeIndex,
   score, ball, audioEvents, gameMode, winner, onlineLocalSeat,
-  startGame, toMenu, enterMenu, enterCredits, resetPositions, startAttract,
+  startGame, toMenu, enterModeSelect, enterCredits, resetPositions, startAttract,
   attractActive,
   menuMove, menuSelect, setMenuIndex,
+  modeMove, modeSelectChoose, setModeIndex, backToModeSelect, setQuitEnabled,
   pauseOptions, pauseIndex, pauseMove, pauseSelect, setPauseIndex,
   pauseGame, resumeFromPause, leaveSubmenu, canPause,
   handleServeKeyDown, handleServeKeyUp,
@@ -35,6 +37,16 @@ import {
   resetSettingsFocus, handleSettingsKey, handleSettingsPointer,
 } from "./ui/settings.js";
 import {
+  resetProfileFocus, handleProfileKey, handleProfilePointer, isEditingName,
+} from "./ui/profileScreen.js";
+import {
+  resetLeaderboard, handleLeaderboardKey, handleLeaderboardPointer,
+} from "./ui/leaderboardScreen.js";
+import { syncProfile } from "./progress/profile.js";
+
+/** Menu actions that open a submenu rather than starting something. */
+const SUBMENU_ACTIONS = ["settings", "controls", "profile", "leaderboard"];
+import {
   resetControlsFocus, handleControlsKey, handleControlsPointer,
 } from "./ui/controlsScreen.js";
 import { onMatchEnd } from "./platform/achievements.js";
@@ -49,10 +61,16 @@ initRender(canvas);
 initViewport(canvas, stage);
 
 // Quitting the app only makes sense on desktop — there's no window to close
-// on the web build, so the option isn't shown there.
-if (isDesktop) {
-  menuOptions.push({ mode: null, action: "quit", label: "QUIT", disabled: false, x: 0, y: 0, w: 0, h: 0 });
-}
+// on the web build, so the option isn't shown there. Applies to both the
+// online and offline menu, whichever is currently built.
+setQuitEnabled(isDesktop);
+
+// Pull the account as early as possible. The home screen renders from the
+// cached profile immediately and swaps in the server's copy when this lands, so
+// coming back on a different machine looks like a refresh, not a loading screen.
+// It is fire-and-forget on purpose: a failed sync leaves the cache in place and
+// the game entirely playable offline.
+void syncProfile();
 
 const keys = new Set();
 
@@ -79,7 +97,7 @@ const MODIFIER_CODES = new Set([
 
 function leaveTitleScreen() {
   if (state !== "title") return false;
-  enterMenu();
+  enterModeSelect();
   playUiConfirm();
   return true;
 }
@@ -90,6 +108,16 @@ window.addEventListener("keydown", (e) => {
 
   if (state === "title") {
     if (!MODIFIER_CODES.has(e.code)) leaveTitleScreen();
+    return;
+  }
+
+  if (state === "modeSelect") {
+    if (e.code === "ArrowUp" || e.code === "KeyW") { modeMove(-1); playUiNavigate(); }
+    else if (e.code === "ArrowDown" || e.code === "KeyS") { modeMove(1); playUiNavigate(); }
+    else if (e.code === "Enter" || e.code === "Space") {
+      if (modeSelectChoose()) playUiConfirm();
+    }
+    else if (e.code === "KeyC") { enterCredits(); playUiConfirm(); }
     return;
   }
 
@@ -125,21 +153,23 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (state === "menu") {
+    if (e.code === "Escape" || e.code === "Backspace") { backToModeSelect(); playUiConfirm(); return; }
     if (e.code === "ArrowUp" || e.code === "KeyW") { menuMove(-1); playUiNavigate(); }
     else if (e.code === "ArrowDown" || e.code === "KeyS") { menuMove(1); playUiNavigate(); }
     else if (e.code === "Enter" || e.code === "Space") {
       const o = menuOptions[menuIndex];
       if (o?.action === "settings") resetSettingsFocus();
       if (o?.action === "controls") resetControlsFocus();
+      if (o?.action === "profile") resetProfileFocus();
+      if (o?.action === "leaderboard") resetLeaderboard();
       if (o?.action === "customize") { openLab(); playUiConfirm(); return; }
       if (o?.action === "online") { startOnlineFromMenu(); return; }
       if (o?.action === "quit") { playUiConfirm(); quitApp(); return; }
       if (menuSelect()) playUiConfirm();
-      else if (o?.action === "settings" || o?.action === "controls") playUiConfirm();
+      else if (SUBMENU_ACTIONS.includes(o?.action)) playUiConfirm();
     }
-    else if (e.code === "Digit1" || e.code === "Numpad1") { startGame("1p"); playUiConfirm(); }
-    else if (e.code === "Digit2" || e.code === "Numpad2") { startGame("2p"); playUiConfirm(); }
-    else if (e.code === "KeyC") { enterCredits(); playUiConfirm(); }
+    else if (menuMode === "offline" && (e.code === "Digit1" || e.code === "Numpad1")) { startGame("1p"); playUiConfirm(); }
+    else if (menuMode === "offline" && (e.code === "Digit2" || e.code === "Numpad2")) { startGame("2p"); playUiConfirm(); }
     return;
   }
   if (state === "credits") {
@@ -162,6 +192,27 @@ window.addEventListener("keydown", (e) => {
     if (res === "leave") leaveSubmenuScreen();
     else if (res === "nav") playUiNavigate();
     else if (res === "capture" || res === "bound" || res === "reset" || res === "cancel") playUiConfirm();
+    return;
+  }
+  if (state === "profile") {
+    // While the name field is open every key belongs to it — including Escape,
+    // which cancels the edit rather than leaving the screen.
+    if (!isEditingName() && ["Escape", "Backspace"].includes(e.code)) {
+      leaveSubmenuScreen();
+      return;
+    }
+    if (handleProfileKey(e.code, e.key)) {
+      if (["ArrowUp", "ArrowDown", "KeyW", "KeyS"].includes(e.code)) playUiNavigate();
+      else playUiConfirm();
+    }
+    return;
+  }
+  if (state === "leaderboard") {
+    if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) {
+      leaveSubmenuScreen();
+      return;
+    }
+    if (handleLeaderboardKey(e.code)) playUiNavigate();
     return;
   }
   if (e.code === "Escape" && canPause()) {
@@ -191,6 +242,15 @@ canvas.addEventListener("mousemove", (e) => {
     pauseOptions.forEach((o, i) => {
       if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h && i !== pauseIndex) {
         setPauseIndex(i);
+        playUiNavigate();
+      }
+    });
+    return;
+  }
+  if (state === "modeSelect") {
+    modeOptions.forEach((o, i) => {
+      if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h && i !== modeIndex) {
+        setModeIndex(i);
         playUiNavigate();
       }
     });
@@ -251,13 +311,25 @@ canvas.addEventListener("mousedown", (e) => {
     leaveSubmenuScreen();
     return;
   }
-  if (state === "menu") {
+  if (state === "modeSelect") {
     const c = creditsLink;
     if (mx >= c.x && mx <= c.x + c.w && my >= c.y && my <= c.y + c.h) {
       enterCredits();
       playUiConfirm();
       return;
     }
+    for (let i = 0; i < modeOptions.length; i++) {
+      const o = modeOptions[i];
+      if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) {
+        if (o.disabled) return;
+        setModeIndex(i);
+        if (modeSelectChoose()) playUiConfirm();
+        return;
+      }
+    }
+    return;
+  }
+  if (state === "menu") {
     for (let i = 0; i < menuOptions.length; i++) {
       const o = menuOptions[i];
       if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) {
@@ -265,16 +337,24 @@ canvas.addEventListener("mousedown", (e) => {
         setMenuIndex(i);
         if (o.action === "settings") resetSettingsFocus();
         if (o.action === "controls") resetControlsFocus();
+        if (o.action === "profile") resetProfileFocus();
+        if (o.action === "leaderboard") resetLeaderboard();
         if (o.action === "customize") { openLab(); playUiConfirm(); return; }
         if (o.action === "online") { startOnlineFromMenu(); return; }
         if (o.action === "quit") { playUiConfirm(); quitApp(); return; }
         if (menuSelect()) playUiConfirm();
-        else if (o.action === "settings" || o.action === "controls") playUiConfirm();
+        else if (SUBMENU_ACTIONS.includes(o.action)) playUiConfirm();
         return;
       }
     }
   } else if (state === "controls") {
     if (handleControlsPointer(mx, my, "down")) playUiConfirm();
+    else leaveSubmenuScreen();
+  } else if (state === "profile") {
+    if (handleProfilePointer(mx, my, "down")) playUiConfirm();
+    else if (!isEditingName()) leaveSubmenuScreen();
+  } else if (state === "leaderboard") {
+    if (handleLeaderboardPointer(mx, my, "down")) playUiConfirm();
     else leaveSubmenuScreen();
   } else if (state === "credits") {
     leaveSubmenuScreen();

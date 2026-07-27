@@ -2,12 +2,14 @@
  * WebSocket client for Cloudflare matchmaking + signaling relay.
  */
 import { MM, encode, decode } from "./protocol.js";
+import { ensureSessionToken } from "./api.js";
 
 const DEFAULT_URL = import.meta.env.VITE_MATCHMAKING_URL || "";
 
 export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
   let ws = null;
   let playerId = null;
+  let account = null;
   let closedByUser = false;
 
   function emit(name, data) {
@@ -26,7 +28,17 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
     }
     closedByUser = false;
     ws = new WebSocket(url);
-    ws.addEventListener("open", () => emit("open"));
+    ws.addEventListener("open", async () => {
+      // Authenticate before anything else — the server refuses to queue an
+      // anonymous socket. `open` is emitted only once we're allowed to act,
+      // so callers never have to think about the handshake.
+      const token = await ensureSessionToken();
+      if (!token) {
+        emit("error", { message: "sign_in_failed" });
+        return;
+      }
+      send({ type: MM.AUTH, token });
+    });
     ws.addEventListener("message", (ev) => {
       let msg;
       try {
@@ -40,6 +52,12 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
           playerId = msg.playerId;
           emit("hello", msg);
           break;
+        case MM.AUTHED:
+          account = { accountId: msg.accountId, displayName: msg.displayName };
+          emit("authed", msg);
+          // Deferred from the socket's open event: this is the real "ready".
+          emit("open");
+          break;
         case MM.QUEUE_JOINED:
           emit("queue_joined", msg);
           break;
@@ -51,6 +69,9 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
           break;
         case MM.PEER_LEFT:
           emit("peer_left", msg);
+          break;
+        case MM.RESULT_RECORDED:
+          emit("result_recorded", msg);
           break;
         case MM.ERROR:
           emit("error", msg);
@@ -84,6 +105,10 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
     send({ type: MM.SIGNAL, payload, targetId });
   }
 
+  function reportResult(result) {
+    send({ type: MM.MATCH_RESULT, ...result });
+  }
+
   function close() {
     closedByUser = true;
     try {
@@ -107,8 +132,10 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
     leaveQueue,
     cancelMatch,
     signal,
+    reportResult,
     close,
     getPlayerId: () => playerId,
+    getAccount: () => account,
     getUrl: () => url,
   };
 }

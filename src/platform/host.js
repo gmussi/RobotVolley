@@ -68,6 +68,19 @@ export async function getSteamStatus() {
   }
 }
 
+/**
+ * Steam session ticket (hex) for account login, or null when Steam is absent.
+ * Callers fall back to the anonymous device identity — see platform/identity.js.
+ */
+export async function getSteamAuthTicket() {
+  if (!bridge?.steam?.authTicket) return null;
+  try {
+    return (await bridge.steam.authTicket()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Fire-and-forget Steam achievement unlock by API name. No-op off desktop. */
 export function unlockSteamAchievement(apiName) {
   bridge?.steam?.unlock?.(apiName);

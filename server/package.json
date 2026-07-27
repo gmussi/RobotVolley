@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "wrangler dev --compatibility-date=2026-05-03",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "migrate:local": "wrangler d1 migrations apply robot-volley-db --local",
+    "migrate:remote": "wrangler d1 migrations apply robot-volley-db --remote"
   },
   "devDependencies": {
-    "wrangler": "^4.20.0"
+    "wrangler": "4.86.0"
   }
 }

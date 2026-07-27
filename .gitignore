@@ -9,6 +9,7 @@ coverage/
 .env.local
 tools/.env
 server/.wrangler/
+server/.dev.vars
 tools/style_ref.png
 tools/robot/refs/style-explore/
 tools/robot/refs/style-explore-comical/
