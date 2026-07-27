@@ -45,8 +45,13 @@ export function tankRollState(dist, box, meta) {
   const pitch = meta.pitchFrac * box.w;
   const cycle = pitch > 0 ? ((dist / pitch) % 1 + 1) % 1 : 0;
   const radius = meta.wheels.length ? meta.wheels[0].ry * box.h : 0;
+  // cycle * frames should land exactly on a frame boundary at exact multiples
+  // of the pitch, but the float round-trip through dist/pitch routinely misses
+  // by ~1e-16 — enough for Math.floor to drop to the frame below. The nudge is
+  // far smaller than a frame's own width (1/frames), so it only ever corrects
+  // that boundary case rather than shifting a genuinely mid-frame value.
   return {
-    frame: Math.floor(cycle * meta.frames) % meta.frames,
+    frame: Math.floor(cycle * meta.frames + 1e-9) % meta.frames,
     spin: radius > 0 ? dist / radius : 0,
   };
 }
