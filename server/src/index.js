@@ -1,20 +1,32 @@
 /**
- * Matchmaking + WebRTC signaling Worker.
- * Forwards WebSocket clients to a single global Matchmaker Durable Object.
+ * Worker entrypoint: account/profile REST API plus the matchmaking +
+ * WebRTC-signaling WebSocket.
+ *
+ * The two halves are deliberately separate. Accounts, stats and leaderboards
+ * are stateless HTTP over D1 (they need cross-player queries and must survive
+ * restarts); matchmaking is a single global Durable Object holding live sockets.
  */
 import { Matchmaker } from "./matchmaker.js";
+import {
+  handleLogin, handleRefresh, handleLink, handleLinkCode, handleRedeemLinkCode,
+} from "./api/auth.js";
+import { handleGetMe, handlePutLoadout, handlePutName } from "./api/me.js";
+import { handleLeaderboard } from "./api/leaderboard.js";
+import { corsHeaders } from "./api/http.js";
 
 export { Matchmaker };
 
-function corsHeaders(request) {
-  const origin = request.headers.get("Origin") || "*";
-  return {
-    "Access-Control-Allow-Origin": origin,
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Max-Age": "86400",
-  };
-}
+const ROUTES = {
+  "POST /auth/login": handleLogin,
+  "POST /auth/refresh": handleRefresh,
+  "POST /auth/link": handleLink,
+  "POST /auth/link-code": handleLinkCode,
+  "POST /auth/redeem-link-code": handleRedeemLinkCode,
+  "GET /me": handleGetMe,
+  "PUT /me/loadout": handlePutLoadout,
+  "PUT /me/name": handlePutName,
+  "GET /leaderboard": handleLeaderboard,
+};
 
 export default {
   async fetch(request, env) {
@@ -29,6 +41,9 @@ export default {
         headers: { "content-type": "text/plain", ...corsHeaders(request) },
       });
     }
+
+    const handler = ROUTES[`${request.method} ${url.pathname}`];
+    if (handler) return handler(request, env);
 
     if (url.pathname === "/ws") {
       if (request.headers.get("Upgrade") !== "websocket") {

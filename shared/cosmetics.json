@@ -1,0 +1,41 @@
+{
+  "_comment": "Single source of truth for cosmetics, imported by BOTH the game (src/data/cosmetics.js) and the Worker (server/src/cosmetics.js) so display and authority cannot drift. Cosmetics are purely visual and never affect physics. Item order is browse order.",
+  "slots": [
+    { "id": "torso", "label": "TORSO", "enabled": true },
+    { "id": "head", "label": "HEAD", "enabled": false },
+    { "id": "aura", "label": "AURA", "enabled": false },
+    { "id": "special", "label": "SPECIAL", "enabled": false }
+  ],
+  "items": {
+    "torso_standard": {
+      "slot": "torso",
+      "label": "Standard",
+      "sprite": "standard",
+      "unlock": { "type": "default" }
+    },
+    "torso_plated": {
+      "slot": "torso",
+      "label": "Plated",
+      "sprite": "plated",
+      "unlock": { "type": "wins", "n": 1 }
+    },
+    "torso_vented": {
+      "slot": "torso",
+      "label": "Vented",
+      "sprite": "vented",
+      "unlock": { "type": "wins", "n": 3 }
+    },
+    "torso_reactor": {
+      "slot": "torso",
+      "label": "Reactor",
+      "sprite": "reactor",
+      "unlock": { "type": "wins", "n": 5 }
+    },
+    "torso_chrome": {
+      "slot": "torso",
+      "label": "Crown",
+      "sprite": "chrome",
+      "unlock": { "type": "wins", "n": 10 }
+    }
+  }
+}

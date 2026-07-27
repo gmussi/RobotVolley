@@ -10,6 +10,7 @@
 import { GLOW } from "../data/theme.js";
 import { drawTankBody, tankBodyRect, tankRoll, tankRollState } from "./tankChassis.js";
 import ROLL from "../assets/robot/anim/tank-roll.json";
+import { spriteFor } from "../data/cosmetics.js";
 
 // Two baked colorways — P1 crimson and P2 blue (tools/robot/gen_p2_set.py).
 // Baked rather than tinted at runtime: identical geometry across teams, exact
@@ -467,6 +468,19 @@ function drawTankBodySprite(ctx, r, side, mirror) {
   ctx.restore();
 }
 
+/**
+ * Which torso sprite to paint.
+ *
+ * The torso is the one body slot with no gameplay behind it — TORSO_TYPES has
+ * only "standard" — which is exactly why it carries the cosmetic. When a
+ * cosmetic is equipped it names the sprite; otherwise we fall back to the
+ * gameplay type, so robots with no profile (local play, the attract demo) look
+ * exactly as they did before.
+ */
+function torsoVariant(r) {
+  return spriteFor(r.cosmetics, "torso") ?? r.torsoType;
+}
+
 export function drawSpriteRobot(ctx, r, floorY) {
   const bodyFlip = !(r.facing < 0); // mirror the left-facing art to face right
   const side = r.side;
@@ -479,7 +493,7 @@ export function drawSpriteRobot(ctx, r, floorY) {
     legR: isTank ? null : pick("leg", r.legType, side),
     armL: pick("arm", "hand", side),
     armR: pick("arm", "hand", side),
-    torso: isTank ? null : pick("torso", r.torsoType, side),
+    torso: isTank ? null : pick("torso", torsoVariant(r), side),
     head: pick("head", r.headType, side),
     weapon: !propGone && r.armType && r.armType !== "hand"
       ? pick("weapon", r.armType, side) : null,
@@ -505,7 +519,7 @@ export function drawSpriteRobot(ctx, r, floorY) {
     const base = slot.replace(/[LR]$/, "");
     const variant =
       base === "leg" ? r.legType :
-      base === "torso" ? r.torsoType :
+      base === "torso" ? torsoVariant(r) :
       base === "head" ? r.headType :
       base === "weapon" ? r.armType : "hand";
     const ov = OVERRIDE[`${base}:${variant}`];

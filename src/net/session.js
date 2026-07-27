@@ -9,9 +9,11 @@ import {
   enterSearching, showDisconnect, toMenu, startGame, setOnlineStatus,
   getRobotLoadout, applyRobotLoadout, buildSnapshot, applySnapshot,
   applyRemoteInput, applyRemoteServe, readLocalOnlineInput, extrapolateVisual,
-  onlineIsHost, onlineLocalSeat, state, servingSide,
+  applyRobotCosmetics, onlineIsHost, onlineLocalSeat, state, servingSide,
+  score, winner,
 } from "../engine/game.js";
 import { codeFor } from "../data/controls.js";
+import { getLoadout as getProfileLoadout, refreshAfterMatch } from "../progress/profile.js";
 
 /** ~50 Hz snapshots — guest extrapolates between them for smooth render. */
 const SNAPSHOT_INTERVAL_MS = 20;
@@ -29,6 +31,9 @@ let active = false;
 let serveKeyDown = false;
 let channelReady = false;
 let connectTimer = null;
+/** For the result report: wall-clock match length, and a once-only guard. */
+let matchStartedAt = 0;
+let resultReported = false;
 
 /** Guest: latest unapplied snapshot (coalesce bursts onto one apply/frame). */
 let pendingSnap = null;
@@ -52,6 +57,20 @@ export function isOnlineActive() {
 
 export function isOnlineSearching() {
   return state === "searching";
+}
+
+/**
+ * Display names for the current match, keyed by seat. These come from
+ * `match_found` — i.e. from the server — never from the peer's handshake, so
+ * they cannot be spoofed by a modified client.
+ * @returns {{0: string, 1: string}|null}
+ */
+export function getMatchNames() {
+  if (!matchInfo) return null;
+  const names = { 0: "P1", 1: "P2" };
+  names[matchInfo.seat] = matchInfo.localName || "YOU";
+  names[matchInfo.seat === 0 ? 1 : 0] = matchInfo.opponentName || "OPPONENT";
+  return names;
 }
 
 function clearConnectTimer() {
@@ -147,6 +166,12 @@ export function beginOnlineMatchmaking() {
     signal: (msg) => {
       peer?.handleSignal(msg.payload);
     },
+    result_recorded: (msg) => {
+      // Re-read the profile so a cosmetic this win unlocked is selectable
+      // immediately, without a restart.
+      if (msg.status === "recorded") void refreshAfterMatch();
+      notify("result_recorded", msg);
+    },
     peer_left: () => {
       if (active) {
         cleanupNet();
@@ -161,6 +186,10 @@ export function beginOnlineMatchmaking() {
     error: (msg) => {
       if (msg.message === "missing_matchmaking_url") {
         showDisconnect("Set VITE_MATCHMAKING_URL to play online");
+      } else if (msg.message === "sign_in_failed" || msg.message === "unauthenticated") {
+        showDisconnect("Could not sign in — check your connection");
+        cleanupNet();
+        notify("disconnect");
       } else if (state === "searching") {
         setOnlineStatus(`Matchmaking error: ${msg.message || "unknown"}`);
       }
@@ -222,9 +251,32 @@ function startWebRtc(msg) {
   }
 }
 
-/** Prefer lab customization on the seat the player will occupy. */
+/**
+ * Dress the seat we're about to occupy from the signed-in profile, then hand
+ * the whole loadout to the peer. Cosmetics come from the account rather than
+ * whatever the Robot Lab last set, so what you picked in the Profile screen is
+ * what your opponent sees.
+ */
 function capturePreMatchLoadout(seat) {
+  applyRobotCosmetics(seat, getProfileLoadout());
   return getRobotLoadout(seat);
+}
+
+/**
+ * Tell the server who won. Both peers send this independently and the server
+ * only records the match when the two agree, so a modified client cannot write
+ * its own result — see server/src/results.js.
+ */
+function reportMatchResult() {
+  if (!matchInfo || resultReported) return;
+  if (winner !== 0 && winner !== 1) return;
+  resultReported = true;
+  mm?.reportResult({
+    roomId: matchInfo.roomId,
+    winnerSeat: winner,
+    score: [score[0], score[1]],
+    durationMs: Math.round(performance.now() - matchStartedAt),
+  });
 }
 
 function queueSnapshot(snap) {
@@ -287,6 +339,8 @@ function beginMatch() {
 
   active = true;
   tickCounter = 0;
+  matchStartedAt = performance.now();
+  resultReported = false;
   lastSnapAt = performance.now();
   lastSnapTick = -1;
   lastSentInput = null;
@@ -321,6 +375,9 @@ export function tickOnline(now, keys, dt = 0) {
   if (!matchInfo || !channelReady) {
     return { runSim: false };
   }
+
+  // Both peers report as soon as the match resolves. Guarded to fire once.
+  if (state === "over") reportMatchResult();
 
   if (!matchInfo.isHost) {
     if (!active && pendingSnap) beginMatch();

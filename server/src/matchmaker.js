@@ -1,6 +1,24 @@
 /**
  * Global matchmaking queue + WebRTC signaling relay (Durable Object).
+ *
+ * Sockets authenticate with the session JWT before they may queue. That costs
+ * no availability — the account API and this matchmaker are the same Worker, so
+ * if one is reachable the other is too — and it buys two things: results can be
+ * attributed to an account, and display names are vouched for by the server
+ * instead of claimed by the peer (otherwise any modified client could
+ * impersonate anyone by lying in its DataChannel handshake).
  */
+import { verifyJwt } from "./auth/jwt.js";
+import { getAccount, getStats } from "./db.js";
+import { chooseOpponent, START_ELO } from "../../shared/ranking.js";
+import { reportResult } from "./results.js";
+
+/**
+ * How long a finished room's seat→account mapping is kept so a late result
+ * report can still be attributed. Persisted in DO storage rather than memory:
+ * the object can be evicted between the last snapshot and the report.
+ */
+const ROOM_RETENTION_MS = 5 * 60 * 1000;
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   if (
@@ -45,9 +63,10 @@ function isOpen(ws) {
 }
 
 export class Matchmaker {
-  constructor(ctx) {
+  constructor(ctx, env) {
     this.ctx = ctx;
-    /** @type {Map<string, { ws: WebSocket, lat: number|null, lon: number|null, colo: string, country: string, inQueue: boolean, roomId: string|null, peerId: string|null, joinedAt: number }>} */
+    this.env = env;
+    /** @type {Map<string, { ws: WebSocket, accountId: string|null, displayName: string|null, lat: number|null, lon: number|null, colo: string, country: string, inQueue: boolean, roomId: string|null, peerId: string|null, joinedAt: number }>} */
     this.sessions = new Map();
     /** @type {string[]} */
     this.queue = [];
@@ -72,6 +91,9 @@ export class Matchmaker {
     const playerId = randomId();
     const session = {
       ws,
+      // Filled in by the `auth` frame; until then the socket may only sign in.
+      accountId: null,
+      displayName: null,
       lat: geo.lat,
       lon: geo.lon,
       colo: geo.colo,
@@ -139,6 +161,9 @@ export class Matchmaker {
     }
 
     switch (msg.type) {
+      case "auth":
+        this.authenticate(playerId, msg.token);
+        break;
       case "join_queue":
         this.joinQueue(playerId);
         break;
@@ -151,15 +176,119 @@ export class Matchmaker {
       case "signal":
         this.relaySignal(playerId, msg);
         break;
+      case "match_result":
+        this.recordResult(playerId, msg);
+        break;
       default:
         this.sendTo(playerId, { type: "error", message: "unknown_type" });
     }
+  }
+
+  /**
+   * Bind this socket to an account. The client waits for `authed` before it
+   * queues, so this races with nothing; a failure leaves the socket usable but
+   * unable to queue, and the client surfaces that rather than hanging.
+   */
+  async authenticate(playerId, token) {
+    const s = this.sessions.get(playerId);
+    if (!s) return;
+
+    const payload = this.env?.JWT_SIGNING_KEY
+      ? await verifyJwt(token, this.env.JWT_SIGNING_KEY)
+      : null;
+    if (!payload?.sub) {
+      this.sendTo(playerId, { type: "error", message: "invalid_token" });
+      return;
+    }
+
+    const account = await getAccount(this.env.DB, payload.sub);
+    if (!account) {
+      this.sendTo(playerId, { type: "error", message: "no_account" });
+      return;
+    }
+    if (account.banned) {
+      this.sendTo(playerId, { type: "error", message: "banned" });
+      return;
+    }
+
+    s.accountId = account.id;
+    s.displayName = account.display_name;
+    // Cached now so pairing stays synchronous — the queue scan must not await.
+    s.elo = (await getStats(this.env.DB, account.id)).elo ?? START_ELO;
+    this.sendTo(playerId, {
+      type: "authed",
+      accountId: account.id,
+      displayName: account.display_name,
+    });
+  }
+
+  /**
+   * Persist the seat→account mapping for a room, so a result reported after a
+   * peer drops (or after this object is evicted) can still be attributed.
+   */
+  async rememberRoom(roomId, seats) {
+    await this.ctx.storage.put(`room:${roomId}`, { seats, at: Date.now() });
+    const existing = await this.ctx.storage.getAlarm();
+    if (existing == null) await this.ctx.storage.setAlarm(Date.now() + ROOM_RETENTION_MS);
+  }
+
+  /** Sweep expired room records; re-arm while any remain. */
+  async alarm() {
+    const rooms = await this.ctx.storage.list({ prefix: "room:" });
+    const cutoff = Date.now() - ROOM_RETENTION_MS;
+    let remaining = 0;
+    for (const [key, value] of rooms) {
+      if ((value?.at ?? 0) < cutoff) await this.ctx.storage.delete(key);
+      else remaining++;
+    }
+    if (remaining > 0) await this.ctx.storage.setAlarm(Date.now() + ROOM_RETENTION_MS);
+  }
+
+  /**
+   * One peer's view of a finished match. The result is only written once both
+   * peers agree — see results.js.
+   */
+  async recordResult(playerId, msg) {
+    const s = this.sessions.get(playerId);
+    if (!s?.accountId) {
+      this.sendTo(playerId, { type: "error", message: "unauthenticated" });
+      return;
+    }
+
+    const record = await this.ctx.storage.get(`room:${msg.roomId}`);
+    if (!record) {
+      this.sendTo(playerId, { type: "error", message: "unknown_room" });
+      return;
+    }
+    // Only the two players in that room may report on it.
+    const seat = record.seats.indexOf(s.accountId);
+    if (seat < 0) {
+      this.sendTo(playerId, { type: "error", message: "not_your_match" });
+      return;
+    }
+
+    const outcome = await reportResult(this.env.DB, {
+      roomId: msg.roomId,
+      accountId: s.accountId,
+      seat,
+      seats: record.seats,
+      report: {
+        winnerSeat: msg.winnerSeat,
+        score: msg.score,
+        durationMs: msg.durationMs,
+      },
+    });
+    this.sendTo(playerId, { type: "result_recorded", status: outcome.status });
   }
 
   joinQueue(playerId) {
     this.pruneDead();
     const s = this.sessions.get(playerId);
     if (!s || !isOpen(s.ws)) return;
+    if (!s.accountId) {
+      this.sendTo(playerId, { type: "error", message: "unauthenticated" });
+      return;
+    }
     if (s.roomId) {
       // Soft-cancel a failed WebRTC attempt so the player can requeue.
       this.cancelMatch(playerId);
@@ -169,18 +298,20 @@ export class Matchmaker {
       return;
     }
 
-    let bestId = null;
-    let bestDist = Number.POSITIVE_INFINITY;
+    // Geography decides. Rating only separates opponents who are already about
+    // as close as each other — see chooseOpponent in shared/ranking.js.
+    const candidates = [];
     for (const otherId of this.queue) {
       if (otherId === playerId) continue;
       const other = this.sessions.get(otherId);
       if (!other || !other.inQueue || other.roomId || !isOpen(other.ws)) continue;
-      const d = haversineKm(s.lat, s.lon, other.lat, other.lon);
-      if (d < bestDist) {
-        bestDist = d;
-        bestId = otherId;
-      }
+      candidates.push({
+        id: otherId,
+        distanceKm: haversineKm(s.lat, s.lon, other.lat, other.lon),
+        elo: other.elo ?? START_ELO,
+      });
     }
+    const bestId = chooseOpponent(candidates, s.elo ?? START_ELO);
 
     if (bestId && this.isAlive(bestId)) {
       this.formMatch(bestId, playerId);
@@ -242,6 +373,8 @@ export class Matchmaker {
     const roomId = randomId();
     const matchSeed = randomSeed();
     this.rooms.set(roomId, { a: hostId, b: guestId });
+    // Seat order here is the seat order the clients are told below (host = 0).
+    void this.rememberRoom(roomId, [host.accountId, guest.accountId]);
 
     host.inQueue = false;
     guest.inQueue = false;
@@ -250,6 +383,8 @@ export class Matchmaker {
     host.peerId = guestId;
     guest.peerId = hostId;
 
+    // Names come from us, not from the peers. A client that lies in its
+    // DataChannel handshake cannot make itself appear as someone else.
     this.sendTo(hostId, {
       type: "match_found",
       roomId,
@@ -257,6 +392,8 @@ export class Matchmaker {
       isHost: true,
       seat: 0,
       peerId: guestId,
+      localName: host.displayName,
+      opponentName: guest.displayName,
     });
     this.sendTo(guestId, {
       type: "match_found",
@@ -265,6 +402,8 @@ export class Matchmaker {
       isHost: false,
       seat: 1,
       peerId: hostId,
+      localName: guest.displayName,
+      opponentName: host.displayName,
     });
   }
 

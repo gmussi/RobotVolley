@@ -6,7 +6,8 @@ import {
 } from "../data/constants.js";
 import {
   ball, score, state, gameMode, servingSide, serveCharge,
-  bannerText, winner, menuOptions, menuIndex, pauseFromState, submenuReturnState,
+  bannerText, winner, menuOptions, menuIndex, menuMode, modeOptions, modeIndex,
+  pauseFromState, submenuReturnState,
   P1, P2, getArmSpec, onlineStatus, onlineLocalSeat, creditsLink, attractActive,
 } from "../engine/game.js";
 import { drawLotteryAnimation } from "./lottery.js";
@@ -26,6 +27,10 @@ import {
   drawFooterHint, drawCircularGauge, drawGlassPanel,
 } from "./neonUi.js";
 import { drawArenaEffects, drawProceduralArena } from "./stadiumDraw.js";
+import { drawRobotPreview } from "./robotPreview.js";
+import { getProfile, getSyncState } from "../progress/profile.js";
+import { drawProfileScreen } from "./profileScreen.js";
+import { drawLeaderboardScreen } from "./leaderboardScreen.js";
 import { colorblindMode } from "../data/accessibility.js";
 import { codeFor } from "../data/controls.js";
 
@@ -53,8 +58,9 @@ export function render() {
   drawAttacks();
   const vis = state === "pause" ? pauseFromState : state;
   if (
-    state !== "title" && state !== "menu" &&
-    state !== "controls" && state !== "settings" && state !== "credits"
+    state !== "title" && state !== "modeSelect" && state !== "menu" &&
+    state !== "controls" && state !== "settings" && state !== "credits" &&
+    state !== "profile" && state !== "leaderboard"
   ) {
     drawBall(); drawBallTracker(); drawHUD();
   } else if (attractActive) {
@@ -527,10 +533,13 @@ function drawOnlineOverlay() {
 
 function drawBanner(vis = state) {
   if (vis === "title") { drawTitleScreen(); return; }
+  if (vis === "modeSelect") { drawModeSelect(); return; }
   if (vis === "menu") { drawMenu(); return; }
   if (vis === "searching" || vis === "disconnect") { drawOnlineOverlay(); return; }
   if (vis === "controls") { drawControlsScreen(ctx); return; }
   if (state === "settings") { drawSettings(ctx); return; }
+  if (state === "profile") { drawProfileScreen(ctx); return; }
+  if (state === "leaderboard") { drawLeaderboardScreen(ctx); return; }
   if (state === "credits") { drawCreditsScreen(ctx); return; }
   if (vis === "serve") {
     const serverIsCpu = gameMode === "1p" && servingSide > 0;
@@ -601,32 +610,95 @@ function drawTitleScreen() {
   ], H - 58);
 }
 
-function drawMenu() {
-  drawScrim(ctx, 0.5);
-  drawBrandLogo();
+/**
+ * Home-screen profile card: your robot, your name, your record.
+ *
+ * Renders from the cached profile the moment the game boots and swaps in the
+ * server's copy when the sync lands, so returning from another machine looks
+ * like a refresh rather than a loading screen. "Offline" is drawn as a quiet
+ * badge, not an error — the web build has to stay playable with no backend.
+ */
+function drawProfileCard(centerY) {
+  const sync = getSyncState();
+  const profile = getProfile();
+  const x = 28;
+  const w = 216;
+  const h = 244;
+  const y = centerY - h / 2;
 
+  drawGlassPanel(ctx, x, y, w, h, { radius: 14, fillAlpha: 0.55 });
+
+  const cx = x + w / 2;
+  if (sync === "loading" && !profile.accountId) {
+    // Nothing cached yet — a gauge is honest about there being no robot to show.
+    const spin = (performance.now() / 900) % 1;
+    drawCircularGauge(ctx, cx, y + 104, 34, spin, COLORS.accent);
+    centerText(ctx, "SIGNING IN…", COLORS.textMuted, 13, y + 176, false);
+    return;
+  }
+
+  drawRobotPreview(ctx, profile.loadout, cx, y + 168, 0.92);
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = fontDisplay(19, 700);
+  ctx.fillStyle = COLORS.text;
+  ctx.fillText(profile.displayName, cx, y + 194);
+
+  if (sync === "offline") {
+    ctx.font = fontBody(11, 700);
+    ctx.fillStyle = COLORS.textMuted;
+    ctx.fillText("OFFLINE", cx, y + 216);
+  }
+}
+
+/**
+ * Lays out a vertical list of menu-style options centered under `startY`, row
+ * spacing shrinking (down to a point) so extra items — e.g. the desktop-only
+ * QUIT entry — never collide with the footer. Shared by the mode-select
+ * screen and the online/offline menu so their spacing math can't drift apart.
+ * @returns {{menuTop: number, menuBottom: number}} vertical extent of the list
+ */
+function drawOptionList(options, selectedIndex, startY, itemW = 440, itemH = 44) {
   const now = performance.now();
-  const startY = H * 0.45;
-  const itemW = 440;
-  const itemH = 44;
-  // Row spacing shrinks (down to a point) so extra items — e.g. the desktop-only
-  // QUIT entry — never collide with the footer hint drawn at H - 58.
-  const footerClearance = (H - 58) - startY - itemH / 2 - 10;
-  const rowH = menuOptions.length > 1
-    ? Math.min(52, footerClearance / (menuOptions.length - 1))
+  const footerY = H - 58;
+  const footerClearance = footerY - startY - itemH / 2 - 10;
+  const rowH = options.length > 1
+    ? Math.min(52, footerClearance / (options.length - 1))
     : 52;
 
-  menuOptions.forEach((o, i) => {
+  options.forEach((o, i) => {
     const cy = startY + i * rowH;
     o.w = itemW; o.h = itemH;
     o.x = (W - itemW) / 2;
     o.y = cy - itemH / 2;
-    drawMenuItem(ctx, o.label, W / 2, cy, itemW, itemH, i === menuIndex, now);
+    drawMenuItem(ctx, o.label, W / 2, cy, itemW, itemH, i === selectedIndex, now);
   });
+
+  return {
+    menuTop: startY - itemH / 2,
+    menuBottom: startY + (options.length - 1) * rowH + itemH / 2,
+  };
+}
+
+/**
+ * The true landing screen, reached from the title splash: your robot and
+ * name, and the choice between ONLINE PLAY and OFFLINE PLAY. Each leads to
+ * its own menu (see drawMenu) — this screen itself never starts a match.
+ *
+ * The robot card itself only shows up one level deeper, inside the ONLINE
+ * menu — it's an online identity (name, unlocks earned by winning online
+ * matches), so it has no business appearing before a mode is even chosen, or
+ * inside the offline menu where none of that applies.
+ */
+function drawModeSelect() {
+  drawScrim(ctx, 0.5);
+  drawBrandLogo();
+
+  drawOptionList(modeOptions, modeIndex, H * 0.45);
 
   const footerY = H - 58;
   drawFooterHint(ctx, [
-    { text: "▲ ▼  SELECT      ENTER  START" },
     { text: "© 2026  ROBOT VOLLEY" },
   ], footerY);
 
@@ -644,6 +716,26 @@ function drawMenu() {
   creditsLink.y = creditsY - padY;
   creditsLink.w = tw + padX * 2;
   creditsLink.h = padY * 2;
+}
+
+/** The chosen category's options (online: match/profile/leaderboard, offline: 1P/2P — both plus controls/settings). */
+function drawMenu() {
+  drawScrim(ctx, 0.5);
+  drawBrandLogo();
+
+  const { menuTop, menuBottom } = drawOptionList(menuOptions, menuIndex, H * 0.45);
+
+  // The robot card is an online identity, so it only belongs beside the
+  // ONLINE options — the offline menu (single/two player) has no account
+  // context to show.
+  if (menuMode === "online") {
+    drawProfileCard((menuTop + menuBottom) / 2);
+  }
+
+  drawFooterHint(ctx, [
+    { text: "© 2026  ROBOT VOLLEY" },
+    { text: "ESC   BACK", accent: true },
+  ], H - 58);
 }
 
 

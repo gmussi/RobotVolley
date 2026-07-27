@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld("desktop", {
   // Steam isn't available. `unlock`/`clear` take a Steam achievement API name.
   steam: {
     status: () => ipcRenderer.invoke("steam:status"),
+    // Session ticket for account login; null when Steam isn't running.
+    authTicket: () => ipcRenderer.invoke("steam:auth-ticket"),
     unlock: (apiName) => ipcRenderer.invoke("steam:unlock", apiName),
     isUnlocked: (apiName) => ipcRenderer.invoke("steam:is-unlocked", apiName),
     clear: (apiName) => ipcRenderer.invoke("steam:clear", apiName),

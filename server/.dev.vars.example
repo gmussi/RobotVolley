@@ -1,0 +1,8 @@
+# Copy to .dev.vars for local `wrangler dev`. Never commit real values.
+# In production these are set with: npx wrangler secret put <NAME>
+JWT_SIGNING_KEY=local-dev-jwt-key-not-for-production
+DEVICE_SIGNING_KEY=local-dev-device-key-not-for-production
+
+# Only needed to exercise the Steam login path locally.
+# STEAM_WEB_API_KEY=
+# STEAM_APP_ID=
