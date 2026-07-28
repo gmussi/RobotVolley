@@ -11,7 +11,8 @@ import {
   MOVE_ACCEL, JUMP_V, AIR_ACCEL, ARM_OVERHANG, COURT_GAP, HEAD_TOP_OFFSET,
   ROCKET_FLAP_V, ROCKET_MAX_FLAPS, BALL_R, BALL_SPIN_VISUAL_RATE, NET_BOUNCE,
   PHYSICS_STEP, DEFAULT_COLORS, MAX_RALLY_DURATION_MS, STALL_COLLISION_WINDOW_MS,
-  STALL_COLLISION_COUNT_THRESHOLD,
+  STALL_COLLISION_COUNT_THRESHOLD, SPEED_RAMP_GRACE_MS, SPEED_RAMP_FULL_MS,
+  BALL_MIN_SPEED_RAMPED, BALL_MAX_SPEED_RAMPED,
 } from "../data/constants.js";
 import { HEAD_TYPES } from "../data/heads.js";
 import { TORSO_TYPES } from "../data/torsos.js";
@@ -62,6 +63,8 @@ let rallyIndex = 0;
 // ---- Stall safety net ----
 /** Elapsed live-rally time; a rally that never reaches the floor gets voided. */
 let rallyElapsedMs = 0;
+/** Elapsed real-match time (not reset per rally) — drives the speed ramp. */
+let matchElapsedMs = 0;
 let wallBounceCount = 0;
 /** Rally-clock timestamp of the last wall bounce, so the loop counter can
  *  tell "10 bounces in the last second" apart from "10 bounces over a long,
@@ -566,6 +569,7 @@ export function startGame(mode, opts = {}) {
   winner = null;
   banner = null;
   rallyIndex = 0;
+  matchElapsedMs = 0;
   setOnlineStatus("");
   if (mode === "online") {
     setOnlineLocalSeat(opts.localSeat ?? 0);
@@ -737,6 +741,17 @@ function noteWallBounce() {
 function checkRallyStall(dt) {
   rallyElapsedMs += dt * 1000;
   if (rallyElapsedMs >= MAX_RALLY_DURATION_MS) voidRally("rally-timeout");
+}
+
+/** Ball speed floor/ceiling ramped by how long the match has run so far. */
+function getSpeedRampBounds() {
+  const t = Math.min(1, Math.max(0,
+    (matchElapsedMs - SPEED_RAMP_GRACE_MS) / (SPEED_RAMP_FULL_MS - SPEED_RAMP_GRACE_MS)
+  ));
+  return {
+    min: BALL_MIN_SPEED_RAMPED * t,
+    max: BALL_MAX_SPEED + (BALL_MAX_SPEED_RAMPED - BALL_MAX_SPEED) * t,
+  };
 }
 
 export function awardPoint(scorer) {
@@ -1057,7 +1072,8 @@ function deflectBall(r, at) {
   ball.spin = -r.side * 2;
   ball.lastHitBy = r.side;
   const sp = Math.hypot(ball.vx, ball.vy);
-  if (sp > BALL_MAX_SPEED) { ball.vx *= BALL_MAX_SPEED / sp; ball.vy *= BALL_MAX_SPEED / sp; }
+  const { max: rampedMax } = getSpeedRampBounds();
+  if (sp > rampedMax) { ball.vx *= rampedMax / sp; ball.vy *= rampedMax / sp; }
   r.eyeBlink = 0.12;
   emitAudio("deflect");
 }
@@ -1286,7 +1302,7 @@ export function collideBallRobot(r, opts = {}) {
   }
 
   const newSpeed = Math.hypot(ball.vx, ball.vy);
-  const allowed = Math.min(newSpeed, incomingSpeed + HIT_SPEED_GAIN, BALL_MAX_SPEED);
+  const allowed = Math.min(newSpeed, incomingSpeed + HIT_SPEED_GAIN, getSpeedRampBounds().max);
   if (newSpeed > allowed && newSpeed > 0) {
     ball.vx *= allowed / newSpeed;
     ball.vy *= allowed / newSpeed;
@@ -1401,6 +1417,16 @@ export function updateBall(dt) {
   // the ball never escapes the corner.
   if (ball.x - ball.r < 0) ball.x = ball.r;
   if (ball.x + ball.r > W) ball.x = W - ball.r;
+
+  const { min: rampedMin } = getSpeedRampBounds();
+  if (rampedMin > 0) {
+    const speed = Math.hypot(ball.vx, ball.vy);
+    if (speed > 1 && speed < rampedMin) {
+      const scale = rampedMin / speed;
+      ball.vx *= scale;
+      ball.vy *= scale;
+    }
+  }
 
   checkRallyStall(dt);
 
@@ -1735,6 +1761,7 @@ export function tickServe(dt) {
 
 export function tickPhysics() {
   if (state === "pause") return;
+  if (gameMode) matchElapsedMs += PHYSICS_STEP * 1000;
   for (const r of robots) updateRobot(r, PHYSICS_STEP);
   if (phase() === "play") updateBall(PHYSICS_STEP);
   else if (phase() === "serve") {
