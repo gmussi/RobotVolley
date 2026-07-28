@@ -74,6 +74,7 @@ export default {
   "banner.wins": "ИГРОК {n} ПОБЕДИЛ!",
   "banner.point": "ОЧКО — ИГРОК {n}",
   "banner.forfeit": "ИГРОК {n} ПОБЕДИЛ — СОПЕРНИК ВЫШЕЛ",
+  "banner.stall": "ПЕРЕИГРОВКА — МЯЧ ЗАСТРЯЛ",
   "banner.pressMenu": "ПРОБЕЛ для меню",
 
   "online.title": "ОНЛАЙН-МАТЧ",

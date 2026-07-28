@@ -74,6 +74,7 @@ export default {
   "banner.wins": "玩家 {n} 获胜！",
   "banner.point": "得分 — 玩家 {n}",
   "banner.forfeit": "玩家 {n} 获胜 — 对手已离开",
+  "banner.stall": "重赛 — 球卡住了",
   "banner.pressMenu": "按空格返回菜单",
 
   "online.title": "在线对战",

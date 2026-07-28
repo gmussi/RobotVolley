@@ -11,7 +11,7 @@ import {
   getRobotLoadout, applyRobotLoadout, buildSnapshot, applySnapshot,
   applyRemoteInput, applyRemoteServe, readLocalOnlineInput, extrapolateVisual,
   applyRobotCosmetics, awardForfeitWin, onlineIsHost, onlineLocalSeat, state,
-  servingSide, score, winner,
+  servingSide, score, winner, onlineOverlay,
 } from "../engine/game.js";
 import { codeFor } from "../data/controls.js";
 import { getLoadout as getProfileLoadout, refreshAfterMatch } from "../progress/profile.js";
@@ -430,7 +430,7 @@ export function tickOnline(now, keys, dt = 0) {
   }
 
   const serveCode = codeFor(0, "attack");
-  const down = keys.has(serveCode);
+  const down = onlineOverlay == null && keys.has(serveCode);
   const serverSeat = servingSide < 0 ? 0 : 1;
   if (serverSeat === onlineLocalSeat) {
     if (down && !serveKeyDown) {

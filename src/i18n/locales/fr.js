@@ -74,6 +74,7 @@ export default {
   "banner.wins": "JOUEUR {n} GAGNE !",
   "banner.point": "POINT — JOUEUR {n}",
   "banner.forfeit": "JOUEUR {n} GAGNE — ADVERSAIRE PARTI",
+  "banner.stall": "REJOUÉ — BALLE COINCÉE",
   "banner.pressMenu": "ESPACE pour le menu",
 
   "online.title": "MATCH EN LIGNE",

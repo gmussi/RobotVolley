@@ -16,7 +16,8 @@ export const SERVE_DIR_X = 0.421;
 export const SERVE_DIR_Y = -0.907;
 
 export const GROUND_RESTITUTION = 0.72;
-export const AIR_RESTITUTION = 1.02;
+/** Must stay <= 1 — anything above adds energy on every non-floor bounce. */
+export const AIR_RESTITUTION = 0.97;
 /** Falling ball hitting the top of a robot — low bounce, redirects sideways. */
 export const TOP_FALL_RESTITUTION_GROUND = 0.32;
 export const TOP_FALL_RESTITUTION_AIR = 0.52;
@@ -59,6 +60,15 @@ export const BALL_SPIN_VISUAL_RATE = 0.85;
 export const NET_BOUNCE = 0.7;
 
 export const PHYSICS_STEP = 1 / 120;
+
+/**
+ * Safety net for a rally that never reaches the floor (e.g. the ball wedged
+ * against a wall/robot) — void it as a let rather than let the match hang.
+ */
+export const MAX_RALLY_DURATION_MS = 45000;
+/** Same-wall bounce count within this window that fast-paths a void. */
+export const STALL_COLLISION_WINDOW_MS = 1000;
+export const STALL_COLLISION_COUNT_THRESHOLD = 10;
 
 export const DEFAULT_COLORS = {
   p1: { head: "#ff5a5f", torso: "#ff5a5f", arms: "#b02a2f", legs: "#b02a2f" },

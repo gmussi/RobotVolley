@@ -74,6 +74,7 @@ export default {
   "banner.wins": "GIOCATORE {n} VINCE!",
   "banner.point": "PUNTO — GIOCATORE {n}",
   "banner.forfeit": "GIOCATORE {n} VINCE — AVVERSARIO USCITO",
+  "banner.stall": "RIPETIZIONE — PALLA BLOCCATA",
   "banner.pressMenu": "SPAZIO per il menu",
 
   "online.title": "PARTITA ONLINE",

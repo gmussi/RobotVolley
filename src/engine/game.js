@@ -10,7 +10,8 @@ import {
   HIT_SPEED_GAIN, BALL_MAX_SPEED, NET, ROBOT_W, ROBOT_H, MOVE_SPEED,
   MOVE_ACCEL, JUMP_V, AIR_ACCEL, ARM_OVERHANG, COURT_GAP, HEAD_TOP_OFFSET,
   ROCKET_FLAP_V, ROCKET_MAX_FLAPS, BALL_R, BALL_SPIN_VISUAL_RATE, NET_BOUNCE,
-  PHYSICS_STEP, DEFAULT_COLORS,
+  PHYSICS_STEP, DEFAULT_COLORS, MAX_RALLY_DURATION_MS, STALL_COLLISION_WINDOW_MS,
+  STALL_COLLISION_COUNT_THRESHOLD,
 } from "../data/constants.js";
 import { HEAD_TYPES } from "../data/heads.js";
 import { TORSO_TYPES } from "../data/torsos.js";
@@ -51,12 +52,18 @@ export let cpuServeTimer = 0;
 export let serveCharging = false;
 export let serveCharge = 0;
 /** Structured match banner — translated at draw time so each client keeps its locale. */
-export let banner = null; // { type: 'wins'|'point'|'forfeit', player: 0|1 } | null
+export let banner = null; // { type: 'wins'|'point'|'forfeit'|'stall', player?: 0|1 } | null
 export let winner = null;
 export let lotteryResults = [null, null];
 export let lotteryTimer = 0;
 export let lotteryTick = 0;
 let rallyIndex = 0;
+
+// ---- Stall safety net ----
+/** Elapsed live-rally time; a rally that never reaches the floor gets voided. */
+let rallyElapsedMs = 0;
+let wallBounceCount = 0;
+let wallBounceWindowMs = 0;
 
 // ---- Attract mode ----
 /**
@@ -531,6 +538,9 @@ export function serveBall(charge) {
   ball.spin = 0;
   serveCharging = false;
   serveCharge = 0;
+  rallyElapsedMs = 0;
+  wallBounceCount = 0;
+  wallBounceWindowMs = 0;
   setPhase("play");
   emitAudio("serve_launch", { charge });
 }
@@ -638,12 +648,84 @@ export function pauseSelect() {
   }
 }
 
+// ---- Online overlay ----
+/**
+ * Online has no true pause (see canPause()) — closing the connection mid-
+ * rally would forfeit the match for a player who just wanted to check
+ * settings. This is a menu layered on top of a still-running match instead:
+ * it never touches `state`/`phase()`, so physics and the opponent keep
+ * simulating underneath it.
+ * @type {null|"pause"|"settings"|"controls"}
+ */
+export let onlineOverlay = null;
+
+export function isOnlineOverlayOpen() {
+  return onlineOverlay != null;
+}
+
+export function openOnlineOverlay() {
+  if (gameMode !== "online" || onlineOverlay != null) return false;
+  onlineOverlay = "pause";
+  pauseIndex = 0;
+  return true;
+}
+
+export function closeOnlineOverlay() {
+  onlineOverlay = null;
+}
+
+/** @param {"pause"|"settings"|"controls"} screen */
+export function setOnlineOverlay(screen) {
+  if (onlineOverlay != null) onlineOverlay = screen;
+}
+
 export function leaveSubmenu() {
   const back = submenuReturnState;
   submenuReturnState = "menu";
   if (back === "pause" && pauseFromState) state = "pause";
   else if (back === "modeSelect") state = "modeSelect";
   else state = "menu";
+}
+
+/**
+ * Safety-net rally end: the ball never reached the floor (stuck against a
+ * wall/robot, or some other still-unknown collision loop) and either the
+ * rally clock or the fast wall-bounce-loop counter tripped. No score change
+ * — this is a "let", not a point for either side.
+ */
+export function voidRally(reason) {
+  console.warn(`[stall] voiding rally (${reason})`, {
+    ball: { x: ball.x, y: ball.y, vx: ball.vx, vy: ball.vy },
+    robots: robots.map((r) => ({ side: r.side, x: r.x, y: r.y })),
+    rallyElapsedMs,
+  });
+  ball.live = false;
+  ball.magnetHold = null;
+  ball.portalHold = null;
+  ball.smashBy = null;
+  if (attractActive) {
+    attractPhase = "point";
+    messageTimer = ATTRACT_POINT_DELAY;
+    return;
+  }
+  banner = { type: "stall" };
+  state = "point";
+  messageTimer = 1.3;
+}
+
+function noteWallBounce(dt) {
+  wallBounceWindowMs -= dt * 1000;
+  if (wallBounceWindowMs <= 0) {
+    wallBounceWindowMs = STALL_COLLISION_WINDOW_MS;
+    wallBounceCount = 0;
+  }
+  wallBounceCount++;
+  if (wallBounceCount >= STALL_COLLISION_COUNT_THRESHOLD) voidRally("wall-robot loop");
+}
+
+function checkRallyStall(dt) {
+  rallyElapsedMs += dt * 1000;
+  if (rallyElapsedMs >= MAX_RALLY_DURATION_MS) voidRally("rally-timeout");
 }
 
 export function awardPoint(scorer) {
@@ -706,7 +788,7 @@ export function handleServeKeyDown(code, controlMap) {
   // Guest never mutates serve state — session relays edges to the host.
   if (gameMode === "online" && !onlineIsHost) return;
   if (gameMode === "online") {
-    if (!isLocalOnlineServer()) return;
+    if (onlineOverlay != null || !isLocalOnlineServer()) return;
     if (isOnlineServeKey(code, controlMap) && !serveCharging) {
       serveCharging = true;
       serveCharge = SERVE_CHARGE_FLOOR;
@@ -723,7 +805,7 @@ export function handleServeKeyUp(code, controlMap) {
   if (state !== "serve" || !serveCharging) return;
   if (gameMode === "online" && !onlineIsHost) return;
   if (gameMode === "online") {
-    if (!isLocalOnlineServer()) return;
+    if (onlineOverlay != null || !isLocalOnlineServer()) return;
     if (isOnlineServeKey(code, controlMap)) serveBall(serveCharge);
     return;
   }
@@ -1287,16 +1369,29 @@ export function updateBall(dt) {
     ball.x = ball.r;
     ball.vx = Math.abs(ball.vx) * 0.95;
     emitAudio("ball_wall");
+    noteWallBounce(dt);
   }
   if (ball.x + ball.r > W) {
     ball.x = W - ball.r;
     ball.vx = -Math.abs(ball.vx) * 0.95;
     emitAudio("ball_wall");
+    noteWallBounce(dt);
   }
 
   collideBallNet(prevX, prevY);
   for (const r of robots) collideBallRobot(r);
   for (const r of robots) collideBallAttack(r);
+
+  // A robot pinned flush against a side wall can get pushed back into it
+  // while resolving overlap with the robot's body rect. Reassert the wall
+  // bound here, position-only (no velocity/audio), so the ball can never
+  // tunnel through the wall this substep — otherwise the wall clamp above
+  // and the robot's overlap correction fight each other every substep and
+  // the ball never escapes the corner.
+  if (ball.x - ball.r < 0) ball.x = ball.r;
+  if (ball.x + ball.r > W) ball.x = W - ball.r;
+
+  checkRallyStall(dt);
 
   if (ball.y + ball.r >= FLOOR_Y) {
     ball.y = FLOOR_Y - ball.r;
@@ -1369,6 +1464,12 @@ export function readInput(keys, controlMap) {
   if (gameMode === "online") {
     // Always use P1 keybindings for the local seat; remote seat is set by netcode.
     const r = robots[onlineLocalSeat];
+    // The overlay keeps the match running behind it, so freeze the local
+    // robot while it's open rather than letting menu navigation also move it.
+    if (onlineOverlay != null) {
+      r.moveDir = 0; r.jumpHeld = false; r.attackHeld = false;
+      return;
+    }
     const L = keys.has(codeFor(0, "left"));
     const R = keys.has(codeFor(0, "right"));
     r.moveDir = (R ? 1 : 0) - (L ? 1 : 0);
@@ -1398,6 +1499,7 @@ export function applyRemoteInput(input) {
 }
 
 export function readLocalOnlineInput(keys) {
+  if (onlineOverlay != null) return { moveDir: 0, jumpHeld: false, attackHeld: false };
   const L = keys.has(codeFor(0, "left"));
   const R = keys.has(codeFor(0, "right"));
   return {
