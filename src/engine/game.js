@@ -137,6 +137,8 @@ export let onlineIsHost = true;
 /** i18n key (+ optional vars) for searching / disconnect status lines. */
 export let onlineStatusKey = "";
 export let onlineStatusVars = {};
+/** Server-provided display names for the current online match: {local, opponent}, or null. */
+export let onlineNames = null;
 
 export function setOnlineLocalSeat(seat) {
   onlineLocalSeat = seat === 1 ? 1 : 0;
@@ -144,6 +146,11 @@ export function setOnlineLocalSeat(seat) {
 
 export function setOnlineIsHost(isHost) {
   onlineIsHost = !!isHost;
+}
+
+/** @param {{local?: string, opponent?: string}|null} names */
+export function setOnlineNames(names) {
+  onlineNames = names && (names.local || names.opponent) ? names : null;
 }
 
 /** @param {string} key i18n key, or "" to clear */
@@ -568,6 +575,7 @@ export function startGame(mode, opts = {}) {
     clearMatchSeed();
     onlineLocalSeat = 0;
     onlineIsHost = true;
+    setOnlineNames(null);
   }
   resetRobots();
   servingSide = matchRandom() < 0.5 ? -1 : 1;
@@ -578,6 +586,7 @@ export function toMenu() {
   clearMatchSeed();
   gameMode = null;
   setOnlineStatus("");
+  setOnlineNames(null);
   state = "menu";
   winner = null;
   banner = null;

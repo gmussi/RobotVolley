@@ -9,7 +9,7 @@ import {
   banner, winner, menuOptions, menuIndex, menuMode, modeOptions, modeIndex,
   pauseFromState, submenuReturnState, onlineOverlay,
   P1, P2, getArmSpec, onlineStatusKey, onlineStatusVars, onlineLocalSeat,
-  creditsLink, attractActive,
+  onlineNames, creditsLink, attractActive,
 } from "../engine/game.js";
 import { t } from "../i18n/index.js";
 import { drawLotteryAnimation } from "./lottery.js";
@@ -483,7 +483,9 @@ function drawRobotPiecesHUD(robot, side, cy, slotSize, gap) {
   let label = side < 0 ? t("hud.p1") : (gameMode === "1p" ? t("hud.cpu") : t("hud.p2"));
   if (gameMode === "online") {
     const seat = side < 0 ? 0 : 1;
-    label = seat === onlineLocalSeat ? t("hud.you") : t("hud.opp");
+    const isLocal = seat === onlineLocalSeat;
+    const name = isLocal ? onlineNames?.local : onlineNames?.opponent;
+    label = name || (isLocal ? t("hud.you") : t("hud.opp"));
   }
   const labelX = side < 0 ? margin : W - margin;
   ctx.fillText(label, labelX, cy + slotSize / 2 + 10);
@@ -550,7 +552,9 @@ function drawBanner(vis = state) {
     const serverSeat = servingSide < 0 ? 0 : 1;
     let name = serverIsCpu ? t("serve.cpu") : t("common.playerN", { n: serverSeat + 1 });
     if (gameMode === "online") {
-      name = serverSeat === onlineLocalSeat ? t("serve.you") : t("serve.opponent");
+      const isLocal = serverSeat === onlineLocalSeat;
+      const onlineName = isLocal ? onlineNames?.local : onlineNames?.opponent;
+      name = onlineName || (isLocal ? t("serve.you") : t("serve.opponent"));
     }
     centerText(ctx, t("serve.toServe", { name }),
       servingSide < 0 ? COLORS.p1 : COLORS.p2, 30, H * 0.32);
