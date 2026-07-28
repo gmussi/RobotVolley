@@ -1,0 +1,23 @@
+# For the private server — pulls the image GitHub Actions publishes, never
+# builds locally. Copy this file there (it needs nothing else from the repo)
+# and see docs/bots.md for the full setup.
+#
+#   docker compose -f docker-compose.server.yml up -d
+#   docker compose -f docker-compose.server.yml pull && docker compose -f docker-compose.server.yml up -d   # update
+services:
+  bots:
+    image: ghcr.io/gmussi/robot-volley-bots:latest
+    restart: unless-stopped
+    environment:
+      BOT_MM_URL: ${BOT_MM_URL:?set BOT_MM_URL in .env, e.g. wss://robot-volley-mm.gmussi.workers.dev/ws}
+      BOT_SECRET: ${BOT_SECRET:?set BOT_SECRET in .env — must match the worker's BOT_SECRET}
+      BOT_API_URL: ${BOT_API_URL:-}
+    command: ["--count", "${BOT_COUNT:-8}", "--skill", "${BOT_SKILL:-mixed}"]
+    volumes:
+      # Bot accounts live here. Losing this volume just orphans the accounts
+      # (a fresh set gets created), but it does mean a rebuilt fleet starts
+      # from scratch on the leaderboard.
+      - bot-credentials:/app/tools/bot/.credentials
+
+volumes:
+  bot-credentials:

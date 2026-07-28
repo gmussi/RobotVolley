@@ -46,7 +46,7 @@ export async function getAccount(db, accountId) {
  * name on collision, then gives up and appends part of the account id — a
  * player can always rename, so a slightly ugly placeholder beats a failed login.
  */
-export async function createAccount(db, provider, uid, suggested) {
+export async function createAccount(db, provider, uid, suggested, { isBot = false } = {}) {
   const id = newId();
   const ts = now();
 
@@ -68,9 +68,10 @@ export async function createAccount(db, provider, uid, suggested) {
   await db.batch([
     db
       .prepare(
-        `INSERT INTO accounts (id, display_name, name_lower, created_at) VALUES (?, ?, ?, ?)`,
+        `INSERT INTO accounts (id, display_name, name_lower, created_at, is_bot)
+         VALUES (?, ?, ?, ?, ?)`,
       )
-      .bind(id, name, name.toLowerCase(), ts),
+      .bind(id, name, name.toLowerCase(), ts, isBot ? 1 : 0),
     db
       .prepare(
         `INSERT INTO identities (provider, provider_uid, account_id, linked_at) VALUES (?, ?, ?, ?)`,
@@ -86,8 +87,11 @@ export async function createAccount(db, provider, uid, suggested) {
   return await getAccount(db, id);
 }
 
-export async function findOrCreateAccount(db, provider, uid, suggested) {
-  return (await findAccountByIdentity(db, provider, uid)) ?? (await createAccount(db, provider, uid, suggested));
+export async function findOrCreateAccount(db, provider, uid, suggested, opts = {}) {
+  return (
+    (await findAccountByIdentity(db, provider, uid)) ??
+    (await createAccount(db, provider, uid, suggested, opts))
+  );
 }
 
 export async function getStats(db, accountId) {

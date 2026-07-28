@@ -10,7 +10,8 @@
  */
 import { verifyJwt } from "./auth/jwt.js";
 import { getAccount, getStats } from "./db.js";
-import { chooseOpponent, START_ELO } from "../../shared/ranking.js";
+import { START_ELO } from "../../shared/ranking.js";
+import { planPairings, HUMAN_BOT_GRACE_MS } from "../../shared/pairing.js";
 import { reportResult, recordForfeit } from "./results.js";
 
 /**
@@ -20,22 +21,12 @@ import { reportResult, recordForfeit } from "./results.js";
  */
 const ROOM_RETENTION_MS = 5 * 60 * 1000;
 
-function haversineKm(lat1, lon1, lat2, lon2) {
-  if (
-    lat1 == null || lon1 == null || lat2 == null || lon2 == null ||
-    Number.isNaN(lat1) || Number.isNaN(lon1) || Number.isNaN(lat2) || Number.isNaN(lon2)
-  ) {
-    return Number.POSITIVE_INFINITY;
-  }
-  const toRad = (d) => (d * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
+/**
+ * Pairing is partly time-based — a human waits `HUMAN_BOT_GRACE_MS` before a
+ * bot becomes an acceptable opponent — so it cannot only run when someone
+ * joins. This is how often we re-check while anyone is queued.
+ */
+const PAIRING_SWEEP_MS = 1000;
 
 function parseGeo(headers) {
   const lat = parseFloat(headers.get("X-Geo-Lat") || "");
@@ -72,6 +63,8 @@ export class Matchmaker {
     this.queue = [];
     /** @type {Map<string, { a: string, b: string }>} */
     this.rooms = new Map();
+    /** Handle for the pairing sweep; non-null only while the queue is busy. */
+    this.sweepTimer = null;
   }
 
   async fetch(request) {
@@ -98,10 +91,13 @@ export class Matchmaker {
       lon: geo.lon,
       colo: geo.colo,
       country: geo.country,
+      isBot: false,
       inQueue: false,
       roomId: null,
       peerId: null,
       joinedAt: Date.now(),
+      /** When this socket last entered the queue — drives the bot grace period. */
+      queuedAt: 0,
     };
     this.sessions.set(playerId, session);
 
@@ -216,6 +212,10 @@ export class Matchmaker {
 
     s.accountId = account.id;
     s.displayName = account.display_name;
+    // Set by the server from the account row, never claimed by the socket: it
+    // decides matchmaking priority (see shared/pairing.js), so a client that
+    // could assert it could misrepresent what the queue contains.
+    s.isBot = account.is_bot === 1;
     // Cached now so pairing stays synchronous — the queue scan must not await.
     s.elo = (await getStats(this.env.DB, account.id)).elo ?? START_ELO;
     this.sendTo(playerId, {
@@ -334,40 +334,90 @@ export class Matchmaker {
       // Soft-cancel a failed WebRTC attempt so the player can requeue.
       this.cancelMatch(playerId);
     }
-    if (s.inQueue) {
-      this.sendTo(playerId, { type: "queue_joined" });
-      return;
+    if (!s.inQueue) {
+      s.inQueue = true;
+      s.queuedAt = Date.now();
+      if (!this.queue.includes(playerId)) this.queue.push(playerId);
     }
+    this.sendTo(playerId, { type: "queue_joined" });
 
-    // Geography decides. Rating only separates opponents who are already about
-    // as close as each other — see chooseOpponent in shared/ranking.js.
-    const candidates = [];
-    for (const otherId of this.queue) {
-      if (otherId === playerId) continue;
-      const other = this.sessions.get(otherId);
-      if (!other || !other.inQueue || other.roomId || !isOpen(other.ws)) continue;
-      candidates.push({
-        id: otherId,
-        distanceKm: haversineKm(s.lat, s.lon, other.lat, other.lon),
-        elo: other.elo ?? START_ELO,
+    // Everyone in the queue is considered together rather than just this
+    // arrival, because who *else* is waiting changes the answer — see
+    // shared/pairing.js.
+    this.runPairing();
+  }
+
+  /**
+   * Form every match the current queue allows. Safe to call at any time; it is
+   * driven both by arrivals and by a timer, since a human's eligibility for a
+   * bot opponent turns on how long they have been waiting.
+   */
+  runPairing() {
+    this.pruneDead();
+
+    const entries = [];
+    for (const id of this.queue) {
+      const s = this.sessions.get(id);
+      if (!s) continue;
+      entries.push({
+        id,
+        isBot: !!s.isBot,
+        queuedAt: s.queuedAt || s.joinedAt,
+        lat: s.lat,
+        lon: s.lon,
+        elo: s.elo ?? START_ELO,
       });
     }
-    const bestId = chooseOpponent(candidates, s.elo ?? START_ELO);
 
-    if (bestId && this.isAlive(bestId)) {
-      this.formMatch(bestId, playerId);
-      return;
+    // How many bots to keep sitting in the queue as a standing supply of
+    // instant opponents. Tunable per deploy: a fleet that exists to cover
+    // players wants a couple held back, one that exists to generate load
+    // wants 0. See shared/pairing.js.
+    const reserveBots = Number.isFinite(Number(this.env?.BOT_QUEUE_RESERVE))
+      ? Number(this.env.BOT_QUEUE_RESERVE)
+      : undefined;
+
+    for (const [hostId, guestId] of planPairings(entries, Date.now(), { reserveBots })) {
+      if (this.isAlive(hostId) && this.isAlive(guestId)) this.formMatch(hostId, guestId);
     }
 
-    s.inQueue = true;
-    if (!this.queue.includes(playerId)) this.queue.push(playerId);
-    this.sendTo(playerId, { type: "queue_joined" });
+    this.scheduleSweep();
+  }
+
+  /**
+   * Keep re-running pairing while anyone is queued. A human who arrives to an
+   * all-bot queue is deliberately not matched for `HUMAN_BOT_GRACE_MS`, and
+   * nothing else would wake us up to match them once that expires.
+   *
+   * The object stays resident for the life of its WebSockets (they are
+   * `accept()`ed, not hibernated), so a plain timer is enough here; the storage
+   * alarm is left to room retention, which is on a completely different clock.
+   */
+  scheduleSweep() {
+    const busy = this.queue.length > 0;
+    if (!busy) {
+      if (this.sweepTimer != null) {
+        clearTimeout(this.sweepTimer);
+        this.sweepTimer = null;
+      }
+      return;
+    }
+    if (this.sweepTimer != null) return;
+    this.sweepTimer = setTimeout(() => {
+      this.sweepTimer = null;
+      try {
+        this.runPairing();
+      } catch {
+        /* never let a sweep failure take the object down */
+      }
+    }, Math.min(PAIRING_SWEEP_MS, HUMAN_BOT_GRACE_MS));
   }
 
   leaveQueue(playerId) {
     const s = this.sessions.get(playerId);
     if (!s) return;
     s.inQueue = false;
+    s.queuedAt = 0;
     this.queue = this.queue.filter((id) => id !== playerId);
   }
 
@@ -396,14 +446,13 @@ export class Matchmaker {
     const host = this.sessions.get(hostId);
     const guest = this.sessions.get(guestId);
     if (!host || !guest || !isOpen(host.ws) || !isOpen(guest.ws)) {
-      // One side died — put the survivor back in queue.
-      if (host && isOpen(host.ws)) {
-        host.inQueue = true;
-        if (!this.queue.includes(hostId)) this.queue.push(hostId);
-      }
-      if (guest && isOpen(guest.ws)) {
-        guest.inQueue = true;
-        if (!this.queue.includes(guestId)) this.queue.push(guestId);
+      // One side died — put the survivor back in queue, with a fresh wait clock
+      // so they get another shot at a human before a bot is offered.
+      for (const [id, s] of [[hostId, host], [guestId, guest]]) {
+        if (!s || !isOpen(s.ws)) continue;
+        s.inQueue = true;
+        s.queuedAt = Date.now();
+        if (!this.queue.includes(id)) this.queue.push(id);
       }
       return;
     }

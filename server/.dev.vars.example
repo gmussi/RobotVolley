@@ -3,6 +3,10 @@
 JWT_SIGNING_KEY=local-dev-jwt-key-not-for-production
 DEVICE_SIGNING_KEY=local-dev-device-key-not-for-production
 
+# Authorises the matchmaking bots in tools/bot/. Must match the --secret they
+# are run with. Unset means no bots can sign in, which is the safe default.
+BOT_SECRET=local-dev-bot-secret-not-for-production
+
 # Only needed to exercise the Steam login path locally.
 # STEAM_WEB_API_KEY=
 # STEAM_APP_ID=

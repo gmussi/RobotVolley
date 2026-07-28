@@ -3,10 +3,9 @@
  */
 import { MM, encode, decode } from "./protocol.js";
 import { ensureSessionToken } from "./api.js";
+import { matchmakingUrl, tokenProvider } from "./config.js";
 
-const DEFAULT_URL = import.meta.env.VITE_MATCHMAKING_URL || "";
-
-export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
+export function createMatchmakingClient(handlers = {}, url = null) {
   let ws = null;
   let playerId = null;
   let account = null;
@@ -21,18 +20,22 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(encode(msg));
   }
 
+  // Resolved at connect time, not import time, so configureNet() can set it.
+  const resolveUrl = () => url || matchmakingUrl();
+
   function connect() {
-    if (!url) {
+    const target = resolveUrl();
+    if (!target) {
       emit("error", { message: "missing_matchmaking_url" });
       return;
     }
     closedByUser = false;
-    ws = new WebSocket(url);
+    ws = new WebSocket(target);
     ws.addEventListener("open", async () => {
       // Authenticate before anything else — the server refuses to queue an
       // anonymous socket. `open` is emitted only once we're allowed to act,
       // so callers never have to think about the handshake.
-      const token = await ensureSessionToken();
+      const token = await (tokenProvider() ?? ensureSessionToken)();
       if (!token) {
         emit("error", { message: "sign_in_failed" });
         return;
@@ -141,6 +144,6 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
     close,
     getPlayerId: () => playerId,
     getAccount: () => account,
-    getUrl: () => url,
+    getUrl: () => resolveUrl(),
   };
 }

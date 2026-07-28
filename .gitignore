@@ -8,6 +8,9 @@ coverage/
 .env
 .env.local
 tools/.env
+# Each bot's account credentials — losing these just orphans the bot accounts,
+# but committing them would hand anyone control of the fleet's accounts.
+tools/bot/.credentials/
 server/.wrangler/
 server/.dev.vars
 tools/style_ref.png
