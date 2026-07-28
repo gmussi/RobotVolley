@@ -14,6 +14,10 @@ export const MM = {
   MATCH_FOUND: "match_found",
   SIGNAL: "signal",
   PEER_LEFT: "peer_left",
+  // Sent once a peer's data channel handshake completes and beginMatch() runs.
+  // The server uses this — not either client's later say-so — to decide
+  // whether a dropped connection is a real forfeit or just a failed setup.
+  MATCH_STARTED: "match_started",
   // Both peers report the finished match; the server records it only when the
   // two reports agree. Rides the matchmaking socket, which stays open for the
   // whole match, so no extra connection is needed.

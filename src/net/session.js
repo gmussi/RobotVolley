@@ -9,8 +9,8 @@ import {
   enterSearching, showDisconnect, toMenu, startGame, setOnlineStatus,
   getRobotLoadout, applyRobotLoadout, buildSnapshot, applySnapshot,
   applyRemoteInput, applyRemoteServe, readLocalOnlineInput, extrapolateVisual,
-  applyRobotCosmetics, onlineIsHost, onlineLocalSeat, state, servingSide,
-  score, winner,
+  applyRobotCosmetics, awardForfeitWin, onlineIsHost, onlineLocalSeat, state,
+  servingSide, score, winner,
 } from "../engine/game.js";
 import { codeFor } from "../data/controls.js";
 import { getLoadout as getProfileLoadout, refreshAfterMatch } from "../progress/profile.js";
@@ -133,6 +133,19 @@ function failConnectAndRequeue(reason) {
   notify("requeue");
 }
 
+/**
+ * The opponent's connection dropped while a match was in progress. Award the
+ * still-connected player the win instead of leaving them stuck on a bare
+ * "opponent disconnected" screen with no result — this is the only signal
+ * either peer gets that the other one quit or lost their connection.
+ */
+function handleOpponentGoneMidMatch() {
+  const seat = onlineLocalSeat;
+  cleanupNet();
+  awardForfeitWin(seat);
+  notify("forfeit_win");
+}
+
 export function cancelOnline() {
   cleanupNet();
   toMenu();
@@ -174,9 +187,7 @@ export function beginOnlineMatchmaking() {
     },
     peer_left: () => {
       if (active) {
-        cleanupNet();
-        showDisconnect("Opponent disconnected");
-        notify("disconnect");
+        handleOpponentGoneMidMatch();
         return;
       }
       if (matchInfo) {
@@ -228,9 +239,7 @@ function startWebRtc(msg) {
     },
     onClose: () => {
       if (active) {
-        cleanupNet();
-        showDisconnect("Opponent disconnected");
-        notify("disconnect");
+        handleOpponentGoneMidMatch();
         return;
       }
       if (matchInfo) {
@@ -253,13 +262,18 @@ function startWebRtc(msg) {
 
 /**
  * Dress the seat we're about to occupy from the signed-in profile, then hand
- * the whole loadout to the peer. Cosmetics come from the account rather than
- * whatever the Robot Lab last set, so what you picked in the Profile screen is
- * what your opponent sees.
+ * the cosmetics to the peer. Colors/cosmetics come from the account rather
+ * than whatever the Robot Lab last set, so what you picked in the Profile
+ * screen is what your opponent sees. Deliberately excludes `accessory` and
+ * `weapon` — those are gameplay state, not account cosmetics, and every match
+ * must start with no accessory and the default weapon. Sending them here
+ * shipped whatever a prior local match (or the Robot Lab) last left on the
+ * robot as if it were part of the account loadout.
  */
 function capturePreMatchLoadout(seat) {
   applyRobotCosmetics(seat, getProfileLoadout());
-  return getRobotLoadout(seat);
+  const { colors, cosmetics } = getRobotLoadout(seat);
+  return { colors, cosmetics };
 }
 
 /**
@@ -345,6 +359,10 @@ function beginMatch() {
   lastSnapTick = -1;
   lastSentInput = null;
   setOnlineStatus("");
+  // Tells the server this room is a real, live match — see forfeitIfStarted
+  // in the matchmaker, which uses this (not a client's later say-so) to
+  // decide whether a dropped connection counts as a forfeit.
+  mm?.matchStarted(matchInfo.roomId);
   notify("match_started", matchInfo);
 
   if (matchInfo.isHost) {

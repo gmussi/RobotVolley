@@ -11,7 +11,7 @@
 import { verifyJwt } from "./auth/jwt.js";
 import { getAccount, getStats } from "./db.js";
 import { chooseOpponent, START_ELO } from "../../shared/ranking.js";
-import { reportResult } from "./results.js";
+import { reportResult, recordForfeit } from "./results.js";
 
 /**
  * How long a finished room's seat→account mapping is kept so a late result
@@ -179,6 +179,9 @@ export class Matchmaker {
       case "match_result":
         this.recordResult(playerId, msg);
         break;
+      case "match_started":
+        this.markMatchStarted(playerId, msg.roomId);
+        break;
       default:
         this.sendTo(playerId, { type: "error", message: "unknown_type" });
     }
@@ -230,6 +233,44 @@ export class Matchmaker {
     await this.ctx.storage.put(`room:${roomId}`, { seats, at: Date.now() });
     const existing = await this.ctx.storage.getAlarm();
     if (existing == null) await this.ctx.storage.setAlarm(Date.now() + ROOM_RETENTION_MS);
+  }
+
+  /**
+   * A peer told us their side of this room reached beginMatch(). Recorded so
+   * a later dropped connection (see forfeitIfStarted) can be told apart from
+   * a WebRTC handshake that never actually turned into a match — only a room
+   * marked started here is eligible to be forfeited into real stats.
+   */
+  async markMatchStarted(playerId, roomId) {
+    const s = this.sessions.get(playerId);
+    if (!s || !roomId || s.roomId !== roomId) return;
+    const record = await this.ctx.storage.get(`room:${roomId}`);
+    if (!record || record.started) return;
+    // Refresh `at` so the retention window covers the match's actual length,
+    // not just the time between matchmaking and the WebRTC handshake.
+    await this.ctx.storage.put(`room:${roomId}`, { ...record, started: true, at: Date.now() });
+  }
+
+  /**
+   * The room's other player is gone and the match had actually started —
+   * credit the one still here a forfeit win. This is server-observed (the
+   * socket really closed), not a client claim, so it needs no corroboration
+   * from a second report.
+   */
+  async forfeitIfStarted(roomId, survivorPlayerId, quitterAccountId) {
+    const record = await this.ctx.storage.get(`room:${roomId}`);
+    if (!record?.started) return;
+    const seats = record.seats || [];
+    const survivorAccount = seats.find((id) => id && id !== quitterAccountId);
+    if (!survivorAccount) return;
+
+    const outcome = await recordForfeit(this.env.DB, {
+      roomId,
+      seats,
+      winnerAccount: survivorAccount,
+      loserAccount: quitterAccountId,
+    });
+    this.sendTo(survivorPlayerId, { type: "result_recorded", status: outcome.status });
   }
 
   /** Sweep expired room records; re-arm while any remain. */
@@ -436,16 +477,21 @@ export class Matchmaker {
 
     this.leaveQueue(playerId);
 
-    if (s.peerId) {
-      const peer = this.sessions.get(s.peerId);
+    const { roomId, peerId, accountId } = s;
+    if (peerId) {
+      const peer = this.sessions.get(peerId);
       if (peer) {
         peer.peerId = null;
         if (peer.roomId) this.rooms.delete(peer.roomId);
         peer.roomId = null;
-        this.sendTo(s.peerId, { type: "peer_left" });
+        this.sendTo(peerId, { type: "peer_left" });
       }
     }
-    if (s.roomId) this.rooms.delete(s.roomId);
+    if (roomId) this.rooms.delete(roomId);
     this.sessions.delete(playerId);
+
+    if (roomId && peerId && accountId) {
+      void this.forfeitIfStarted(roomId, peerId, accountId);
+    }
   }
 }

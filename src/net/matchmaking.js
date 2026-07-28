@@ -109,6 +109,10 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
     send({ type: MM.MATCH_RESULT, ...result });
   }
 
+  function matchStarted(roomId) {
+    send({ type: MM.MATCH_STARTED, roomId });
+  }
+
   function close() {
     closedByUser = true;
     try {
@@ -133,6 +137,7 @@ export function createMatchmakingClient(handlers = {}, url = DEFAULT_URL) {
     cancelMatch,
     signal,
     reportResult,
+    matchStarted,
     close,
     getPlayerId: () => playerId,
     getAccount: () => account,

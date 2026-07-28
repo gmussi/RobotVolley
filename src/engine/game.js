@@ -661,6 +661,19 @@ export function awardPoint(scorer) {
   }
 }
 
+/**
+ * The opponent quit or dropped connection mid-match — award the remaining
+ * player the win via the same "over" flow a normal match end uses, so the
+ * win banner, achievements, and result reporting all fire as usual.
+ */
+export function awardForfeitWin(seat) {
+  if (state === "over") return;
+  winner = seat;
+  state = "over";
+  bannerText = `PLAYER ${seat + 1} WINS — OPPONENT LEFT`;
+  emitAudio("match_win");
+}
+
 // ---- Serve input ----
 export function isServerKey(code, controlMap) {
   const ctrl = controlMap[code];

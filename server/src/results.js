@@ -127,6 +127,52 @@ export async function reportResult(db, { roomId, accountId, seat, report, seats 
   return { status: "recorded" };
 }
 
+/**
+ * Server-observed forfeit: the matchmaker itself saw the loser's socket close
+ * while the room was marked "started" (see Matchmaker#forfeitIfStarted) — this
+ * is written directly as 'recorded' rather than 'pending' because the server
+ * is the one asserting it happened, not a client report waiting on a second
+ * peer to corroborate (there is no second peer left to ask).
+ *
+ * Guarded against two concurrent forfeits for the same room (e.g. both sockets
+ * drop together) by the `room_id` primary key: the loser of that race gets a
+ * constraint failure here and is treated as a no-op, same as any other replay
+ * of an already-settled room.
+ *
+ * @returns {Promise<{status: string, reason?: string}>}
+ */
+export async function recordForfeit(db, { roomId, seats, winnerAccount, loserAccount }) {
+  if (!winnerAccount || !loserAccount || winnerAccount === loserAccount) {
+    return { status: "rejected", reason: "bad_accounts" };
+  }
+
+  const existing = await db.prepare(`SELECT status FROM matches WHERE room_id = ?`).bind(roomId).first();
+  // Any existing row — pending, recorded, or disputed — means either a real
+  // dual-report is already in flight or this room was already settled. A
+  // forfeit never overrides that.
+  if (existing) return { status: existing.status, reason: "already_settled" };
+
+  const winnerSeat = seats.indexOf(winnerAccount);
+  const ts = Date.now();
+  try {
+    await db
+      .prepare(
+        `INSERT INTO matches
+           (room_id, a_account, b_account, winner_seat, score_a, score_b,
+            duration_ms, reported_by, status, created_at, recorded_at)
+         VALUES (?, ?, ?, ?, NULL, NULL, NULL, NULL, 'recorded', ?, ?)`,
+      )
+      .bind(roomId, seats[0] ?? null, seats[1] ?? null, winnerSeat, ts, ts)
+      .run();
+  } catch {
+    // Lost the race to a concurrent forfeit/report for the same room.
+    return { status: "already_settled" };
+  }
+
+  await applyOutcome(db, winnerAccount, loserAccount, ts);
+  return { status: "recorded" };
+}
+
 /** Move stats, Elo, unlocks and both leaderboard periods for one settled match. */
 async function applyOutcome(db, winnerAccount, loserAccount, ts) {
   const [winnerStats, loserStats] = await Promise.all([
