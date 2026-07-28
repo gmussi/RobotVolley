@@ -1,5 +1,6 @@
 /**
- * Leaderboard — daily and weekly boards with a live reset countdown.
+ * Leaderboard — daily and weekly boards, a last-matches tab, and a live reset
+ * countdown.
  *
  * The countdown ticks against the server's `resetsAt`, corrected for the offset
  * between the server clock and this device's, so a wrong system clock shows the
@@ -8,19 +9,21 @@
 import { W, H } from "../data/constants.js";
 import { apiFetch, isApiConfigured } from "../net/api.js";
 import { getProfile } from "../progress/profile.js";
-import { t, formatLocalizedCountdown } from "../i18n/index.js";
+import { t, formatLocalizedCountdown, formatLocalizedAgo } from "../i18n/index.js";
 import {
   COLORS, fontDisplay, fontBody,
   drawScrim, drawTitle, drawGlassPanel, drawFooterHint, roundRect,
 } from "./neonUi.js";
 
-const PERIODS = ["daily", "weekly"];
+const TABS = ["daily", "weekly", "matches"];
 const ROWS_VISIBLE = 9;
 
-let period = "daily";
+let tab = "daily";
 /** @type {"idle"|"loading"|"ready"|"offline"} */
 let loadState = "idle";
 let board = null;
+/** @type {Array<object>|null} last-matches tab data */
+let matches = null;
 /** serverTime - Date.now() at fetch, so the countdown ignores clock skew. */
 let clockOffset = 0;
 let scrollTop = 0;
@@ -38,7 +41,17 @@ async function load() {
     return;
   }
   loadState = "loading";
-  const res = await apiFetch(`/leaderboard?period=${period}`);
+  if (tab === "matches") {
+    const res = await apiFetch("/matches/recent");
+    if (res.ok && res.data) {
+      matches = res.data.matches ?? [];
+      loadState = "ready";
+    } else {
+      loadState = "offline";
+    }
+    return;
+  }
+  const res = await apiFetch(`/leaderboard?period=${tab}`);
   if (res.ok && res.data) {
     board = res.data;
     clockOffset = (res.data.serverTime ?? Date.now()) - Date.now();
@@ -48,24 +61,29 @@ async function load() {
   }
 }
 
-function setPeriod(next) {
-  if (period === next) return;
-  period = next;
+function setTab(next) {
+  if (tab === next) return;
+  tab = next;
   board = null;
+  matches = null;
   scrollTop = 0;
   void load();
 }
 
+function listLength() {
+  return tab === "matches" ? (matches?.length ?? 0) : (board?.entries?.length ?? 0);
+}
+
 export function handleLeaderboardKey(code) {
   if (code === "ArrowLeft" || code === "KeyA") {
-    setPeriod(PERIODS[(PERIODS.indexOf(period) + PERIODS.length - 1) % PERIODS.length]);
+    setTab(TABS[(TABS.indexOf(tab) + TABS.length - 1) % TABS.length]);
     return true;
   }
   if (code === "ArrowRight" || code === "KeyD") {
-    setPeriod(PERIODS[(PERIODS.indexOf(period) + 1) % PERIODS.length]);
+    setTab(TABS[(TABS.indexOf(tab) + 1) % TABS.length]);
     return true;
   }
-  const max = Math.max(0, (board?.entries?.length ?? 0) - ROWS_VISIBLE);
+  const max = Math.max(0, listLength() - ROWS_VISIBLE);
   if (code === "ArrowDown" || code === "KeyS") {
     scrollTop = Math.min(max, scrollTop + 1);
     return true;
@@ -81,7 +99,7 @@ export function handleLeaderboardPointer(mx, my, phase) {
   if (phase !== "down") return false;
   for (const box of leaderboardHitBoxes) {
     if (mx >= box.x && mx <= box.x + box.w && my >= box.y && my <= box.y + box.h) {
-      setPeriod(box.period);
+      setTab(box.tab);
       return true;
     }
   }
@@ -89,11 +107,11 @@ export function handleLeaderboardPointer(mx, my, phase) {
 }
 
 function drawTabs(ctx, x, y, w) {
-  const tabW = w / PERIODS.length;
-  PERIODS.forEach((p, i) => {
+  const tabW = w / TABS.length;
+  TABS.forEach((tb, i) => {
     const tx = x + i * tabW;
-    const active = p === period;
-    leaderboardHitBoxes.push({ period: p, x: tx, y, w: tabW, h: 34 });
+    const active = tb === tab;
+    leaderboardHitBoxes.push({ tab: tb, x: tx, y, w: tabW, h: 34 });
     drawGlassPanel(ctx, tx + 3, y, tabW - 6, 34, {
       radius: 8,
       borderColor: active ? COLORS.accent : COLORS.surfaceBorder,
@@ -105,7 +123,7 @@ function drawTabs(ctx, x, y, w) {
     ctx.font = fontDisplay(15, 700);
     ctx.letterSpacing = "2px";
     ctx.fillStyle = active ? COLORS.accent : COLORS.textMuted;
-    ctx.fillText(t(`leaderboard.${p}`), tx + tabW / 2, y + 17);
+    ctx.fillText(t(`leaderboard.${tb}`), tx + tabW / 2, y + 17);
     ctx.letterSpacing = "0px";
   });
 }
@@ -140,6 +158,29 @@ function drawRow(ctx, entry, x, y, w, highlight) {
   ctx.fillText(t("leaderboard.lossShort", { n: losses }), x + w - 12, y);
 }
 
+function drawMatchRow(ctx, m, x, y, w) {
+  ctx.textBaseline = "middle";
+  ctx.font = fontDisplay(15, 700);
+  ctx.fillStyle = m.won ? COLORS.accent : COLORS.textMuted;
+  ctx.textAlign = "right";
+  ctx.fillText(t(m.won ? "leaderboard.matchWin" : "leaderboard.matchLoss"), x + 34, y);
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = COLORS.text;
+  ctx.fillText(m.opponentName ?? t("leaderboard.unknownOpponent"), x + 52, y);
+
+  const score = Number.isInteger(m.myScore) && Number.isInteger(m.opponentScore)
+    ? `${m.myScore}-${m.opponentScore}`
+    : "—";
+  ctx.textAlign = "right";
+  ctx.font = fontBody(13, 700);
+  ctx.fillStyle = COLORS.textMuted;
+  ctx.fillText(score, x + w - 96, y);
+
+  ctx.font = fontBody(12, 700);
+  ctx.fillText(formatLocalizedAgo(Date.now() - m.recordedAt), x + w - 12, y);
+}
+
 export function drawLeaderboardScreen(ctx) {
   leaderboardHitBoxes.length = 0;
   drawScrim(ctx, 0.6);
@@ -151,7 +192,8 @@ export function drawLeaderboardScreen(ctx) {
 
   drawTabs(ctx, panelX + 24, H * 0.17, panelW - 48);
 
-  // Reset countdown — the whole reason the board feels urgent.
+  // Reset countdown — the whole reason the board feels urgent. Only the
+  // period boards reset; the matches tab has nothing to show here.
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = fontBody(13, 700);
@@ -172,7 +214,8 @@ export function drawLeaderboardScreen(ctx) {
   const listW = panelW - 80;
   let y = H * 0.34;
 
-  if (loadState === "loading" && !board) {
+  const hasData = tab === "matches" ? matches != null : board != null;
+  if (loadState === "loading" && !hasData) {
     ctx.fillStyle = COLORS.textMuted;
     ctx.font = fontBody(14, 700);
     ctx.fillText(t("leaderboard.loading"), W / 2, H * 0.5);
@@ -190,36 +233,56 @@ export function drawLeaderboardScreen(ctx) {
   ctx.textAlign = "right";
   ctx.font = fontBody(11, 700);
   ctx.fillStyle = COLORS.textMuted;
-  ctx.fillText(t("leaderboard.wins"), listX + listW - 96, y - 22);
-  ctx.fillText(t("leaderboard.losses"), listX + listW - 12, y - 22);
-
-  const entries = board?.entries ?? [];
-  if (!entries.length) {
-    ctx.textAlign = "center";
-    ctx.font = fontBody(14, 700);
-    ctx.fillStyle = COLORS.textMuted;
-    ctx.fillText(t("leaderboard.empty"), W / 2, H * 0.5);
+  if (tab === "matches") {
+    ctx.fillText(t("leaderboard.matchScore"), listX + listW - 96, y - 22);
+    ctx.fillText(t("leaderboard.matchWhen"), listX + listW - 12, y - 22);
   } else {
-    const myId = getProfile().accountId;
-    for (const entry of entries.slice(scrollTop, scrollTop + ROWS_VISIBLE)) {
-      drawRow(ctx, entry, listX, y, listW, entry.accountId === myId);
-      y += 32;
-    }
+    ctx.fillText(t("leaderboard.wins"), listX + listW - 96, y - 22);
+    ctx.fillText(t("leaderboard.losses"), listX + listW - 12, y - 22);
   }
 
-  // Your own row, pinned, when you're not visible in the window above.
-  const me = board?.me;
-  const visible = entries
-    .slice(scrollTop, scrollTop + ROWS_VISIBLE)
-    .some((e) => e.accountId === me?.accountId);
-  if (me && !visible) {
-    const pinY = H * 0.83;
-    ctx.strokeStyle = COLORS.surfaceBorder;
-    ctx.beginPath();
-    ctx.moveTo(listX, pinY - 20);
-    ctx.lineTo(listX + listW, pinY - 20);
-    ctx.stroke();
-    drawRow(ctx, me, listX, pinY, listW, true);
+  if (tab === "matches") {
+    const list = matches ?? [];
+    if (!list.length) {
+      ctx.textAlign = "center";
+      ctx.font = fontBody(14, 700);
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.fillText(t("leaderboard.noMatches"), W / 2, H * 0.5);
+    } else {
+      for (const m of list.slice(scrollTop, scrollTop + ROWS_VISIBLE)) {
+        drawMatchRow(ctx, m, listX, y, listW);
+        y += 32;
+      }
+    }
+  } else {
+    const entries = board?.entries ?? [];
+    if (!entries.length) {
+      ctx.textAlign = "center";
+      ctx.font = fontBody(14, 700);
+      ctx.fillStyle = COLORS.textMuted;
+      ctx.fillText(t("leaderboard.empty"), W / 2, H * 0.5);
+    } else {
+      const myId = getProfile().accountId;
+      for (const entry of entries.slice(scrollTop, scrollTop + ROWS_VISIBLE)) {
+        drawRow(ctx, entry, listX, y, listW, entry.accountId === myId);
+        y += 32;
+      }
+    }
+
+    // Your own row, pinned, when you're not visible in the window above.
+    const me = board?.me;
+    const visible = entries
+      .slice(scrollTop, scrollTop + ROWS_VISIBLE)
+      .some((e) => e.accountId === me?.accountId);
+    if (me && !visible) {
+      const pinY = H * 0.83;
+      ctx.strokeStyle = COLORS.surfaceBorder;
+      ctx.beginPath();
+      ctx.moveTo(listX, pinY - 20);
+      ctx.lineTo(listX + listW, pinY - 20);
+      ctx.stroke();
+      drawRow(ctx, me, listX, pinY, listW, true);
+    }
   }
 
   drawFooterHint(ctx, [

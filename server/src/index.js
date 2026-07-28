@@ -12,6 +12,7 @@ import {
 } from "./api/auth.js";
 import { handleGetMe, handlePutLoadout, handlePutName } from "./api/me.js";
 import { handleLeaderboard } from "./api/leaderboard.js";
+import { handleRecentMatches } from "./api/matches.js";
 import { corsHeaders } from "./api/http.js";
 
 export { Matchmaker };
@@ -26,6 +27,7 @@ const ROUTES = {
   "PUT /me/loadout": handlePutLoadout,
   "PUT /me/name": handlePutName,
   "GET /leaderboard": handleLeaderboard,
+  "GET /matches/recent": handleRecentMatches,
 };
 
 export default {
