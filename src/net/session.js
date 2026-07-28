@@ -151,6 +151,15 @@ function handleOpponentGoneMidMatch() {
 }
 
 export function cancelOnline() {
+  // The player can dismiss the "match over" screen (tap/click/Space) within a
+  // single frame of the win — well inside human reaction time when they were
+  // already anticipating it. tickOnline() only reports the result on its next
+  // call, which loses the race if cleanupNet() below tears down `mm` first:
+  // matchInfo goes null and the report never sends. Flush it here first — the
+  // browser's WebSocket close() still flushes buffered sends, so calling this
+  // immediately before cleanupNet() is enough. A no-op when there is nothing
+  // to report (mid-match quit, already reported, etc).
+  reportMatchResult();
   cleanupNet();
   toMenu();
   notify("cancelled");

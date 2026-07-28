@@ -506,8 +506,8 @@ function drawArmEmblem(type, hx, hy, dir, armCol, side = -1) {
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#3a424c";
-    ctx.fillRect(hx - 2 + dir * 2, hy - 14, 8, 4);
-    ctx.strokeRect(hx - 2 + dir * 2, hy - 14, 8, 4);
+    ctx.fillRect(hx, hy - 14, dir * 8, 4);
+    ctx.strokeRect(hx, hy - 14, dir * 8, 4);
     const mx = hx + dir * 10;
     const my = hy - 12;
     const blue = side > 0;
