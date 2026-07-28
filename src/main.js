@@ -29,6 +29,7 @@ import {
   modeMove, modeSelectChoose, setModeIndex, backToModeSelect, setQuitEnabled,
   pauseOptions, pauseIndex, pauseMove, pauseSelect, setPauseIndex,
   pauseGame, resumeFromPause, leaveSubmenu, canPause,
+  onlineOverlay, openOnlineOverlay, closeOnlineOverlay, setOnlineOverlay,
   handleServeKeyDown, handleServeKeyUp,
   readInput, tickServe, tickPhysics,
 } from "./engine/game.js";
@@ -224,8 +225,51 @@ window.addEventListener("keydown", (e) => {
     if (handleLeaderboardKey(e.code)) playUiNavigate();
     return;
   }
+  if (onlineOverlay != null) {
+    if (onlineOverlay === "settings") {
+      if (["Enter", "Space", "Escape", "Backspace"].includes(e.code)) {
+        setOnlineOverlay("pause");
+        playUiConfirm();
+        return;
+      }
+      if (handleSettingsKey(e.code)) {
+        if (["ArrowUp", "ArrowDown", "KeyW", "KeyS"].includes(e.code)) playUiNavigate();
+        else playUiConfirm();
+      }
+      return;
+    }
+    if (onlineOverlay === "controls") {
+      const res = handleControlsKey(e.code, e.isTrusted);
+      if (res === "leave") { setOnlineOverlay("pause"); playUiConfirm(); }
+      else if (res === "nav") playUiNavigate();
+      else if (["capture", "bound", "reset", "cancel"].includes(res)) playUiConfirm();
+      return;
+    }
+    // onlineOverlay === "pause"
+    if (e.code === "Escape") { closeOnlineOverlay(); playUiConfirm(); return; }
+    if (e.code === "ArrowUp" || e.code === "KeyW") { pauseMove(-1); playUiNavigate(); return; }
+    if (e.code === "ArrowDown" || e.code === "KeyS") { pauseMove(1); playUiNavigate(); return; }
+    if (e.code === "Enter" || e.code === "Space") {
+      const o = pauseOptions[pauseIndex];
+      if (o?.action === "resume") closeOnlineOverlay();
+      else if (o?.action === "settings") { resetSettingsFocus(); setOnlineOverlay("settings"); }
+      else if (o?.action === "controls") { resetControlsFocus(); setOnlineOverlay("controls"); }
+      else if (o?.action === "quit") { closeOnlineOverlay(); cancelOnline(); }
+      playUiConfirm();
+      return;
+    }
+    return;
+  }
   if (e.code === "Escape" && canPause()) {
     pauseGame();
+    playUiConfirm();
+    return;
+  }
+  if (
+    e.code === "Escape" && gameMode === "online" && isOnlineActive() &&
+    (state === "play" || state === "serve" || state === "point")
+  ) {
+    openOnlineOverlay();
     playUiConfirm();
     return;
   }
@@ -243,11 +287,11 @@ window.addEventListener("keyup", (e) => {
 
 canvas.addEventListener("mousemove", (e) => {
   const { mx, my } = eventToCanvas(canvas, e);
-  if (state === "settings" && settingsDragging) {
+  if ((state === "settings" || onlineOverlay === "settings") && settingsDragging) {
     handleSettingsPointer(mx, my, "move");
     return;
   }
-  if (state === "pause") {
+  if (state === "pause" || onlineOverlay === "pause") {
     pauseOptions.forEach((o, i) => {
       if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h && i !== pauseIndex) {
         setPauseIndex(i);
@@ -256,6 +300,7 @@ canvas.addEventListener("mousemove", (e) => {
     });
     return;
   }
+  if (onlineOverlay != null) return;
   if (state === "modeSelect") {
     modeOptions.forEach((o, i) => {
       if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h && i !== modeIndex) {
@@ -309,6 +354,36 @@ canvas.addEventListener("mousedown", (e) => {
         return;
       }
     }
+    return;
+  }
+  if (onlineOverlay === "pause") {
+    for (let i = 0; i < pauseOptions.length; i++) {
+      const o = pauseOptions[i];
+      if (mx >= o.x && mx <= o.x + o.w && my >= o.y && my <= o.y + o.h) {
+        setPauseIndex(i);
+        if (o.action === "resume") closeOnlineOverlay();
+        else if (o.action === "settings") { resetSettingsFocus(); setOnlineOverlay("settings"); }
+        else if (o.action === "controls") { resetControlsFocus(); setOnlineOverlay("controls"); }
+        else if (o.action === "quit") { closeOnlineOverlay(); cancelOnline(); }
+        playUiConfirm();
+        return;
+      }
+    }
+    return;
+  }
+  if (onlineOverlay === "settings") {
+    if (handleSettingsPointer(mx, my, "down")) {
+      settingsDragging = true;
+      playUiConfirm();
+      return;
+    }
+    setOnlineOverlay("pause");
+    playUiConfirm();
+    return;
+  }
+  if (onlineOverlay === "controls") {
+    if (handleControlsPointer(mx, my, "down")) playUiConfirm();
+    else { setOnlineOverlay("pause"); playUiConfirm(); }
     return;
   }
   if (state === "settings") {

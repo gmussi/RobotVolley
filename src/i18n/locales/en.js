@@ -74,6 +74,7 @@ export default {
   "banner.wins": "PLAYER {n} WINS!",
   "banner.point": "POINT — PLAYER {n}",
   "banner.forfeit": "PLAYER {n} WINS — OPPONENT LEFT",
+  "banner.stall": "REPLAY — BALL STUCK",
   "banner.pressMenu": "press SPACE for the menu",
 
   "online.title": "ONLINE MATCH",

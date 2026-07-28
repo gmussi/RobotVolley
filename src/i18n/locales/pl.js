@@ -74,6 +74,7 @@ export default {
   "banner.wins": "GRACZ {n} WYGRYWA!",
   "banner.point": "PUNKT — GRACZ {n}",
   "banner.forfeit": "GRACZ {n} WYGRYWA — PRZECIWNIK WYSZEDŁ",
+  "banner.stall": "POWTÓRKA — PIŁKA UTKNĘŁA",
   "banner.pressMenu": "SPACJA, by otworzyć menu",
 
   "online.title": "MECZ ONLINE",

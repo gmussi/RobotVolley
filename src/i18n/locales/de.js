@@ -74,6 +74,7 @@ export default {
   "banner.wins": "SPIELER {n} GEWINNT!",
   "banner.point": "PUNKT — SPIELER {n}",
   "banner.forfeit": "SPIELER {n} GEWINNT — GEGNER HAT VERLASSEN",
+  "banner.stall": "WIEDERHOLUNG — BALL FESTGESTECKT",
   "banner.pressMenu": "LEERTASTE für das Menü",
 
   "online.title": "ONLINE-MATCH",

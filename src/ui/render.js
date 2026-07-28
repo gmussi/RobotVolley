@@ -7,7 +7,7 @@ import {
 import {
   ball, score, state, gameMode, servingSide, serveCharge,
   banner, winner, menuOptions, menuIndex, menuMode, modeOptions, modeIndex,
-  pauseFromState, submenuReturnState,
+  pauseFromState, submenuReturnState, onlineOverlay,
   P1, P2, getArmSpec, onlineStatusKey, onlineStatusVars, onlineLocalSeat,
   creditsLink, attractActive,
 } from "../engine/game.js";
@@ -77,6 +77,9 @@ export function render() {
     drawBanner(vis);
   }
   if (state === "pause") drawPauseOverlay(ctx);
+  if (onlineOverlay === "pause") drawPauseOverlay(ctx);
+  else if (onlineOverlay === "settings") drawSettings(ctx);
+  else if (onlineOverlay === "controls") drawControlsScreen(ctx);
   drawTouchControls(ctx);
 }
 
@@ -581,6 +584,7 @@ function bannerMessage() {
   const n = (banner.player ?? 0) + 1;
   if (banner.type === "wins") return t("banner.wins", { n });
   if (banner.type === "forfeit") return t("banner.forfeit", { n });
+  if (banner.type === "stall") return t("banner.stall");
   return t("banner.point", { n });
 }
 

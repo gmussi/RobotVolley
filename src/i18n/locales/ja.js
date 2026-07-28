@@ -74,6 +74,7 @@ export default {
   "banner.wins": "プレイヤー {n} の勝ち！",
   "banner.point": "ポイント — プレイヤー {n}",
   "banner.forfeit": "プレイヤー {n} の勝ち — 相手が退出",
+  "banner.stall": "リプレイ — ボールが詰まりました",
   "banner.pressMenu": "スペースでメニューへ",
 
   "online.title": "オンライン対戦",

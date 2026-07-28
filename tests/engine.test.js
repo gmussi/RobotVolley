@@ -2,17 +2,21 @@ import { describe, it, expect, vi } from "vitest";
 import {
   W, H, FLOOR_Y, WIN_SCORE, BALL_R, NET, ROBOT_W, BALL_MAX_SPEED,
   MOVE_SPEED, JUMP_V, TANK_JUMP_V, TANK_MOVE_SPEED_MUL, POWER_JUMP_V,
+  AIR_RESTITUTION, MAX_RALLY_DURATION_MS,
 } from "../src/data/constants.js";
 import {
-  ball, score, makeRobot, updateRobotParts, predictBallX,
-  serveBall, awardPoint, resetPositions, resetRobots, robots,
+  ball, score, banner, makeRobot, updateRobotParts, predictBallX,
+  serveBall, awardPoint, voidRally, resetPositions, resetRobots, robots,
   collideBallRobot, getHeadSpec, getTorsoSpec, getLegSpec, getArmSpec, applyItems,
   updateBall, updateRobot, updateAttack, collideBallAttack, PHYSICS_STEP, state,
   planPartLottery, commitPartLottery, prepareServe, startGame, lotteryResults, lotteryTick,
   tickServe, LOTTERY_TOTAL_DURATION,
   canPause, pauseGame, resumeFromPause, pauseSelect, pauseMove,
   pauseFromState, pauseIndex, leaveSubmenu, toMenu,
+  onlineOverlay, openOnlineOverlay, closeOnlineOverlay, setOnlineOverlay,
+  readLocalOnlineInput,
 } from "../src/engine/game.js";
+import { codeFor } from "../src/data/controls.js";
 import { HEAD_TYPES } from "../src/data/heads.js";
 import { TORSO_TYPES } from "../src/data/torsos.js";
 import { LEG_TYPES } from "../src/data/legs.js";
@@ -252,6 +256,48 @@ describe("head collisions", () => {
     }
     expect(ball.magnetHold).toBeNull();
     expect(ball.vy).toBeLessThan(0);
+  });
+});
+
+describe("stuck-ball safety net", () => {
+  it("air restitution never exceeds 1 (would add energy on every bounce)", () => {
+    expect(AIR_RESTITUTION).toBeLessThanOrEqual(1);
+  });
+
+  it("never lets the ball tunnel through a wall a robot is pinned against, and always resolves the rally", () => {
+    startGame("2p");
+    const r = robots[0];
+    r.x = 6; r.y = FLOOR_Y - r.h; r.vx = 0; r.vy = 0; r.onGround = true;
+    updateRobotParts(r);
+    robots[1].x = W - ROBOT_W - 6; robots[1].y = FLOOR_Y - robots[1].h;
+    updateRobotParts(robots[1]);
+
+    serveBall(1); // resets the rally clock / wall-bounce counters like a real serve
+    ball.x = 30; ball.y = r.y + r.h / 2; ball.vx = -400; ball.vy = 0; ball.spin = 0;
+
+    const maxSteps = Math.ceil(MAX_RALLY_DURATION_MS / (PHYSICS_STEP * 1000)) + 200;
+    let tunneled = false;
+    for (let i = 0; i < maxSteps; i++) {
+      updateBall(PHYSICS_STEP);
+      if (ball.x - ball.r < -0.01 || ball.x + ball.r > W + 0.01) tunneled = true;
+      if (!ball.live) break;
+    }
+    expect(tunneled).toBe(false);
+    expect(ball.live).toBe(false);
+  });
+
+  it("voidRally ends the rally as a no-score let, not a point", () => {
+    startGame("2p");
+    serveBall(1);
+    score[0] = 1; score[1] = 2;
+    ball.live = true;
+
+    voidRally("test");
+
+    expect(ball.live).toBe(false);
+    expect(banner?.type).toBe("stall");
+    expect(score[0]).toBe(1);
+    expect(score[1]).toBe(2);
   });
 });
 
@@ -746,5 +792,39 @@ describe("pause", () => {
     pauseSelect();
     expect(state).toBe("menu");
     expect(pauseFromState).toBeNull();
+  });
+});
+
+describe("online overlay", () => {
+  it("layers on top of a live online match without touching top-level state", () => {
+    toMenu();
+    startGame("online", { seed: 1 });
+    serveBall(1);
+    expect(state).toBe("play");
+
+    expect(openOnlineOverlay()).toBe(true);
+    expect(onlineOverlay).toBe("pause");
+    expect(state).toBe("play"); // match keeps running underneath
+
+    expect(readLocalOnlineInput(new Set([codeFor(0, "right")]))).toEqual({
+      moveDir: 0, jumpHeld: false, attackHeld: false,
+    });
+
+    setOnlineOverlay("settings");
+    expect(onlineOverlay).toBe("settings");
+    expect(state).toBe("play");
+
+    closeOnlineOverlay();
+    expect(onlineOverlay).toBeNull();
+    expect(readLocalOnlineInput(new Set([codeFor(0, "right")]))).toEqual({
+      moveDir: 1, jumpHeld: false, attackHeld: false,
+    });
+  });
+
+  it("is a no-op outside online mode", () => {
+    toMenu();
+    startGame("2p");
+    expect(openOnlineOverlay()).toBe(false);
+    expect(onlineOverlay).toBeNull();
   });
 });
