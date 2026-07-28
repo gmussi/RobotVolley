@@ -120,3 +120,8 @@ export function formatLocalizedCountdown(ms) {
   if (h > 0) return t("time.hm", { h, m });
   return t("time.ms", { m, s: s % 60 });
 }
+
+/** Localized "N ago" for the leaderboard's last-matches tab. */
+export function formatLocalizedAgo(ms) {
+  return t("time.ago", { time: formatLocalizedCountdown(ms) });
+}
