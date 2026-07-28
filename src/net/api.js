@@ -144,6 +144,16 @@ export function getSessionToken() {
   return jwt;
 }
 
+/**
+ * Forget the cached JWT without discarding the refresh token — used when a
+ * caller outside apiFetch's own 401-retry (e.g. the matchmaking socket) finds
+ * out the token it was handed is dead, so the next `ensureSessionToken()`
+ * re-authenticates instead of handing back the same rejected value forever.
+ */
+export function invalidateSessionToken() {
+  jwt = null;
+}
+
 /** Ensure a session exists, then hand back its token. Null when offline. */
 export async function ensureSessionToken() {
   // A caller-supplied provider owns its own credentials end to end — signing in
