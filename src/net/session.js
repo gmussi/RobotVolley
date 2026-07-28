@@ -11,7 +11,7 @@ import {
   getRobotLoadout, applyRobotLoadout, buildSnapshot, applySnapshot,
   applyRemoteInput, applyRemoteServe, readLocalOnlineInput, extrapolateVisual,
   applyRobotCosmetics, awardForfeitWin, onlineIsHost, onlineLocalSeat, state,
-  servingSide, score, winner, onlineOverlay,
+  servingSide, score, winner, onlineOverlay, setOnlineNames,
 } from "../engine/game.js";
 import { codeFor } from "../data/controls.js";
 import { getLoadout as getProfileLoadout, refreshAfterMatch } from "../progress/profile.js";
@@ -61,17 +61,13 @@ export function isOnlineSearching() {
 }
 
 /**
- * Display names for the current match, keyed by seat. These come from
- * `match_found` — i.e. from the server — never from the peer's handshake, so
- * they cannot be spoofed by a modified client.
- * @returns {{0: string, 1: string}|null}
+ * Push display names for the current match into engine state, keyed by
+ * local/opponent. These come from `match_found` — i.e. from the server —
+ * never from the peer's handshake, so they cannot be spoofed by a modified
+ * client.
  */
-export function getMatchNames() {
-  if (!matchInfo) return null;
-  const names = { 0: "P1", 1: "P2" };
-  names[matchInfo.seat] = matchInfo.localName || "YOU";
-  names[matchInfo.seat === 0 ? 1 : 0] = matchInfo.opponentName || "OPPONENT";
-  return names;
+function applyMatchNames(msg) {
+  setOnlineNames({ local: msg.localName || null, opponent: msg.opponentName || null });
 }
 
 function clearConnectTimer() {
@@ -86,6 +82,7 @@ function cleanupPeerOnly() {
   channelReady = false;
   // Clear matchInfo before closing so peer onClose does not re-enter requeue.
   matchInfo = null;
+  setOnlineNames(null);
   pendingLoadout = null;
   pendingSnap = null;
   lastSnapTick = -1;
@@ -180,6 +177,7 @@ export function beginOnlineMatchmaking() {
     },
     match_found: (msg) => {
       matchInfo = msg;
+      applyMatchNames(msg);
       setOnlineStatus("online.opponentFound");
       startWebRtc(msg);
     },
