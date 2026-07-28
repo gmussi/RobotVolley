@@ -75,6 +75,17 @@ export const MAX_RALLY_DURATION_MS = 8 * 60_000;
 export const STALL_COLLISION_WINDOW_MS = 1000;
 export const STALL_COLLISION_COUNT_THRESHOLD = 10;
 
+/**
+ * The longer a match runs, the faster the ball is forced to move — closes
+ * off stalling by deliberately keeping every touch soft (e.g. repeated
+ * TOP_FALL_RESTITUTION head bounces). No effect for the first
+ * SPEED_RAMP_GRACE_MS of a match; fully phased in by SPEED_RAMP_FULL_MS.
+ */
+export const SPEED_RAMP_GRACE_MS = 90_000;       // 1.5 min — no ramp yet
+export const SPEED_RAMP_FULL_MS = 12 * 60_000;   // 12 min — ramp fully applied
+export const BALL_MIN_SPEED_RAMPED = 450;        // floor once fully ramped
+export const BALL_MAX_SPEED_RAMPED = 1700;       // ceiling once fully ramped
+
 export const DEFAULT_COLORS = {
   p1: { head: "#ff5a5f", torso: "#ff5a5f", arms: "#b02a2f", legs: "#b02a2f" },
   p2: { head: "#29b6f6", torso: "#29b6f6", arms: "#1565a8", legs: "#1565a8" },
