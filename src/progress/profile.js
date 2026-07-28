@@ -27,6 +27,15 @@ const CACHE_KEY = "robotvolley_profile_cache";
 let syncState = "idle";
 let profile = null;
 let inFlight = null;
+/**
+ * Bumped on every local optimistic write to the loadout. A `/me` GET can be
+ * outstanding for a while (slow network, a boot-time sync still settling) and
+ * land *after* the player has since equipped something new — without this, a
+ * late response would silently overwrite that fresher choice with whatever
+ * the loadout was when the GET was sent. `syncProfile()` snapshots this
+ * before firing and keeps the local loadout if it no longer matches.
+ */
+let loadoutGeneration = 0;
 
 const listeners = new Set();
 
@@ -120,11 +129,26 @@ export function syncProfile() {
   }
 
   setSyncState("loading");
+  const startGeneration = loadoutGeneration;
   inFlight = (async () => {
     const res = await apiFetch("/me");
     if (res.ok && res.data) {
-      profile = normalize(res.data);
-      cache();
+      const fresh = normalize(res.data);
+      // Two GETs (e.g. the boot-time sync and a post-match refresh) can
+      // resolve out of order. `updatedAt` is monotonic server-side, so a
+      // response older than what we're already showing is a stale straggler
+      // — applying it would roll wins/unlocks backward. Drop it instead.
+      if (fresh.updatedAt >= (getProfile().updatedAt ?? 0)) {
+        // A newer local equip happened while this request was in flight —
+        // this response's loadout predates it, so keep what's on screen and
+        // only take the fields the server is always authoritative for
+        // (stats, unlocks, name). The equip's own request settles the
+        // loadout for real.
+        profile = loadoutGeneration === startGeneration
+          ? fresh
+          : { ...fresh, loadout: getProfile().loadout };
+        cache();
+      }
       setSyncState("ready");
     } else {
       setSyncState("offline");
@@ -162,6 +186,7 @@ export async function updateName(name) {
 export async function updateLoadout(loadout) {
   const clean = sanitizeCosmetics(loadout);
   const previous = getProfile().loadout;
+  loadoutGeneration++;
   profile = { ...getProfile(), loadout: clean };
   cache();
   notify();
@@ -172,6 +197,7 @@ export async function updateLoadout(loadout) {
   // "offline" is not a rejection — keep the choice and let the next sync settle
   // it. Anything else means the server refused, so put it back.
   if (res.error !== "offline" && res.error !== "not_configured") {
+    loadoutGeneration++;
     profile = { ...getProfile(), loadout: previous };
     cache();
     notify();

@@ -2,7 +2,7 @@
  * WebSocket client for Cloudflare matchmaking + signaling relay.
  */
 import { MM, encode, decode } from "./protocol.js";
-import { ensureSessionToken } from "./api.js";
+import { ensureSessionToken, invalidateSessionToken } from "./api.js";
 import { matchmakingUrl, tokenProvider } from "./config.js";
 
 export function createMatchmakingClient(handlers = {}, url = null) {
@@ -10,6 +10,10 @@ export function createMatchmakingClient(handlers = {}, url = null) {
   let playerId = null;
   let account = null;
   let closedByUser = false;
+  // Guards the invalid_token retry below to exactly one attempt per socket,
+  // so a token that is rejected twice in a row (dead refresh token, banned
+  // account, etc.) surfaces as a real error instead of looping forever.
+  let authRetried = false;
 
   function emit(name, data) {
     const fn = handlers[name];
@@ -23,6 +27,18 @@ export function createMatchmakingClient(handlers = {}, url = null) {
   // Resolved at connect time, not import time, so configureNet() can set it.
   const resolveUrl = () => url || matchmakingUrl();
 
+  // Authenticate before anything else — the server refuses to queue an
+  // anonymous socket. `open` is emitted only once we're allowed to act, so
+  // callers never have to think about the handshake.
+  async function sendAuth() {
+    const token = await (tokenProvider() ?? ensureSessionToken)();
+    if (!token) {
+      emit("error", { message: "sign_in_failed" });
+      return;
+    }
+    send({ type: MM.AUTH, token });
+  }
+
   function connect() {
     const target = resolveUrl();
     if (!target) {
@@ -30,17 +46,10 @@ export function createMatchmakingClient(handlers = {}, url = null) {
       return;
     }
     closedByUser = false;
+    authRetried = false;
     ws = new WebSocket(target);
-    ws.addEventListener("open", async () => {
-      // Authenticate before anything else — the server refuses to queue an
-      // anonymous socket. `open` is emitted only once we're allowed to act,
-      // so callers never have to think about the handshake.
-      const token = await (tokenProvider() ?? ensureSessionToken)();
-      if (!token) {
-        emit("error", { message: "sign_in_failed" });
-        return;
-      }
-      send({ type: MM.AUTH, token });
+    ws.addEventListener("open", () => {
+      void sendAuth();
     });
     ws.addEventListener("message", (ev) => {
       let msg;
@@ -77,6 +86,19 @@ export function createMatchmakingClient(handlers = {}, url = null) {
           emit("result_recorded", msg);
           break;
         case MM.ERROR:
+          // A cached JWT can go stale between logging in and actually queuing
+          // (long menu idle, a long prior match) or die mid-session for any
+          // other reason. Without this the client keeps re-sending the same
+          // dead token on every future connect — including right after the
+          // player cancels and tries again — and never recovers on its own.
+          // One retry with a forced-fresh token covers that; a caller-supplied
+          // tokenProvider owns its own refresh, so it's left alone.
+          if (msg.message === "invalid_token" && !authRetried && !tokenProvider()) {
+            authRetried = true;
+            invalidateSessionToken();
+            void sendAuth();
+            break;
+          }
           emit("error", msg);
           break;
         default:
