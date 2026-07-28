@@ -63,7 +63,10 @@ let rallyIndex = 0;
 /** Elapsed live-rally time; a rally that never reaches the floor gets voided. */
 let rallyElapsedMs = 0;
 let wallBounceCount = 0;
-let wallBounceWindowMs = 0;
+/** Rally-clock timestamp of the last wall bounce, so the loop counter can
+ *  tell "10 bounces in the last second" apart from "10 bounces over a long,
+ *  perfectly normal rally". */
+let lastWallBounceMs = -Infinity;
 
 // ---- Attract mode ----
 /**
@@ -540,7 +543,7 @@ export function serveBall(charge) {
   serveCharge = 0;
   rallyElapsedMs = 0;
   wallBounceCount = 0;
-  wallBounceWindowMs = 0;
+  lastWallBounceMs = -Infinity;
   setPhase("play");
   emitAudio("serve_launch", { charge });
 }
@@ -713,12 +716,11 @@ export function voidRally(reason) {
   messageTimer = 1.3;
 }
 
-function noteWallBounce(dt) {
-  wallBounceWindowMs -= dt * 1000;
-  if (wallBounceWindowMs <= 0) {
-    wallBounceWindowMs = STALL_COLLISION_WINDOW_MS;
-    wallBounceCount = 0;
-  }
+function noteWallBounce() {
+  // A gap longer than the window means this bounce is unrelated to the last
+  // one (normal play, not a loop) — start the count over from this touch.
+  if (rallyElapsedMs - lastWallBounceMs > STALL_COLLISION_WINDOW_MS) wallBounceCount = 0;
+  lastWallBounceMs = rallyElapsedMs;
   wallBounceCount++;
   if (wallBounceCount >= STALL_COLLISION_COUNT_THRESHOLD) voidRally("wall-robot loop");
 }
@@ -1369,13 +1371,13 @@ export function updateBall(dt) {
     ball.x = ball.r;
     ball.vx = Math.abs(ball.vx) * 0.95;
     emitAudio("ball_wall");
-    noteWallBounce(dt);
+    noteWallBounce();
   }
   if (ball.x + ball.r > W) {
     ball.x = W - ball.r;
     ball.vx = -Math.abs(ball.vx) * 0.95;
     emitAudio("ball_wall");
-    noteWallBounce(dt);
+    noteWallBounce();
   }
 
   collideBallNet(prevX, prevY);
