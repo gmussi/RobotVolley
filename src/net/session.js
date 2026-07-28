@@ -122,13 +122,13 @@ function failConnectAndRequeue(reason) {
     /* ignore */
   }
   if (wasActive || !mm) {
-    showDisconnect(reason || "Opponent disconnected");
+    showDisconnect(reason || "online.opponentDisconnected");
     cleanupNet();
     notify("disconnect");
     return;
   }
   enterSearching();
-  setOnlineStatus(reason || "Connection failed — searching again…");
+  setOnlineStatus(reason || "online.connectionFailed");
   mm.joinQueue();
   notify("requeue");
 }
@@ -157,23 +157,23 @@ export function beginOnlineMatchmaking() {
   enterSearching();
 
   if (!import.meta.env.VITE_MATCHMAKING_URL) {
-    setOnlineStatus("Online matchmaking is not configured");
-    showDisconnect("Set VITE_MATCHMAKING_URL to play online");
+    setOnlineStatus("online.notConfigured");
+    showDisconnect("online.setUrl");
     notify("error", { message: "missing_url" });
     return;
   }
 
   mm = createMatchmakingClient({
     open: () => {
-      setOnlineStatus("Searching for opponent…");
+      setOnlineStatus("online.searching");
       mm.joinQueue();
     },
     queue_joined: () => {
-      setOnlineStatus("Searching for opponent…");
+      setOnlineStatus("online.searching");
     },
     match_found: (msg) => {
       matchInfo = msg;
-      setOnlineStatus("Opponent found — connecting…");
+      setOnlineStatus("online.opponentFound");
       startWebRtc(msg);
     },
     signal: (msg) => {
@@ -191,24 +191,24 @@ export function beginOnlineMatchmaking() {
         return;
       }
       if (matchInfo) {
-        failConnectAndRequeue("Opponent left — searching again…");
+        failConnectAndRequeue("online.opponentLeft");
       }
     },
     error: (msg) => {
       if (msg.message === "missing_matchmaking_url") {
-        showDisconnect("Set VITE_MATCHMAKING_URL to play online");
+        showDisconnect("online.setUrl");
       } else if (msg.message === "sign_in_failed" || msg.message === "unauthenticated") {
-        showDisconnect("Could not sign in — check your connection");
+        showDisconnect("online.signInFailed");
         cleanupNet();
         notify("disconnect");
       } else if (state === "searching") {
-        setOnlineStatus(`Matchmaking error: ${msg.message || "unknown"}`);
+        setOnlineStatus("online.matchmakingError", { message: msg.message || "unknown" });
       }
       notify("error", msg);
     },
     close: () => {
       if (state === "searching" || (!active && matchInfo)) {
-        showDisconnect("Lost connection to matchmaking server");
+        showDisconnect("online.lostServer");
         cleanupNet();
         notify("disconnect");
       }
@@ -230,7 +230,7 @@ function startWebRtc(msg) {
     onOpen: () => {
       clearConnectTimer();
       channelReady = true;
-      setOnlineStatus("Opponent found — syncing…");
+      setOnlineStatus("online.opponentSyncing");
       peer.sendCtrl({
         type: DC.HELLO,
         seat: msg.seat,
@@ -243,14 +243,14 @@ function startWebRtc(msg) {
         return;
       }
       if (matchInfo) {
-        failConnectAndRequeue("Could not connect — searching again…");
+        failConnectAndRequeue("online.connectFailed");
       }
     },
   });
 
   connectTimer = setTimeout(() => {
     if (!channelReady && matchInfo) {
-      failConnectAndRequeue("Connection timed out — searching again…");
+      failConnectAndRequeue("online.connectTimeout");
     }
   }, CONNECT_TIMEOUT_MS);
 

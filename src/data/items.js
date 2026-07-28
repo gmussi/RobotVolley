@@ -17,6 +17,7 @@
 import { HEAD_TYPES } from "./heads.js";
 import { LEG_TYPES } from "./legs.js";
 import { ARM_TYPES } from "./arms.js";
+import { t } from "../i18n/index.js";
 
 /** Slot key each accessory occupies -> the robot field it drives. */
 export const SLOT_FIELD = {
@@ -88,11 +89,17 @@ export function itemPreviewSlot(kind, id) {
 }
 
 export function itemLabel(kind, id) {
-  if (!id) return "None";
+  if (!id) return t("item.none");
+  const key = `item.${id}`;
+  const translated = t(key);
+  if (translated !== key) return translated;
   return (kind === "weapon" ? WEAPONS : ACCESSORIES)[id]?.label ?? id;
 }
 
 export function itemDescription(kind, id) {
   if (!id) return "";
+  const key = `item.desc.${id}`;
+  const translated = t(key);
+  if (translated !== key) return translated;
   return (kind === "weapon" ? WEAPONS : ACCESSORIES)[id]?.description ?? "";
 }

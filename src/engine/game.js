@@ -50,7 +50,8 @@ export let messageTimer = 0;
 export let cpuServeTimer = 0;
 export let serveCharging = false;
 export let serveCharge = 0;
-export let bannerText = "";
+/** Structured match banner — translated at draw time so each client keeps its locale. */
+export let banner = null; // { type: 'wins'|'point'|'forfeit', player: 0|1 } | null
 export let winner = null;
 export let lotteryResults = [null, null];
 export let lotteryTimer = 0;
@@ -123,8 +124,9 @@ function endAttractRally(scorer) {
 export let onlineLocalSeat = 0;
 /** Host runs physics; guest applies snapshots. */
 export let onlineIsHost = true;
-/** Status line for searching / disconnect screens. */
-export let onlineStatus = "";
+/** i18n key (+ optional vars) for searching / disconnect status lines. */
+export let onlineStatusKey = "";
+export let onlineStatusVars = {};
 
 export function setOnlineLocalSeat(seat) {
   onlineLocalSeat = seat === 1 ? 1 : 0;
@@ -134,19 +136,21 @@ export function setOnlineIsHost(isHost) {
   onlineIsHost = !!isHost;
 }
 
-export function setOnlineStatus(text) {
-  onlineStatus = text || "";
+/** @param {string} key i18n key, or "" to clear */
+export function setOnlineStatus(key, vars = {}) {
+  onlineStatusKey = key || "";
+  onlineStatusVars = vars && typeof vars === "object" ? vars : {};
 }
 
 export function enterSearching() {
   stopAttract();
   gameMode = null;
-  onlineStatus = "Searching for opponent…";
+  setOnlineStatus("online.searching");
   state = "searching";
 }
 
-export function showDisconnect(reason = "Opponent disconnected") {
-  onlineStatus = reason;
+export function showDisconnect(reasonKey = "online.opponentDisconnected", vars = {}) {
+  setOnlineStatus(reasonKey, vars);
   state = "disconnect";
   gameMode = null;
 }
@@ -245,17 +249,17 @@ function enterServePhase() {
  * categories carry CONTROLS and SETTINGS — those aren't specific to either.
  */
 const ONLINE_MENU_ITEMS = [
-  { mode: null, action: "online", label: "ONLINE MATCH" },
-  { mode: null, action: "profile", label: "MY PROFILE" },
-  { mode: null, action: "leaderboard", label: "LEADERBOARD" },
-  { mode: null, action: "controls", label: "CONTROLS" },
-  { mode: null, action: "settings", label: "SETTINGS" },
+  { mode: null, action: "online", labelKey: "menu.onlineMatch" },
+  { mode: null, action: "profile", labelKey: "menu.myProfile" },
+  { mode: null, action: "leaderboard", labelKey: "menu.leaderboard" },
+  { mode: null, action: "controls", labelKey: "menu.controls" },
+  { mode: null, action: "settings", labelKey: "menu.settings" },
 ];
 const OFFLINE_MENU_ITEMS = [
-  { mode: "1p", label: "SINGLE PLAYER" },
-  { mode: "2p", label: "TWO PLAYERS" },
-  { mode: null, action: "controls", label: "CONTROLS" },
-  { mode: null, action: "settings", label: "SETTINGS" },
+  { mode: "1p", labelKey: "menu.singlePlayer" },
+  { mode: "2p", labelKey: "menu.twoPlayers" },
+  { mode: null, action: "controls", labelKey: "menu.controls" },
+  { mode: null, action: "settings", labelKey: "menu.settings" },
 ];
 
 /** Hit box for the title-menu footer's CREDITS link; filled in by render.js each draw. */
@@ -275,7 +279,7 @@ function buildMenuOptions(items) {
     menuOptions.push({ disabled: false, x: 0, y: 0, w: 0, h: 0, ...item });
   }
   if (quitEnabled) {
-    menuOptions.push({ mode: null, action: "quit", label: "QUIT", disabled: false, x: 0, y: 0, w: 0, h: 0 });
+    menuOptions.push({ mode: null, action: "quit", labelKey: "menu.quit", disabled: false, x: 0, y: 0, w: 0, h: 0 });
   }
 }
 
@@ -308,8 +312,8 @@ export function menuMove(delta) {
 // ---- Mode select (ONLINE PLAY / OFFLINE PLAY) — the true landing screen ----
 
 export const modeOptions = [
-  { target: "online", label: "ONLINE PLAY", disabled: false, x: 0, y: 0, w: 0, h: 0 },
-  { target: "offline", label: "OFFLINE PLAY", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+  { target: "online", labelKey: "menu.onlinePlay", disabled: false, x: 0, y: 0, w: 0, h: 0 },
+  { target: "offline", labelKey: "menu.offlinePlay", disabled: false, x: 0, y: 0, w: 0, h: 0 },
 ];
 export let modeIndex = 0;
 
@@ -540,8 +544,9 @@ export function startGame(mode, opts = {}) {
   gameMode = mode;
   score[0] = 0; score[1] = 0;
   winner = null;
+  banner = null;
   rallyIndex = 0;
-  onlineStatus = "";
+  setOnlineStatus("");
   if (mode === "online") {
     setOnlineLocalSeat(opts.localSeat ?? 0);
     setOnlineIsHost(opts.isHost !== false);
@@ -559,9 +564,10 @@ export function startGame(mode, opts = {}) {
 export function toMenu() {
   clearMatchSeed();
   gameMode = null;
-  onlineStatus = "";
+  setOnlineStatus("");
   state = "menu";
   winner = null;
+  banner = null;
   pauseFromState = null;
   startAttract();
 }
@@ -574,10 +580,10 @@ export let pauseFromState = null;
 export let submenuReturnState = "menu";
 
 export const pauseOptions = [
-  { action: "resume", label: "RESUME", x: 0, y: 0, w: 0, h: 0 },
-  { action: "settings", label: "SETTINGS", x: 0, y: 0, w: 0, h: 0 },
-  { action: "controls", label: "CONTROLS", x: 0, y: 0, w: 0, h: 0 },
-  { action: "quit", label: "QUIT", x: 0, y: 0, w: 0, h: 0 },
+  { action: "resume", labelKey: "pause.resume", x: 0, y: 0, w: 0, h: 0 },
+  { action: "settings", labelKey: "menu.settings", x: 0, y: 0, w: 0, h: 0 },
+  { action: "controls", labelKey: "menu.controls", x: 0, y: 0, w: 0, h: 0 },
+  { action: "quit", labelKey: "menu.quit", x: 0, y: 0, w: 0, h: 0 },
 ];
 
 export let pauseIndex = 0;
@@ -650,10 +656,10 @@ export function awardPoint(scorer) {
   if (score[scorer] >= WIN_SCORE) {
     winner = scorer;
     state = "over";
-    bannerText = `PLAYER ${scorer + 1} WINS!`;
+    banner = { type: "wins", player: scorer };
     emitAudio("match_win");
   } else {
-    bannerText = `POINT — PLAYER ${scorer + 1}`;
+    banner = { type: "point", player: scorer };
     state = "point";
     messageTimer = 1.3;
     servingSide = scorer === 0 ? 1 : -1;
@@ -670,7 +676,7 @@ export function awardForfeitWin(seat) {
   if (state === "over") return;
   winner = seat;
   state = "over";
-  bannerText = `PLAYER ${seat + 1} WINS — OPPONENT LEFT`;
+  banner = { type: "forfeit", player: seat };
   emitAudio("match_win");
 }
 
@@ -1481,7 +1487,7 @@ export function buildSnapshot(tick) {
     messageTimer,
     lotteryTimer,
     lotteryTick,
-    bannerText,
+    banner,
     winner,
     rallyIndex,
     ball: {
@@ -1513,7 +1519,7 @@ export function applySnapshot(snap) {
   if (snap.lotteryTick != null && snap.lotteryTick !== lotteryTick) {
     lotteryTick = snap.lotteryTick;
   }
-  bannerText = snap.bannerText;
+  banner = snap.banner ?? null;
   winner = snap.winner;
   if (snap.rallyIndex != null) rallyIndex = snap.rallyIndex;
 

@@ -11,16 +11,50 @@
  * equipping is gated, and the server re-checks that anyway.
  */
 import { W, H } from "../data/constants.js";
-import { SLOTS, itemsForSlot, unlockProgress, unlockLabel } from "../data/cosmetics.js";
+import { SLOTS, itemsForSlot, unlockProgress, getItem } from "../data/cosmetics.js";
 import {
   getProfile, getSyncState, getLoadout, updateLoadout, updateName,
 } from "../progress/profile.js";
 import { NAME_MAX, NAME_MIN, isNameCharValid } from "../data/nameRules.js";
+import { t } from "../i18n/index.js";
 import { drawRobotPreview } from "./robotPreview.js";
 import {
   COLORS, fontDisplay, fontBody,
   drawScrim, drawTitle, drawGlassPanel, drawFooterHint, roundRect,
 } from "./neonUi.js";
+
+function localizedUnlockLabel(itemId) {
+  const item = getItem(itemId);
+  const rule = item?.unlock ?? { type: "default" };
+  switch (rule.type) {
+    case "default":
+      return "";
+    case "wins":
+      return rule.n === 1 ? t("unlock.win1") : t("unlock.wins", { n: rule.n });
+    case "matches":
+      return t("unlock.matches", { n: rule.n });
+    case "rank":
+      return t("unlock.rank", {
+        n: rule.top,
+        board: t(`leaderboard.${rule.board}`),
+      });
+    default:
+      return t("unlock.locked");
+  }
+}
+
+function cosmeticItemLabel(item) {
+  if (!item) return "—";
+  const key = `cosmetic.item.${item.id}`;
+  const translated = t(key);
+  return translated !== key ? translated : item.label;
+}
+
+function slotLabel(slot) {
+  const key = `cosmetic.slot.${slot.id}`;
+  const translated = t(key);
+  return translated !== key ? translated : slot.label;
+}
 
 /** Focus row 0 is the name; rows 1..n are the cosmetic sections. */
 let focusIndex = 0;
@@ -96,7 +130,7 @@ function beginNameEdit() {
 async function commitName() {
   const draft = (nameDraft ?? "").trim();
   if (draft.length < NAME_MIN) {
-    nameError = `AT LEAST ${NAME_MIN} CHARACTERS`;
+    nameError = t("profile.atLeastChars", { n: NAME_MIN });
     return;
   }
   nameBusy = true;
@@ -108,11 +142,11 @@ async function commitName() {
     return;
   }
   nameError =
-    res.error === "name_taken" ? "THAT NAME IS TAKEN"
-      : res.error === "rename_cooldown" ? "RENAMED TOO RECENTLY"
-        : res.error === "bad_characters" ? "LETTERS, NUMBERS, - AND _ ONLY"
-          : res.error === "offline" || res.error === "not_configured" ? "CAN'T REACH THE SERVER"
-            : "COULDN'T SAVE THAT NAME";
+    res.error === "name_taken" ? t("profile.nameTaken")
+      : res.error === "rename_cooldown" ? t("profile.renameCooldown")
+        : res.error === "bad_characters" ? t("profile.badCharacters")
+          : res.error === "offline" || res.error === "not_configured" ? t("profile.cantReach")
+            : t("profile.couldntSave");
 }
 
 /** Returns true when the key was consumed by the name editor. */
@@ -226,9 +260,9 @@ function drawNameRow(ctx, x, y, w, focused) {
   ctx.textAlign = "right";
   ctx.font = fontBody(12, 700);
   ctx.fillStyle = COLORS.textMuted;
-  if (nameBusy) ctx.fillText("SAVING…", x + w - 14, y + h / 2);
-  else if (editing) ctx.fillText(`${nameDraft.length}/${NAME_MAX}   ENTER`, x + w - 14, y + h / 2);
-  else if (focused) ctx.fillText("ENTER TO RENAME", x + w - 14, y + h / 2);
+  if (nameBusy) ctx.fillText(t("profile.saving"), x + w - 14, y + h / 2);
+  else if (editing) ctx.fillText(t("profile.enterHint", { n: nameDraft.length, max: NAME_MAX }), x + w - 14, y + h / 2);
+  else if (focused) ctx.fillText(t("profile.enterRename"), x + w - 14, y + h / 2);
 
   if (nameError) {
     ctx.textAlign = "left";
@@ -248,7 +282,7 @@ function drawSectionRow(ctx, slot, row, x, y, w, focused) {
   ctx.font = fontDisplay(16, 700);
   ctx.letterSpacing = "2px";
   ctx.fillStyle = focused && enabled ? accent : COLORS.textMuted;
-  ctx.fillText(slot.label, x, y);
+  ctx.fillText(slotLabel(slot), x, y);
   ctx.letterSpacing = "0px";
 
   const boxY = y + 12;
@@ -267,7 +301,7 @@ function drawSectionRow(ctx, slot, row, x, y, w, focused) {
     ctx.font = fontBody(13, 700);
     ctx.fillStyle = COLORS.textMuted;
     ctx.globalAlpha = 0.75;
-    ctx.fillText("COMING SOON", x + w / 2, midY);
+    ctx.fillText(t("profile.comingSoon"), x + w / 2, midY);
     ctx.globalAlpha = 1;
     return;
   }
@@ -293,17 +327,17 @@ function drawSectionRow(ctx, slot, row, x, y, w, focused) {
   ctx.font = fontDisplay(17, 700);
   ctx.fillStyle = progress.unlocked ? COLORS.text : COLORS.textMuted;
   ctx.globalAlpha = progress.unlocked ? 1 : 0.55;
-  ctx.fillText(item?.label ?? "—", x + w / 2, midY - 8);
+  ctx.fillText(cosmeticItemLabel(item), x + w / 2, midY - 8);
   ctx.globalAlpha = 1;
 
   ctx.font = fontBody(11, 700);
   if (progress.unlocked) {
     const equipped = getLoadout()[slot.id] === item?.id;
     ctx.fillStyle = equipped ? COLORS.accent : COLORS.textMuted;
-    ctx.fillText(equipped ? "EQUIPPED" : "", x + w / 2, midY + 12);
+    ctx.fillText(equipped ? t("profile.equipped") : "", x + w / 2, midY + 12);
   } else {
     ctx.fillStyle = COLORS.p1;
-    const label = unlockLabel(item.id);
+    const label = localizedUnlockLabel(item.id);
     const detail = progress.need ? `${label}   (${progress.have}/${progress.need})` : label;
     ctx.fillText(detail, x + w / 2, midY + 12);
   }
@@ -328,7 +362,7 @@ function drawSectionRow(ctx, slot, row, x, y, w, focused) {
 export function drawProfileScreen(ctx) {
   profileHitBoxes.length = 0;
   drawScrim(ctx, 0.62);
-  drawTitle(ctx, "MY PROFILE", W / 2, H * 0.08, 44);
+  drawTitle(ctx, t("profile.title"), W / 2, H * 0.08, 44);
 
   const margin = 56;
 
@@ -342,13 +376,13 @@ export function drawProfileScreen(ctx) {
   ctx.font = fontBody(12, 700);
   ctx.fillStyle = COLORS.textMuted;
   ctx.fillText(
-    `${stats.wins}W · ${stats.losses}L · ${stats.matches} PLAYED`,
+    t("profile.stats", { wins: stats.wins, losses: stats.losses, matches: stats.matches }),
     previewCx,
     H * 0.87,
   );
   if (getSyncState() === "offline") {
     ctx.fillStyle = COLORS.p1;
-    ctx.fillText("OFFLINE — CHANGES MAY NOT SAVE", previewCx, H * 0.91);
+    ctx.fillText(t("profile.offlineWarn"), previewCx, H * 0.91);
   }
 
   // Right: name + the four sections, filling the rest of the width.
@@ -366,7 +400,7 @@ export function drawProfileScreen(ctx) {
   });
 
   drawFooterHint(ctx, [
-    { text: nameDraft !== null ? "TYPE A NAME      ENTER  SAVE      ESC  CANCEL" : "▲ ▼  SELECT      ◄ ►  BROWSE" },
-    { text: nameDraft !== null ? "" : "ESC   BACK", accent: true },
+    { text: nameDraft !== null ? t("profile.footerEdit") : t("profile.footer") },
+    { text: nameDraft !== null ? "" : t("common.escBack"), accent: true },
   ], H - 34);
 }

@@ -29,9 +29,10 @@ export const GLOW = {
   scrimHeavy: "rgba(6,9,18,0.72)",
 };
 
+/** CJK/system fallbacks keep Japanese/Chinese readable without bundling huge fonts. */
 export const FONTS = {
-  display: "'Rajdhani', 'Segoe UI', system-ui, sans-serif",
-  body: "'Inter', 'Segoe UI', system-ui, sans-serif",
+  display: "'Rajdhani', 'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK JP', 'Noto Sans SC', system-ui, sans-serif",
+  body: "'Inter', 'Segoe UI', 'PingFang SC', 'Hiragino Sans', 'Noto Sans CJK JP', 'Noto Sans SC', system-ui, sans-serif",
 };
 
 /** Canvas font strings (size in px). */

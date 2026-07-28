@@ -8,7 +8,8 @@ import {
   LOTTERY_SPIN_DURATION, LOTTERY_TOTAL_DURATION,
 } from "../engine/game.js";
 import { colorsFromAccent, drawPartPreview } from "./robotDraw.js";
-import { itemPreviewSlot } from "../data/items.js";
+import { itemPreviewSlot, itemLabel } from "../data/items.js";
+import { t } from "../i18n/index.js";
 import { COLORS, fontDisplay, fontBody, drawGlassPanel, roundRect } from "./neonUi.js";
 
 const ITEM_H = 52;
@@ -68,7 +69,7 @@ function drawReelItem(ctx, result, option, x, y, w, h, accent, highlighted, side
   ctx.font = fontBody(13, highlighted ? 600 : 400);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(option.label, x + w / 2, y + h - 12);
+  ctx.fillText(itemLabel(result.kind, option.id), x + w / 2, y + h - 12);
 }
 
 /** Big square card that replaces the reel once the winner lands. */
@@ -103,11 +104,11 @@ function drawRevealCard(ctx, result, cx, playerIdx, holdElapsed) {
   ctx.font = fontBody(13, 700);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(`PLAYER ${playerIdx + 1}`, cx, y + 26);
+  ctx.fillText(t("common.playerN", { n: playerIdx + 1 }), cx, y + 26);
 
   ctx.fillStyle = COLORS.lottery;
   ctx.font = fontDisplay(14, 600);
-  ctx.fillText(result.slotName.toUpperCase(), cx, y + 48);
+  ctx.fillText(t(`lottery.${result.slotName}`), cx, y + 48);
 
   // Big icon in the center of the square.
   drawPartPreview(
@@ -127,7 +128,7 @@ function drawRevealCard(ctx, result, cx, playerIdx, holdElapsed) {
   ctx.textBaseline = "middle";
   ctx.shadowColor = accent;
   ctx.shadowBlur = 12;
-  ctx.fillText(result.newLabel, cx, y + REVEAL_SIZE - 34);
+  ctx.fillText(itemLabel(result.kind, result.newType), cx, y + REVEAL_SIZE - 34);
   ctx.shadowBlur = 0;
 
   ctx.restore();
@@ -150,11 +151,15 @@ function drawSpinPanel(ctx, result, cx, playerIdx, elapsed) {
   ctx.font = fontBody(13, 700);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(`PLAYER ${playerIdx + 1}`, cx, panelY + 22);
+  ctx.fillText(t("common.playerN", { n: playerIdx + 1 }), cx, panelY + 22);
 
   ctx.fillStyle = COLORS.lottery;
   ctx.font = fontDisplay(15, 600);
-  ctx.fillText(`GETTING NEW ${result.slotName.toUpperCase()}`, cx, panelY + 44);
+  ctx.fillText(
+    t("lottery.gettingNew", { slot: t(`lottery.${result.slotName}`) }),
+    cx,
+    panelY + 44,
+  );
 
   const reelX = panelX + 10;
   const reelY = panelY + 62;

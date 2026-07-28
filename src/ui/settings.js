@@ -1,10 +1,11 @@
 /**
- * Settings screen — music / sound volume sliders (canvas UI).
+ * Settings screen — volume, accessibility, language (canvas UI).
  */
 import { W, H } from "../data/constants.js";
 import { getMusicVolume, getSfxVolume, setMusicVolume, setSfxVolume } from "../audio/manager.js";
 import { submenuReturnState } from "../engine/game.js";
 import { colorblindMode, toggleColorblindMode } from "../data/accessibility.js";
+import { t, cycleLocale, getLocaleNativeName } from "../i18n/index.js";
 import {
   COLORS, fontDisplay, fontBody,
   drawScrim, drawTitle, drawGlassPanel, drawFooterHint, roundRect,
@@ -13,7 +14,7 @@ import {
 const STEP = 0.05;
 
 let focusIndex = 0;
-const FOCUS_COUNT = 3;
+const FOCUS_COUNT = 4;
 let dragging = null;
 
 export const settingsSliders = [];
@@ -33,7 +34,7 @@ export function resetSettingsFocus() {
 
 export function handleSettingsKey(code) {
   if (code === "ArrowUp" || code === "KeyW") {
-    focusIndex = (focusIndex + 1) % FOCUS_COUNT;
+    focusIndex = (focusIndex - 1 + FOCUS_COUNT) % FOCUS_COUNT;
     return true;
   }
   if (code === "ArrowDown" || code === "KeyS") {
@@ -43,6 +44,16 @@ export function handleSettingsKey(code) {
   if (focusIndex === 2 && (code === "Enter" || code === "Space")) {
     toggleColorblindMode();
     return true;
+  }
+  if (focusIndex === 3) {
+    if (code === "ArrowRight" || code === "KeyD" || code === "Enter" || code === "Space") {
+      cycleLocale(1);
+      return true;
+    }
+    if (code === "ArrowLeft" || code === "KeyA") {
+      cycleLocale(-1);
+      return true;
+    }
   }
   const delta = (code === "ArrowRight" || code === "KeyD") ? STEP
     : (code === "ArrowLeft" || code === "KeyA") ? -STEP : 0;
@@ -59,6 +70,16 @@ export function handleSettingsPointer(mx, my, phase) {
       const b = settingsSliders[i];
       if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
         focusIndex = i;
+        if (b.id === "language") {
+          // Click left/right half of the language row to cycle.
+          const mid = b.x + b.w / 2;
+          cycleLocale(mx < mid ? -1 : 1);
+          return true;
+        }
+        if (b.id === "colorblind") {
+          toggleColorblindMode();
+          return true;
+        }
         dragging = b.id;
         const v = valueFromX(mx, b);
         if (b.id === "music") setMusicVolume(v);
@@ -125,40 +146,53 @@ export function drawSettings(ctx) {
   settingsSliders.length = 0;
   drawScrim(ctx, 0.55);
 
-  drawGlassPanel(ctx, W / 2 - 220, H * 0.18, 440, 320, { radius: 16, fillAlpha: 0.82 });
-  drawTitle(ctx, "SETTINGS", W / 2, H * 0.12, 48);
+  drawGlassPanel(ctx, W / 2 - 220, H * 0.14, 440, 390, { radius: 16, fillAlpha: 0.82 });
+  drawTitle(ctx, t("settings.title"), W / 2, H * 0.10, 48);
 
   drawVolumeRow(ctx, {
     id: "music",
-    label: "MUSIC",
-    y: H * 0.34,
+    label: t("settings.music"),
+    y: H * 0.28,
     value: getMusicVolume(),
     accent: COLORS.accent,
     focused: focusIndex === 0,
   });
   drawVolumeRow(ctx, {
     id: "sound",
-    label: "SOUND",
-    y: H * 0.48,
+    label: t("settings.sound"),
+    y: H * 0.40,
     value: getSfxVolume(),
     accent: COLORS.p2,
     focused: focusIndex === 1,
   });
 
-  const cbY = H * 0.62;
-  const cbX = W / 2 - 180;
+  const cbY = H * 0.54;
+  const rowX = W / 2 - 180;
+  const rowW = 360;
+  settingsSliders.push({ id: "colorblind", x: rowX, y: cbY - 16, w: rowW, h: 36 });
   ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
   ctx.font = fontDisplay(22, 600);
   ctx.fillStyle = focusIndex === 2 ? COLORS.accent : COLORS.text;
-  ctx.fillText("COLORBLIND MODE", cbX, cbY);
+  ctx.fillText(t("settings.colorblind"), rowX, cbY);
   ctx.textAlign = "right";
   ctx.fillStyle = colorblindMode ? COLORS.accent : COLORS.textMuted;
-  ctx.fillText(colorblindMode ? "ON" : "OFF", cbX + 360, cbY);
+  ctx.fillText(colorblindMode ? t("common.on") : t("common.off"), rowX + rowW, cbY);
 
-  const backHint = submenuReturnState === "pause" ? "ENTER / ESC   BACK TO PAUSE"
-    : "ENTER / ESC   BACK";
+  const langY = H * 0.64;
+  settingsSliders.push({ id: "language", x: rowX, y: langY - 16, w: rowW, h: 36 });
+  ctx.textAlign = "left";
+  ctx.font = fontDisplay(22, 600);
+  ctx.fillStyle = focusIndex === 3 ? COLORS.accent : COLORS.text;
+  ctx.fillText(t("settings.language"), rowX, langY);
+  ctx.textAlign = "right";
+  ctx.font = fontBody(18, 600);
+  ctx.fillStyle = focusIndex === 3 ? COLORS.accent : COLORS.textMuted;
+  ctx.fillText(`◄  ${getLocaleNativeName()}  ►`, rowX + rowW, langY);
+
+  const backHint = submenuReturnState === "pause" ? t("common.backToPause") : t("common.back");
   drawFooterHint(ctx, [
-    { text: "▲ ▼  SELECT BAR      ◄ ►  ADJUST" },
+    { text: t("settings.footerBars") },
     { text: backHint, accent: true },
   ], H - 58);
 }

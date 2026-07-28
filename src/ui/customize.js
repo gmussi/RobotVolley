@@ -1,22 +1,29 @@
 /** Robot Lab — in-game customization panel (neon DOM UI). */
 import { P1, P2, robots, applyItems } from "../engine/game.js";
 import { COLOR_PRESETS } from "../data/theme.js";
-import { ACCESSORIES, WEAPONS } from "../data/items.js";
+import { ACCESSORIES, WEAPONS, itemLabel } from "../data/items.js";
+import { t, onLocaleChange } from "../i18n/index.js";
 
-function itemOptions(registry) {
-  return Object.entries(registry).map(([id, t]) => ({ id, label: t.label }));
+function itemOptions(kind, registry) {
+  return Object.keys(registry).map((id) => ({ id, label: itemLabel(kind, id) }));
 }
 
-const PART_SECTIONS = [
-  // Accessories can be cleared back to an all-standard body; a weapon cannot —
-  // clearing one just means carrying the starter, which is itself an option.
-  {
-    key: "accessory",
-    label: "Accessory",
-    options: () => [{ id: "", label: "None" }].concat(itemOptions(ACCESSORIES)),
-  },
-  { key: "weapon", label: "Weapon", options: () => itemOptions(WEAPONS) },
-];
+function partSections() {
+  return [
+    // Accessories can be cleared back to an all-standard body; a weapon cannot —
+    // clearing one just means carrying the starter, which is itself an option.
+    {
+      key: "accessory",
+      label: t("lab.accessory"),
+      options: () => [{ id: "", label: t("lab.none") }].concat(itemOptions("accessory", ACCESSORIES)),
+    },
+    {
+      key: "weapon",
+      label: t("lab.weapon"),
+      options: () => itemOptions("weapon", WEAPONS),
+    },
+  ];
+}
 
 const COLOR_PARTS = ["head", "torso", "arms", "legs"];
 
@@ -57,21 +64,21 @@ function partButtons(robot, playerIdx, section) {
 }
 
 function playerBlock(robot, playerIdx) {
-  const tag = playerIdx === 0 ? "P1" : "P2";
+  const title = playerIdx === 0 ? t("lab.p1Robot") : t("lab.p2Robot");
   const tagClass = playerIdx === 0 ? "tag-p1" : "tag-p2";
   const colors = COLOR_PARTS.map((part) => `
     <div class="lab-row">
       <span class="lab-label">${part}</span>
       <div class="swatch-row">${swatchGrid(robot, playerIdx, part)}</div>
     </div>`).join("");
-  const parts = PART_SECTIONS.map((sec) => `
+  const parts = partSections().map((sec) => `
     <div class="lab-row">
       <span class="lab-label">${sec.label}</span>
       <div class="part-row">${partButtons(robot, playerIdx, sec)}</div>
     </div>`).join("");
   return `
     <div class="lab-player">
-      <div class="lab-player-title"><span class="${tagClass}"><b>${tag}</b></span> ROBOT</div>
+      <div class="lab-player-title"><span class="${tagClass}"><b>${title}</b></span></div>
       ${colors}${parts}
     </div>`;
 }
@@ -98,13 +105,16 @@ function renderLab() {
 
 export function wireCustomizePanel() {
   document.getElementById("labClose")?.addEventListener("click", closeLab);
+  onLocaleChange(() => {
+    if (panelOpen) renderLab();
+  });
   renderLab();
-}
-
-export function syncRobotPartsToDom() {
-  if (panelOpen) renderLab();
 }
 
 export function wireDomControls() {
   wireCustomizePanel();
+}
+
+export function syncRobotPartsToDom() {
+  if (panelOpen) renderLab();
 }

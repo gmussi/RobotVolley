@@ -16,16 +16,18 @@ import {
 } from "./neonUi.js";
 import { submenuReturnState } from "../engine/game.js";
 import { codeFor, rebind, resetBindings } from "../data/controls.js";
+import { t } from "../i18n/index.js";
 
 const KEY_GLYPH = {
   ArrowLeft: "◄", ArrowRight: "►", ArrowUp: "▲", ArrowDown: "▼",
-  Slash: "/", Space: "SPACE", Backquote: "`", Minus: "-", Equal: "=",
+  Slash: "/", Backquote: "`", Minus: "-", Equal: "=",
   Comma: ",", Period: ".", Semicolon: ";", Quote: "'",
   BracketLeft: "[", BracketRight: "]", Backslash: "\\",
 };
 
 function keyGlyph(code) {
   if (!code) return "—"; // unbound
+  if (code === "Space") return t("common.space");
   if (KEY_GLYPH[code]) return KEY_GLYPH[code];
   if (code.startsWith("Key")) return code.slice(3);
   if (code.startsWith("Digit")) return code.slice(5);
@@ -39,10 +41,10 @@ const MODIFIERS = new Set([
 ]);
 
 const ROWS = [
-  { act: "left", label: "MOVE LEFT" },
-  { act: "right", label: "MOVE RIGHT" },
-  { act: "jump", label: "JUMP" },
-  { act: "attack", label: "ATTACK / SERVE", note: "hold to charge serve" },
+  { act: "left", labelKey: "controls.moveLeft" },
+  { act: "right", labelKey: "controls.moveRight" },
+  { act: "jump", labelKey: "controls.jump" },
+  { act: "attack", labelKey: "controls.attack", noteKey: "controls.attackNote" },
 ];
 
 /** {onReset, col, row} — col is the player index (0/1), row indexes ROWS. */
@@ -65,8 +67,13 @@ export function isCapturingBinding() {
   return !!capturing;
 }
 
-function beginCapture(player, act, label) {
-  capturing = { player, act, label, pName: player === 0 ? "PLAYER 1" : "PLAYER 2" };
+function beginCapture(player, act, labelKey) {
+  capturing = {
+    player,
+    act,
+    labelKey,
+    pNameKey: player === 0 ? "controls.player1" : "controls.player2",
+  };
 }
 
 function moveFocus(dx, dy) {
@@ -100,7 +107,7 @@ export function handleControlsKey(code, isTrusted = true) {
   if (code === "ArrowRight" || code === "KeyD") { moveFocus(1, 0); return "nav"; }
   if (code === "Enter" || code === "Space") {
     if (focus.onReset) { resetBindings(); return "reset"; }
-    beginCapture(focus.col, ROWS[focus.row].act, ROWS[focus.row].label);
+    beginCapture(focus.col, ROWS[focus.row].act, ROWS[focus.row].labelKey);
     return "capture";
   }
   if (code === "Escape" || code === "Backspace") return "leave";
@@ -121,7 +128,7 @@ export function handleControlsPointer(mx, my, phase) {
       focus.onReset = false;
       focus.col = r.player;
       focus.row = ROWS.findIndex((x) => x.act === r.act);
-      beginCapture(r.player, r.act, ROWS[focus.row].label);
+      beginCapture(r.player, r.act, ROWS[focus.row].labelKey);
       return true;
     }
   }
@@ -135,11 +142,11 @@ function inside(mx, my, r) {
 export function drawControlsScreen(ctx) {
   rowRects.length = 0;
   drawScrim(ctx, 0.55);
-  drawTitle(ctx, "CONTROLS", W / 2, H * 0.12, 44);
+  drawTitle(ctx, t("controls.title"), W / 2, H * 0.12, 44);
 
   const players = [
-    { col: 0, name: "PLAYER 1", accent: COLORS.p1, colX: W * 0.27 },
-    { col: 1, name: "PLAYER 2", accent: COLORS.p2, colX: W * 0.73 },
+    { col: 0, name: t("controls.player1"), accent: COLORS.p1, colX: W * 0.27 },
+    { col: 1, name: t("controls.player2"), accent: COLORS.p2, colX: W * 0.73 },
   ];
   const headerY = H * 0.24;
   const rowY0 = H * 0.33;
@@ -186,11 +193,11 @@ export function drawControlsScreen(ctx) {
       ctx.font = fontDisplay(19, 600);
       ctx.letterSpacing = "2px";
       ctx.fillStyle = focused ? p.accent : COLORS.text;
-      ctx.fillText(row.label, p.colX + labelX, cy - (row.note ? 8 : 0));
-      if (row.note) {
+      ctx.fillText(t(row.labelKey), p.colX + labelX, cy - (row.noteKey ? 8 : 0));
+      if (row.noteKey) {
         ctx.font = fontBody(12, 500);
         ctx.fillStyle = COLORS.textMuted;
-        ctx.fillText(row.note, p.colX + labelX, cy + 12);
+        ctx.fillText(t(row.noteKey), p.colX + labelX, cy + 12);
       }
       ctx.letterSpacing = "0px";
 
@@ -215,15 +222,15 @@ export function drawControlsScreen(ctx) {
   ctx.font = fontDisplay(18, 700);
   ctx.letterSpacing = "2px";
   ctx.fillStyle = rFocused ? COLORS.accent : COLORS.text;
-  ctx.fillText("RESET TO DEFAULTS", W / 2, rbY + rbH / 2 + 1);
+  ctx.fillText(t("controls.reset"), W / 2, rbY + rbH / 2 + 1);
   ctx.letterSpacing = "0px";
   resetRect = { x: rbX, y: rbY, w: rbW, h: rbH };
 
   const backHint = submenuReturnState === "pause"
-    ? "ENTER  REBIND      ESC  BACK TO PAUSE"
-    : "ENTER  REBIND      ESC  BACK";
+    ? t("common.backToPause")
+    : t("common.back");
   drawFooterHint(ctx, [
-    { text: "▲ ▼ ◄ ►  NAVIGATE" },
+    { text: t("controls.footer") },
     { text: backHint, accent: true },
   ], H - 44);
 
@@ -242,11 +249,11 @@ export function drawControlsScreen(ctx) {
     ctx.font = fontDisplay(28, 700);
     ctx.letterSpacing = "2px";
     ctx.fillStyle = COLORS.text;
-    ctx.fillText("PRESS A KEY", W / 2, py + 50);
+    ctx.fillText(t("controls.pressKey"), W / 2, py + 50);
     ctx.letterSpacing = "0px";
     ctx.font = fontBody(15, 500);
     ctx.fillStyle = COLORS.textMuted;
-    ctx.fillText(`${capturing.pName} · ${capturing.label}`, W / 2, py + 88);
-    ctx.fillText("ESC to cancel", W / 2, py + 114);
+    ctx.fillText(`${t(capturing.pNameKey)} · ${t(capturing.labelKey)}`, W / 2, py + 88);
+    ctx.fillText(t("controls.escCancel"), W / 2, py + 114);
   }
 }

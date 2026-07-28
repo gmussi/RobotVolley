@@ -2,12 +2,21 @@
  * App entry — wires engine, renderer, and input. The only file that knows both sides.
  */
 // Self-hosted fonts (bundled by Vite) so the desktop/Steam build runs offline.
-// Latin subset only — the UI copy is English; skips the Devanagari payload.
+// Latin + latin-ext (PL/DE/…) + Cyrillic (RU). CJK falls back to system fonts.
 import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-500.css";
 import "@fontsource/inter/latin-600.css";
+import "@fontsource/inter/latin-ext-400.css";
+import "@fontsource/inter/latin-ext-500.css";
+import "@fontsource/inter/latin-ext-600.css";
+import "@fontsource/inter/cyrillic-400.css";
+import "@fontsource/inter/cyrillic-500.css";
+import "@fontsource/inter/cyrillic-600.css";
 import "@fontsource/rajdhani/latin-600.css";
 import "@fontsource/rajdhani/latin-700.css";
+import "@fontsource/rajdhani/latin-ext-600.css";
+import "@fontsource/rajdhani/latin-ext-700.css";
+import "./i18n/index.js";
 import "./styles/main.css";
 import { CONTROL } from "./data/controls.js";
 import {

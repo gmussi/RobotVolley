@@ -7,8 +7,8 @@
  */
 import { W, H } from "../data/constants.js";
 import { apiFetch, isApiConfigured } from "../net/api.js";
-import { formatCountdown } from "../../shared/periods.js";
 import { getProfile } from "../progress/profile.js";
+import { t, formatLocalizedCountdown } from "../i18n/index.js";
 import {
   COLORS, fontDisplay, fontBody,
   drawScrim, drawTitle, drawGlassPanel, drawFooterHint, roundRect,
@@ -105,7 +105,7 @@ function drawTabs(ctx, x, y, w) {
     ctx.font = fontDisplay(15, 700);
     ctx.letterSpacing = "2px";
     ctx.fillStyle = active ? COLORS.accent : COLORS.textMuted;
-    ctx.fillText(p.toUpperCase(), tx + tabW / 2, y + 17);
+    ctx.fillText(t(`leaderboard.${p}`), tx + tabW / 2, y + 17);
     ctx.letterSpacing = "0px";
   });
 }
@@ -134,10 +134,10 @@ function drawRow(ctx, entry, x, y, w, highlight) {
   ctx.textAlign = "right";
   ctx.font = fontBody(13, 700);
   ctx.fillStyle = COLORS.textMuted;
-  ctx.fillText(`${entry.wins}W`, x + w - 96, y);
+  ctx.fillText(t("leaderboard.winShort", { n: entry.wins }), x + w - 96, y);
   ctx.font = fontDisplay(15, 700);
   ctx.fillStyle = highlight ? COLORS.accent : COLORS.text;
-  ctx.fillText(`${losses}L`, x + w - 12, y);
+  ctx.fillText(t("leaderboard.lossShort", { n: losses }), x + w - 12, y);
 }
 
 export function drawLeaderboardScreen(ctx) {
@@ -147,7 +147,7 @@ export function drawLeaderboardScreen(ctx) {
   const panelX = W / 2 - 330;
   const panelW = 660;
   drawGlassPanel(ctx, panelX, H * 0.13, panelW, H * 0.76, { radius: 16, fillAlpha: 0.84 });
-  drawTitle(ctx, "LEADERBOARD", W / 2, H * 0.09, 38);
+  drawTitle(ctx, t("leaderboard.title"), W / 2, H * 0.09, 38);
 
   drawTabs(ctx, panelX + 24, H * 0.17, panelW - 48);
 
@@ -158,7 +158,11 @@ export function drawLeaderboardScreen(ctx) {
   if (board?.resetsAt) {
     const remaining = board.resetsAt - (Date.now() + clockOffset);
     ctx.fillStyle = COLORS.accent;
-    ctx.fillText(`RESETS IN ${formatCountdown(remaining)}`, W / 2, H * 0.265);
+    ctx.fillText(
+      t("leaderboard.resetsIn", { time: formatLocalizedCountdown(remaining) }),
+      W / 2,
+      H * 0.265,
+    );
   } else {
     ctx.fillStyle = COLORS.textMuted;
     ctx.fillText(" ", W / 2, H * 0.265);
@@ -171,14 +175,14 @@ export function drawLeaderboardScreen(ctx) {
   if (loadState === "loading" && !board) {
     ctx.fillStyle = COLORS.textMuted;
     ctx.font = fontBody(14, 700);
-    ctx.fillText("LOADING…", W / 2, H * 0.5);
+    ctx.fillText(t("leaderboard.loading"), W / 2, H * 0.5);
     return;
   }
   if (loadState === "offline") {
     ctx.fillStyle = COLORS.textMuted;
     ctx.font = fontBody(14, 700);
-    ctx.fillText("CAN'T REACH THE SERVER", W / 2, H * 0.5);
-    drawFooterHint(ctx, [{ text: "ESC   BACK", accent: true }], H - 44);
+    ctx.fillText(t("leaderboard.cantReach"), W / 2, H * 0.5);
+    drawFooterHint(ctx, [{ text: t("common.escBack"), accent: true }], H - 44);
     return;
   }
 
@@ -186,15 +190,15 @@ export function drawLeaderboardScreen(ctx) {
   ctx.textAlign = "right";
   ctx.font = fontBody(11, 700);
   ctx.fillStyle = COLORS.textMuted;
-  ctx.fillText("WINS", listX + listW - 96, y - 22);
-  ctx.fillText("LOSSES", listX + listW - 12, y - 22);
+  ctx.fillText(t("leaderboard.wins"), listX + listW - 96, y - 22);
+  ctx.fillText(t("leaderboard.losses"), listX + listW - 12, y - 22);
 
   const entries = board?.entries ?? [];
   if (!entries.length) {
     ctx.textAlign = "center";
     ctx.font = fontBody(14, 700);
     ctx.fillStyle = COLORS.textMuted;
-    ctx.fillText("NOBODY HAS PLAYED YET — BE FIRST", W / 2, H * 0.5);
+    ctx.fillText(t("leaderboard.empty"), W / 2, H * 0.5);
   } else {
     const myId = getProfile().accountId;
     for (const entry of entries.slice(scrollTop, scrollTop + ROWS_VISIBLE)) {
@@ -219,7 +223,7 @@ export function drawLeaderboardScreen(ctx) {
   }
 
   drawFooterHint(ctx, [
-    { text: "◄ ►  DAILY / WEEKLY      ▲ ▼  SCROLL" },
-    { text: "ESC   BACK", accent: true },
+    { text: t("leaderboard.footer") },
+    { text: t("common.escBack"), accent: true },
   ], H - 44);
 }

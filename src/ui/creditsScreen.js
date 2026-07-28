@@ -4,15 +4,22 @@
  */
 import { W, H } from "../data/constants.js";
 import { CREDIT_SECTIONS } from "../data/credits.js";
+import { t } from "../i18n/index.js";
 import {
   COLORS, fontDisplay, fontBody,
   drawScrim, drawTitle, drawGlassPanel, drawFooterHint,
 } from "./neonUi.js";
 
+const SECTION_KEYS = {
+  Music: "credits.music",
+  Fonts: "credits.fonts",
+  "Built With": "credits.builtWith",
+};
+
 export function drawCreditsScreen(ctx) {
   drawScrim(ctx, 0.55);
   drawGlassPanel(ctx, W / 2 - 260, H * 0.16, 520, H * 0.62, { radius: 16, fillAlpha: 0.82 });
-  drawTitle(ctx, "CREDITS", W / 2, H * 0.12, 44);
+  drawTitle(ctx, t("credits.title"), W / 2, H * 0.12, 44);
 
   let y = H * 0.26;
   const leftX = W / 2 - 210;
@@ -23,7 +30,10 @@ export function drawCreditsScreen(ctx) {
     ctx.font = fontDisplay(18, 700);
     ctx.letterSpacing = "2px";
     ctx.fillStyle = COLORS.accent;
-    ctx.fillText(section.title.toUpperCase(), leftX, y);
+    const title = SECTION_KEYS[section.title]
+      ? t(SECTION_KEYS[section.title])
+      : section.title.toUpperCase();
+    ctx.fillText(title, leftX, y);
     ctx.letterSpacing = "0px";
     y += 30;
 
@@ -41,6 +51,5 @@ export function drawCreditsScreen(ctx) {
     y += 18;
   }
 
-  const backHint = "ENTER / ESC   BACK";
-  drawFooterHint(ctx, [{ text: backHint, accent: true }], H - 44);
+  drawFooterHint(ctx, [{ text: t("common.back"), accent: true }], H - 44);
 }

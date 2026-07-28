@@ -6,10 +6,12 @@ import {
 } from "../data/constants.js";
 import {
   ball, score, state, gameMode, servingSide, serveCharge,
-  bannerText, winner, menuOptions, menuIndex, menuMode, modeOptions, modeIndex,
+  banner, winner, menuOptions, menuIndex, menuMode, modeOptions, modeIndex,
   pauseFromState, submenuReturnState,
-  P1, P2, getArmSpec, onlineStatus, onlineLocalSeat, creditsLink, attractActive,
+  P1, P2, getArmSpec, onlineStatusKey, onlineStatusVars, onlineLocalSeat,
+  creditsLink, attractActive,
 } from "../engine/game.js";
+import { t } from "../i18n/index.js";
 import { drawLotteryAnimation } from "./lottery.js";
 import { drawSettings } from "./settings.js";
 import { drawControlsScreen } from "./controlsScreen.js";
@@ -441,7 +443,7 @@ function drawHUD() {
   ctx.fillText("—", W / 2, cy - 4);
   ctx.fillStyle = COLORS.textMuted;
   ctx.font = fontBody(10, 600);
-  ctx.fillText(`FIRST TO ${WIN_SCORE}`, W / 2, cy + 16);
+  ctx.fillText(t("hud.firstTo", { n: WIN_SCORE }), W / 2, cy + 16);
 }
 
 function getAttackFrac(r) {
@@ -475,10 +477,10 @@ function drawRobotPiecesHUD(robot, side, cy, slotSize, gap) {
   ctx.textBaseline = "middle";
   ctx.fillStyle = accent;
   ctx.font = fontBody(11, 700);
-  let label = side < 0 ? "P1" : (gameMode === "1p" ? "CPU" : "P2");
+  let label = side < 0 ? t("hud.p1") : (gameMode === "1p" ? t("hud.cpu") : t("hud.p2"));
   if (gameMode === "online") {
     const seat = side < 0 ? 0 : 1;
-    label = seat === onlineLocalSeat ? "YOU" : "OPP";
+    label = seat === onlineLocalSeat ? t("hud.you") : t("hud.opp");
   }
   const labelX = side < 0 ? margin : W - margin;
   ctx.fillText(label, labelX, cy + slotSize / 2 + 10);
@@ -522,12 +524,11 @@ function drawOnlineOverlay() {
     borderColor: COLORS.accent,
     glowColor: GLOW.accent || GLOW.p1,
   });
-  const title = state === "searching" ? "ONLINE MATCH" : "DISCONNECTED";
+  const title = state === "searching" ? t("online.title") : t("online.disconnected");
   centerText(ctx, title, COLORS.accent, 36, H * 0.38);
-  centerText(ctx, onlineStatus || "", COLORS.text, 18, H * 0.38 + 48, false);
-  const hint = state === "searching"
-    ? "press ESC or SPACE to cancel"
-    : "press SPACE for the menu";
+  const status = onlineStatusKey ? t(onlineStatusKey, onlineStatusVars) : "";
+  centerText(ctx, status, COLORS.text, 18, H * 0.38 + 48, false);
+  const hint = state === "searching" ? t("online.cancel") : t("online.pressMenu");
   centerText(ctx, hint, COLORS.textMuted, 14, H * 0.38 + 96, false);
 }
 
@@ -544,24 +545,24 @@ function drawBanner(vis = state) {
   if (vis === "serve") {
     const serverIsCpu = gameMode === "1p" && servingSide > 0;
     const serverSeat = servingSide < 0 ? 0 : 1;
-    let name = serverIsCpu ? "CPU" : `PLAYER ${serverSeat + 1}`;
+    let name = serverIsCpu ? t("serve.cpu") : t("common.playerN", { n: serverSeat + 1 });
     if (gameMode === "online") {
-      name = serverSeat === onlineLocalSeat ? "YOU" : "OPPONENT";
+      name = serverSeat === onlineLocalSeat ? t("serve.you") : t("serve.opponent");
     }
-    centerText(ctx, `${name} TO SERVE`,
+    centerText(ctx, t("serve.toServe", { name }),
       servingSide < 0 ? COLORS.p1 : COLORS.p2, 30, H * 0.32);
     const attackCode = codeFor(gameMode === "online" ? 0 : serverSeat, "attack");
     const key = attackCode === "Slash" ? "/"
       : attackCode?.startsWith("Key") ? attackCode.slice(3)
       : attackCode || "ATK";
     const localServing = gameMode !== "online" || serverSeat === onlineLocalSeat;
-    const servePrompt = serverIsCpu ? "serving…"
+    const servePrompt = serverIsCpu ? t("serve.serving")
       : localServing
-        ? `hold  ${key}  to charge · release to serve`
-        : "waiting for opponent to serve…";
+        ? t("serve.holdCharge", { key })
+        : t("serve.waiting");
     centerText(ctx, servePrompt, COLORS.textMuted, 16, H * 0.32 + 34, false);
   } else if (vis === "point") {
-    centerText(ctx, bannerText, COLORS.accent, 34, H * 0.4);
+    centerText(ctx, bannerMessage(), COLORS.accent, 34, H * 0.4);
   } else if (vis === "over") {
     drawScrim(ctx, 0.65);
     drawGlassPanel(ctx, W / 2 - 280, H * 0.28, 560, 220, {
@@ -569,10 +570,18 @@ function drawBanner(vis = state) {
       borderColor: winner === 0 ? COLORS.p1 : COLORS.p2,
       glowColor: winner === 0 ? GLOW.p1 : GLOW.p2,
     });
-    centerText(ctx, bannerText, winner === 0 ? COLORS.p1 : COLORS.p2, 48, H * 0.38);
+    centerText(ctx, bannerMessage(), winner === 0 ? COLORS.p1 : COLORS.p2, 48, H * 0.38);
     centerText(ctx, `${score[0]} — ${score[1]}`, COLORS.text, 34, H * 0.38 + 52);
-    centerText(ctx, "press SPACE for the menu", COLORS.textMuted, 16, H * 0.38 + 96, false);
+    centerText(ctx, t("banner.pressMenu"), COLORS.textMuted, 16, H * 0.38 + 96, false);
   }
+}
+
+function bannerMessage() {
+  if (!banner) return "";
+  const n = (banner.player ?? 0) + 1;
+  if (banner.type === "wins") return t("banner.wins", { n });
+  if (banner.type === "forfeit") return t("banner.forfeit", { n });
+  return t("banner.point", { n });
 }
 
 
@@ -591,7 +600,7 @@ function drawBrandLogo() {
       lh,
     );
   } else {
-    drawTitle(ctx, "ROBOT VOLLEY", W / 2, H * 0.10, 64);
+    drawTitle(ctx, t("menu.brand"), W / 2, H * 0.10, 64);
   }
 }
 
@@ -602,11 +611,11 @@ function drawTitleScreen() {
   const pulse = 0.55 + 0.45 * Math.sin(performance.now() * 0.005);
   ctx.save();
   ctx.globalAlpha = pulse;
-  centerText(ctx, "PRESS ANY BUTTON", COLORS.accent, 28, H * 0.58);
+  centerText(ctx, t("menu.pressAnyButton"), COLORS.accent, 28, H * 0.58);
   ctx.restore();
 
   drawFooterHint(ctx, [
-    { text: "© 2026  ROBOT VOLLEY" },
+    { text: t("menu.copyright") },
   ], H - 58);
 }
 
@@ -633,7 +642,7 @@ function drawProfileCard(centerY) {
     // Nothing cached yet — a gauge is honest about there being no robot to show.
     const spin = (performance.now() / 900) % 1;
     drawCircularGauge(ctx, cx, y + 104, 34, spin, COLORS.accent);
-    centerText(ctx, "SIGNING IN…", COLORS.textMuted, 13, y + 176, false);
+    centerText(ctx, t("profile.signingIn"), COLORS.textMuted, 13, y + 176, false);
     return;
   }
 
@@ -648,7 +657,7 @@ function drawProfileCard(centerY) {
   if (sync === "offline") {
     ctx.font = fontBody(11, 700);
     ctx.fillStyle = COLORS.textMuted;
-    ctx.fillText("OFFLINE", cx, y + 216);
+    ctx.fillText(t("profile.offline"), cx, y + 216);
   }
 }
 
@@ -672,7 +681,7 @@ function drawOptionList(options, selectedIndex, startY, itemW = 440, itemH = 44)
     o.w = itemW; o.h = itemH;
     o.x = (W - itemW) / 2;
     o.y = cy - itemH / 2;
-    drawMenuItem(ctx, o.label, W / 2, cy, itemW, itemH, i === selectedIndex, now);
+    drawMenuItem(ctx, t(o.labelKey), W / 2, cy, itemW, itemH, i === selectedIndex, now);
   });
 
   return {
@@ -699,11 +708,11 @@ function drawModeSelect() {
 
   const footerY = H - 58;
   drawFooterHint(ctx, [
-    { text: "© 2026  ROBOT VOLLEY" },
+    { text: t("menu.copyright") },
   ], footerY);
 
   const creditsY = footerY + 44;
-  const creditsText = "C   CREDITS";
+  const creditsText = t("menu.credits");
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.font = fontBody(13, 600);
@@ -733,8 +742,8 @@ function drawMenu() {
   }
 
   drawFooterHint(ctx, [
-    { text: "© 2026  ROBOT VOLLEY" },
-    { text: "ESC   BACK", accent: true },
+    { text: t("menu.copyright") },
+    { text: t("common.escBack"), accent: true },
   ], H - 58);
 }
 
