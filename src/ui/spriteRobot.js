@@ -237,8 +237,10 @@ function drawPiece(ctx, src, sk, r, ov, mirror, frames = 1, frameIdx = 0, vScale
 
   const rotRad = ov && ov[3] != null ? (ov[3] * Math.PI) / 180 : 0;
   if (rotRad !== 0) {
-    // Rotate around the socket centre; flip the sign when mirrored so the tilt
-    // reads the same in screen space for both facings.
+    // Rotate around the socket centre. The mirror (ctx.scale) is applied
+    // around the rotated image, not the other way round, so the tilt itself
+    // mirrors along with the art instead of being negated in place —
+    // otherwise the muzzle swings to the wrong side when mirrored.
     const pivotY =
       sk.anchor === "top" ? jointY + h / 2 :
       sk.anchor === "bottom" ? jointY - h / 2 :
@@ -246,7 +248,7 @@ function drawPiece(ctx, src, sk, r, ov, mirror, frames = 1, frameIdx = 0, vScale
     ctx.save();
     ctx.translate(cx, pivotY);
     if (mirror) ctx.scale(-1, 1);
-    ctx.rotate(mirror ? -rotRad : rotRad);
+    ctx.rotate(rotRad);
     ctx.drawImage(src, sx, 0, iw, ih, -w / 2, -h / 2, w, h);
     ctx.restore();
   } else if (mirror) {
