@@ -11,6 +11,8 @@
  */
 import { getItem, setItem } from "../platform/save.js";
 import { getPlatformTicket } from "../platform/identity.js";
+import { ENV } from "../platform/env.js";
+import { matchmakingUrl, tokenProvider } from "./config.js";
 
 const TOKEN_KEY = "robotvolley_account_token";
 const REQUEST_TIMEOUT_MS = 8000;
@@ -25,9 +27,9 @@ let loginPromise = null;
  * deploys working without a new environment variable.
  */
 export function apiBase() {
-  const explicit = import.meta.env.VITE_API_URL;
+  const explicit = ENV.VITE_API_URL;
   if (explicit) return String(explicit).replace(/\/$/, "");
-  const mm = import.meta.env.VITE_MATCHMAKING_URL;
+  const mm = matchmakingUrl();
   if (!mm) return null;
   return String(mm)
     .replace(/^ws:/, "http:")
@@ -121,15 +123,18 @@ export function login() {
  */
 export async function apiFetch(path, opts = {}) {
   if (!apiBase()) return { ok: false, status: 0, error: "not_configured", data: null };
-  if (!jwt) await login();
-  if (!jwt) return { ok: false, status: 0, error: "offline", data: null };
+  // Always via ensureSessionToken rather than the module's own `jwt`, so a
+  // caller that supplied its own credentials (configureNet) is never sent
+  // through platform sign-in behind its back.
+  let token = await ensureSessionToken();
+  if (!token) return { ok: false, status: 0, error: "offline", data: null };
 
-  let res = await rawFetch(path, { ...opts, token: jwt });
+  let res = await rawFetch(path, { ...opts, token });
   if (res.status === 401) {
     jwt = null;
-    await login();
-    if (!jwt) return res;
-    res = await rawFetch(path, { ...opts, token: jwt });
+    token = await ensureSessionToken();
+    if (!token) return res;
+    res = await rawFetch(path, { ...opts, token });
   }
   return res;
 }
@@ -141,6 +146,10 @@ export function getSessionToken() {
 
 /** Ensure a session exists, then hand back its token. Null when offline. */
 export async function ensureSessionToken() {
+  // A caller-supplied provider owns its own credentials end to end — signing in
+  // through this module as well would mint a second, unrelated account.
+  const provider = tokenProvider();
+  if (provider) return provider();
   if (!jwt) await login();
   return jwt;
 }

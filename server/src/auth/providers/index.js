@@ -12,10 +12,12 @@
  */
 import { deviceProvider } from "./device.js";
 import { steamProvider } from "./steam.js";
+import { botProvider } from "./bot.js";
 
 export const PROVIDERS = {
   device: deviceProvider,
   steam: steamProvider,
+  bot: botProvider,
 };
 
 export function getProvider(id) {

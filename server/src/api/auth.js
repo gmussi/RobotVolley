@@ -40,6 +40,9 @@ export async function handleLogin(request, env) {
     provider.id,
     identity.uid,
     identity.suggestedName,
+    // Only the provider decides this — see auth/providers/bot.js, which gates
+    // it on a server secret so a client cannot declare itself a bot.
+    { isBot: identity.isBot === true },
   );
   if (account.banned) return fail(request, "banned", 403);
 

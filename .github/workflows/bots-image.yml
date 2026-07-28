@@ -1,0 +1,78 @@
+name: Build and push bot fleet image
+
+# Publishes tools/bot/ as a container image to GHCR whenever the code it
+# actually depends on changes — the bot runs the real engine and netcode
+# (src/, shared/), so those are in scope too, not just tools/bot/ itself.
+#
+# The published image is a private GHCR package by default for a repo this
+# size, but GHCR's default has changed before and is worth distrusting once:
+# after the first successful run, confirm (or set) Package settings → Danger
+# Zone → Visibility → Private at
+# https://github.com/users/gmussi/packages/container/robot-volley-bots/settings
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "shared/**"
+      - "tools/bot/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/bots-image.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: bots-image
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/gmussi/robot-volley-bots
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: tools/bot/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

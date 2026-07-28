@@ -5,6 +5,7 @@
 import { createMatchmakingClient } from "./matchmaking.js";
 import { createPeerConnection } from "./webrtc.js";
 import { DC } from "./protocol.js";
+import { matchmakingUrl } from "./config.js";
 import {
   enterSearching, showDisconnect, toMenu, startGame, setOnlineStatus,
   getRobotLoadout, applyRobotLoadout, buildSnapshot, applySnapshot,
@@ -141,7 +142,13 @@ function failConnectAndRequeue(reason) {
  */
 function handleOpponentGoneMidMatch() {
   const seat = onlineLocalSeat;
+  const decided = state === "over" || winner === 0 || winner === 1;
   cleanupNet();
+  // A match that already has a result is not a forfeit. Both peers linger on
+  // the result screen and whoever leaves first closes their socket; without
+  // this guard the one still watching gets "opponent disconnected — you win"
+  // pasted over the match they just lost.
+  if (decided) return;
   awardForfeitWin(seat);
   notify("forfeit_win");
 }
@@ -156,7 +163,7 @@ export function beginOnlineMatchmaking() {
   cleanupNet();
   enterSearching();
 
-  if (!import.meta.env.VITE_MATCHMAKING_URL) {
+  if (!matchmakingUrl()) {
     setOnlineStatus("online.notConfigured");
     showDisconnect("online.setUrl");
     notify("error", { message: "missing_url" });

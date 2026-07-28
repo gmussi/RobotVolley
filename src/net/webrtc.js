@@ -4,34 +4,12 @@
  * - game: unreliable/unordered (state snapshots, inputs) — avoids backlog hitching
  */
 import { encode, decode } from "./protocol.js";
-
-/**
- * STUN alone can't traverse symmetric NAT / restrictive firewalls, which is
- * common on Steam's broad player base. A TURN relay is optional and configured
- * the same way as VITE_MATCHMAKING_URL: unset by default (STUN-only, unchanged
- * behavior), or provided at build time. VITE_TURN_URL accepts a comma-separated
- * list of URLs (e.g. a UDP and a TCP/TLS fallback) sharing one credential pair.
- */
-function buildIceServers() {
-  const servers = [{ urls: "stun:stun.l.google.com:19302" }];
-  const turnUrl = import.meta.env.VITE_TURN_URL;
-  if (turnUrl) {
-    const urls = turnUrl.split(",").map((u) => u.trim()).filter(Boolean);
-    if (urls.length) {
-      servers.push({
-        urls,
-        username: import.meta.env.VITE_TURN_USERNAME || undefined,
-        credential: import.meta.env.VITE_TURN_CREDENTIAL || undefined,
-      });
-    }
-  }
-  return servers;
-}
-
-const ICE_SERVERS = buildIceServers();
+import { iceServers } from "./config.js";
 
 export function createPeerConnection({ isHost, onSignal, onMessage, onOpen, onClose }) {
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  // Resolved per connection rather than at module load: headless clients call
+  // configureNet() after this module is imported.
+  const pc = new RTCPeerConnection({ iceServers: iceServers() });
   let ctrl = null;
   let game = null;
   let ctrlOpen = false;
