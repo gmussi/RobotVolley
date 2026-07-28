@@ -286,6 +286,28 @@ describe("stuck-ball safety net", () => {
     expect(ball.live).toBe(false);
   });
 
+  it("does not void a long rally over ordinary wall touches spaced seconds apart", () => {
+    startGame("2p");
+    serveBall(1);
+
+    const stepsPerGap = Math.round(2000 / (PHYSICS_STEP * 1000)); // ~2s between touches
+    for (let bounce = 0; bounce < 12 && ball.live; bounce++) {
+      // Park the ball safely mid-air (away from any wall/floor/robot) while the
+      // rally clock keeps advancing, same as a normal rally between touches.
+      for (let i = 0; i < stepsPerGap && ball.live; i++) {
+        ball.x = W / 2; ball.y = 100; ball.vx = 0; ball.vy = 0;
+        updateBall(PHYSICS_STEP);
+      }
+      if (!ball.live) break;
+      // A single, ordinary touch against the left wall.
+      ball.x = ball.r + 1; ball.y = 300; ball.vx = -60; ball.vy = 0;
+      updateBall(PHYSICS_STEP);
+    }
+
+    expect(ball.live).toBe(true);
+    expect(banner?.type).not.toBe("stall");
+  });
+
   it("voidRally ends the rally as a no-score let, not a point", () => {
     startGame("2p");
     serveBall(1);

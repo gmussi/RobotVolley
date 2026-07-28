@@ -64,8 +64,13 @@ export const PHYSICS_STEP = 1 / 120;
 /**
  * Safety net for a rally that never reaches the floor (e.g. the ball wedged
  * against a wall/robot) — void it as a let rather than let the match hang.
+ * Rallies here are legitimately long (~4 minute median with a long tail per
+ * docs/bots.md — the same reason BOT_MATCH_TIMEOUT_MS defaults to 8 minutes),
+ * so this only needs to catch a rally that's unambiguously never coming
+ * back; the fast wall-bounce loop counter below is what catches the known
+ * wedge bug quickly, well before this ever needs to fire.
  */
-export const MAX_RALLY_DURATION_MS = 45000;
+export const MAX_RALLY_DURATION_MS = 8 * 60_000;
 /** Same-wall bounce count within this window that fast-paths a void. */
 export const STALL_COLLISION_WINDOW_MS = 1000;
 export const STALL_COLLISION_COUNT_THRESHOLD = 10;
