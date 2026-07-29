@@ -38,6 +38,7 @@ import { initViewport, eventToCanvas } from "./ui/viewport.js";
 import { wireDomControls, syncRobotPartsToDom, openLab } from "./ui/customize.js";
 import { initTouchControls } from "./ui/touchControls.js";
 import { initGamepads, pollGamepads } from "./input/gamepad.js";
+import { initInputDevice } from "./input/device.js";
 import { preloadAssets, hideSplash, setSplashProgress } from "./ui/preload.js";
 import {
   initAudio, drainEvents, onStateChange, tickLotterySounds,
@@ -274,7 +275,9 @@ window.addEventListener("keydown", (e) => {
     return;
   }
   if (state === "serve") handleServeKeyDown(e.code, CONTROL);
-  if (e.code === "Space" && state === "over") {
+  // Enter as well as Space: a controller's confirm button emits Enter, and this
+  // is the one screen a pad player would otherwise be stranded on.
+  if ((e.code === "Space" || e.code === "Enter") && state === "over") {
     if (isOnlineActive()) cancelOnline();
     else toMenu();
   }
@@ -455,6 +458,7 @@ startAttract();
 syncRobotPartsToDom();
 initTouchControls(canvas, keys);
 initGamepads();
+initInputDevice();
 
 preloadAssets(setSplashProgress).then(() => {
   hideSplash();

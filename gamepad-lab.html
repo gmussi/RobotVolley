@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Robot Volley — Gamepad Lab</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 24px;
+    background: #0b1020; color: #e8ecf6;
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p.sub { color: #8b95ad; margin: 0 0 20px; }
+  .panel {
+    background: #121828; border: 1px solid #2a3450; border-radius: 10px;
+    padding: 16px; margin-bottom: 16px;
+  }
+  .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: #ffd54a; margin: 0 0 12px; }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { text-align: left; padding: 3px 10px 3px 0; vertical-align: top; }
+  th { color: #8b95ad; font-weight: 400; }
+  .on { color: #6cc24a; font-weight: 700; }
+  .off { color: #48526b; }
+  .grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btn {
+    min-width: 46px; text-align: center; padding: 6px 4px; border-radius: 6px;
+    background: #1a2138; border: 1px solid #2a3450; font-size: 12px;
+  }
+  .btn.hit { background: #6cc24a; color: #0b1020; border-color: #6cc24a; font-weight: 700; }
+  .btn small { display: block; color: #8b95ad; font-size: 10px; }
+  .btn.hit small { color: #0b1020; }
+  .bar { height: 6px; background: #1a2138; border-radius: 3px; position: relative; margin-top: 3px; }
+  .bar i { position: absolute; top: 0; bottom: 0; width: 3px; background: #ffd54a; border-radius: 2px; }
+  code { color: #ffd54a; }
+  .empty { color: #8b95ad; }
+</style>
+</head>
+<body>
+<h1>Gamepad Lab</h1>
+<p class="sub">
+  Press every button and report what lights up. Open this in the browser you are
+  actually playing in — layouts differ between Chrome and Firefox for the same pad.
+</p>
+<div id="out"><div class="panel empty">No pad seen yet — press a button on your controller.</div></div>
+
+<script type="module">
+import { __diagnostics } from "./src/input/gamepad.js";
+const { STANDARD, HID, readHat, calibrate, readPad, codeForButton } = __diagnostics;
+
+const out = document.getElementById("out");
+const cal = [];
+const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+function render() {
+  const pads = [...(navigator.getGamepads?.() ?? [])].filter(Boolean);
+  if (!pads.length) {
+    out.innerHTML = '<div class="panel empty">No pad seen yet — press a button on your controller.</div>';
+    requestAnimationFrame(render);
+    return;
+  }
+
+  out.innerHTML = pads.map((pad) => {
+    const st = cal[pad.index] || (cal[pad.index] = calibrate(pad));
+    const layoutName = pad.mapping === "standard" ? "STANDARD" : "HID (raw)";
+    const layout = pad.mapping === "standard" ? STANDARD : HID;
+    const logical = readPad(pad, st);
+
+    const buttons = pad.buttons.map((b, i) => {
+      const role = Object.entries(layout).find(([, v]) => v === i)?.[0] ?? "";
+      return `<div class="btn ${b.pressed ? "hit" : ""}">${i}<small>${role || "&nbsp;"}</small></div>`;
+    }).join("");
+
+    const axes = pad.axes.map((v, i) => {
+      const base = st.base[i] ?? 0;
+      const tag = i === st.hatAxis ? " (hat)" : i === 0 ? " (stick X)" : i === 1 ? " (stick Y)" : "";
+      const pct = Math.max(0, Math.min(100, (v + 1) * 50));
+      return `<tr><td>axes[${i}]${tag}</td><td>${v.toFixed(3)}</td>
+        <td>rest ${base.toFixed(3)}</td><td style="width:40%">
+        <div class="bar"><i style="left:${pct}%"></i></div></td></tr>`;
+    }).join("");
+
+    const rows = Object.keys(logical).map((name) => {
+      const inMatch = codeForButton(0, name, false);
+      const inMenu = codeForButton(0, name, true);
+      return `<tr><td>${name}</td>
+        <td class="${logical[name] ? "on" : "off"}">${logical[name] ? "PRESSED" : "—"}</td>
+        <td><code>${esc(inMatch ?? "—")}</code></td>
+        <td><code>${esc(inMenu ?? "—")}</code></td></tr>`;
+    }).join("");
+
+    const hat = st.hatAxis != null ? readHat(pad.axes[st.hatAxis]) : null;
+
+    return `<div class="panel">
+      <h2>Pad ${pad.index} — ${layoutName}</h2>
+      <table>
+        <tr><th>id</th><td colspan="3"><code>${esc(pad.id)}</code></td></tr>
+        <tr><th>mapping</th><td colspan="3"><code>${esc(pad.mapping || "(empty)")}</code></td></tr>
+        <tr><th>hat axis</th><td colspan="3"><code>${st.hatAxis ?? "none found"}</code>
+          ${hat ? ` → ${esc(Object.entries(hat).filter(([, v]) => v).map(([k]) => k).join(" ") || "centered")}` : ""}</td></tr>
+      </table>
+    </div>
+    <div class="panel"><h2>Raw buttons</h2><div class="grid">${buttons}</div></div>
+    <div class="panel"><h2>Raw axes</h2><table>${axes}</table></div>
+    <div class="panel"><h2>What the game sees (as Player 1)</h2>
+      <table><tr><th>button</th><th>state</th><th>emits in a match</th><th>emits in a menu</th></tr>${rows}</table></div>`;
+  }).join("");
+
+  requestAnimationFrame(render);
+}
+render();
+</script>
+</body>
+</html>
