@@ -14,26 +14,11 @@ import {
   COLORS, fontDisplay, fontBody,
   drawScrim, drawTitle, drawGlassPanel, drawFooterHint, drawKeyCap,
 } from "./neonUi.js";
+import { drawHintText, keyLabel, padGlyphForAction } from "./glyphs.js";
+import { usingGamepad } from "../input/device.js";
 import { submenuReturnState } from "../engine/game.js";
 import { codeFor, rebind, resetBindings } from "../data/controls.js";
 import { t } from "../i18n/index.js";
-
-const KEY_GLYPH = {
-  ArrowLeft: "◄", ArrowRight: "►", ArrowUp: "▲", ArrowDown: "▼",
-  Slash: "/", Backquote: "`", Minus: "-", Equal: "=",
-  Comma: ",", Period: ".", Semicolon: ";", Quote: "'",
-  BracketLeft: "[", BracketRight: "]", Backslash: "\\",
-};
-
-function keyGlyph(code) {
-  if (!code) return "—"; // unbound
-  if (code === "Space") return t("common.space");
-  if (KEY_GLYPH[code]) return KEY_GLYPH[code];
-  if (code.startsWith("Key")) return code.slice(3);
-  if (code.startsWith("Digit")) return code.slice(5);
-  if (code.startsWith("Numpad")) return `#${code.slice(6)}`;
-  return code;
-}
 
 const MODIFIERS = new Set([
   "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight",
@@ -107,6 +92,9 @@ export function handleControlsKey(code, isTrusted = true) {
   if (code === "ArrowRight" || code === "KeyD") { moveFocus(1, 0); return "nav"; }
   if (code === "Enter" || code === "Space") {
     if (focus.onReset) { resetBindings(); return "reset"; }
+    // Capture only accepts keyboard input, so opening it from a pad would be a
+    // dead end — the prompt would sit there ignoring every button.
+    if (!isTrusted) return "consumed";
     beginCapture(focus.col, ROWS[focus.row].act, ROWS[focus.row].labelKey);
     return "capture";
   }
@@ -185,7 +173,12 @@ export function drawControlsScreen(ctx) {
         });
       }
       const captureHere = capturing && capturing.player === p.col && capturing.act === row.act;
-      const glyph = captureHere ? "…" : keyGlyph(codeFor(p.col, row.act));
+      // On a pad the cap shows the controller button — the same for both seats,
+      // since each pad drives its own. Touch a key and the bindings come back.
+      const padGlyph = padGlyphForAction(row.act);
+      const glyph = captureHere ? "…"
+        : padGlyph ? { pad: padGlyph }
+        : keyLabel(codeFor(p.col, row.act));
       drawKeyCap(ctx, p.colX + keyOffset, cy, glyph, p.accent);
 
       ctx.textAlign = "left";
@@ -230,7 +223,9 @@ export function drawControlsScreen(ctx) {
     ? t("common.backToPause")
     : t("common.back");
   drawFooterHint(ctx, [
-    { text: t("controls.footer") },
+    // Rebinding captures keys, so on a pad there is nothing to offer here
+    // beyond saying so — and how to get back to the keyboard view.
+    { text: usingGamepad() ? t("controls.padFixed") : t("controls.footer") },
     { text: backHint, accent: true },
   ], H - 44);
 
@@ -254,6 +249,6 @@ export function drawControlsScreen(ctx) {
     ctx.font = fontBody(15, 500);
     ctx.fillStyle = COLORS.textMuted;
     ctx.fillText(`${t(capturing.pNameKey)} · ${t(capturing.labelKey)}`, W / 2, py + 88);
-    ctx.fillText(t("controls.escCancel"), W / 2, py + 114);
+    drawHintText(ctx, t("controls.escCancel"), W / 2, py + 114, 15);
   }
 }

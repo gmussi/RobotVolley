@@ -22,6 +22,7 @@ import {
   COLORS, fontDisplay, fontBody,
   drawScrim, drawTitle, drawGlassPanel, drawFooterHint, roundRect,
 } from "./neonUi.js";
+import { drawHintText } from "./glyphs.js";
 
 function localizedUnlockLabel(itemId) {
   const item = getItem(itemId);
@@ -261,8 +262,8 @@ function drawNameRow(ctx, x, y, w, focused) {
   ctx.font = fontBody(12, 700);
   ctx.fillStyle = COLORS.textMuted;
   if (nameBusy) ctx.fillText(t("profile.saving"), x + w - 14, y + h / 2);
-  else if (editing) ctx.fillText(t("profile.enterHint", { n: nameDraft.length, max: NAME_MAX }), x + w - 14, y + h / 2);
-  else if (focused) ctx.fillText(t("profile.enterRename"), x + w - 14, y + h / 2);
+  else if (editing) drawHintText(ctx, t("profile.enterHint", { n: nameDraft.length, max: NAME_MAX }), x + w - 14, y + h / 2, 12, "right");
+  else if (focused) drawHintText(ctx, t("profile.enterRename"), x + w - 14, y + h / 2, 12, "right");
 
   if (nameError) {
     ctx.textAlign = "left";

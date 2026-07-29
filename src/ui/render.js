@@ -35,6 +35,8 @@ import { drawProfileScreen } from "./profileScreen.js";
 import { drawLeaderboardScreen } from "./leaderboardScreen.js";
 import { colorblindMode } from "../data/accessibility.js";
 import { codeFor } from "../data/controls.js";
+import { usingGamepad } from "../input/device.js";
+import { drawActionBadge, keyLabel } from "./glyphs.js";
 
 let ctx;
 let renderRemainder = 0;
@@ -458,6 +460,16 @@ function isAttackReady(r) {
   return getAttackFrac(r) >= 1;
 }
 
+/**
+ * Is this seat driven from a keyboard or pad on this machine? The CPU has no
+ * key to show, and neither does an online opponent — their controls are theirs.
+ */
+function isLocallyPlayed(seat) {
+  if (gameMode === "online") return seat === onlineLocalSeat;
+  if (gameMode === "1p") return seat === 0;
+  return true; // 2p: both seats are at this keyboard
+}
+
 function drawRobotPiecesHUD(robot, side, cy, slotSize, gap) {
   const accent = side < 0 ? "#ff5a5f" : "#29b6f6";
   // The body is always standard apart from the one accessory, so the HUD shows
@@ -471,9 +483,18 @@ function drawRobotPiecesHUD(robot, side, cy, slotSize, gap) {
   const margin = 14;
   const startX = side < 0 ? margin : W - margin - rowW;
 
+  const seat = side < 0 ? 0 : 1;
+  const showKey = isLocallyPlayed(seat);
+
   slots.forEach((slot, i) => {
     const x = startX + i * (slotSize + gap);
     drawHudPieceSlot(robot, slot, x, cy, slotSize);
+    // Tuck the trigger for the weapon into its bottom-right corner, but only
+    // where somebody at this machine can actually press it, and only when there
+    // is a weapon equipped to trigger.
+    if (slot.kind === "weapon" && slot.id && showKey) {
+      drawActionBadge(ctx, seat, "attack", x + slotSize - 2, cy + slotSize / 2 - 2, 15);
+    }
   });
 
   ctx.textAlign = side < 0 ? "left" : "right";
@@ -559,9 +580,9 @@ function drawBanner(vis = state) {
     centerText(ctx, t("serve.toServe", { name }),
       servingSide < 0 ? COLORS.p1 : COLORS.p2, 30, H * 0.32);
     const attackCode = codeFor(gameMode === "online" ? 0 : serverSeat, "attack");
-    const key = attackCode === "Slash" ? "/"
-      : attackCode?.startsWith("Key") ? attackCode.slice(3)
-      : attackCode || "ATK";
+    // On a pad the serve is the square button, so hand the glyph layer a marker
+    // instead of a letter; on keyboard it stays the actual bound key.
+    const key = usingGamepad() ? "[attack]" : keyLabel(attackCode);
     const localServing = gameMode !== "online" || serverSeat === onlineLocalSeat;
     const servePrompt = serverIsCpu ? t("serve.serving")
       : localServing
