@@ -11,10 +11,11 @@ import {
   getRobotLoadout, applyRobotLoadout, buildSnapshot, applySnapshot,
   applyRemoteInput, applyRemoteServe, readLocalOnlineInput, extrapolateVisual,
   applyRobotCosmetics, awardForfeitWin, onlineIsHost, onlineLocalSeat, state,
-  servingSide, score, winner, onlineOverlay, setOnlineNames,
+  servingSide, score, winner, onlineOverlay, setOnlineNames, maxDeficit,
 } from "../engine/game.js";
 import { codeFor } from "../data/controls.js";
 import { getLoadout as getProfileLoadout, refreshAfterMatch } from "../progress/profile.js";
+import { showMatchUnlocks, clearMatchUnlocks } from "../ui/unlockReveal.js";
 
 /** ~50 Hz snapshots — guest extrapolates between them for smooth render. */
 const SNAPSHOT_INTERVAL_MS = 20;
@@ -199,6 +200,14 @@ export function beginOnlineMatchmaking() {
       if (msg.status === "recorded") void refreshAfterMatch();
       notify("result_recorded", msg);
     },
+    result_settled: (msg) => {
+      // Both seats' unlocks, so the reveal can show each player's prize on
+      // their own half. Also the only outcome message the *first* reporter
+      // receives — its own result_recorded only ever said "pending".
+      showMatchUnlocks(msg.unlocks);
+      void refreshAfterMatch();
+      notify("result_settled", msg);
+    },
     peer_left: () => {
       if (active) {
         handleOpponentGoneMidMatch();
@@ -304,6 +313,10 @@ function reportMatchResult() {
     winnerSeat: winner,
     score: [score[0], score[1]],
     durationMs: Math.round(performance.now() - matchStartedAt),
+    // The winner's worst moment, which is the only evidence a 5-4 was a
+    // comeback rather than a close finish. Both peers derive it from the same
+    // score sequence; the server ignores it unless they match.
+    maxDeficit: maxDeficit[winner],
   });
 }
 
@@ -369,6 +382,9 @@ function beginMatch() {
   tickCounter = 0;
   matchStartedAt = performance.now();
   resultReported = false;
+  // Drop the previous match's reveal so last game's prize can't linger over
+  // this one's result screen.
+  clearMatchUnlocks();
   lastSnapAt = performance.now();
   lastSnapTick = -1;
   lastSentInput = null;

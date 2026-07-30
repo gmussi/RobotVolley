@@ -1,9 +1,11 @@
 {
-  "_comment": "Single source of truth for cosmetics, imported by BOTH the game (src/data/cosmetics.js) and the Worker (server/src/cosmetics.js) so display and authority cannot drift. Cosmetics are purely visual and never affect physics. Item order is browse order.",
+  "_comment": "Single source of truth for cosmetics, imported by BOTH the game (src/data/cosmetics.js) and the Worker (server/src/cosmetics.js) so display and authority cannot drift. Cosmetics are purely visual and never affect physics. Item order is browse order, and the FIRST item of every enabled slot must be `default` — that is what a new account wears.",
+  "_comment_sprite": "`sprite` is a render token, not necessarily a file. Torsos resolve it to assets/robot/parts/torso-<sprite>.webp; auras and decals are drawn procedurally by auraDraw.js / decalDraw.js and just switch on the token.",
+  "_comment_reveal": "`reveal` ranks an item for the post-unlock screen, which shows only ONE cosmetic even when several land together (a rank rollover grants every tier at or below your placement). Higher wins. Items without it are never worth a reveal.",
   "slots": [
     { "id": "torso", "label": "TORSO", "enabled": true },
-    { "id": "head", "label": "HEAD", "enabled": false },
-    { "id": "aura", "label": "AURA", "enabled": false },
+    { "id": "decal", "label": "DECALS", "enabled": true },
+    { "id": "aura", "label": "AURA", "enabled": true },
     { "id": "special", "label": "SPECIAL", "enabled": false }
   ],
   "items": {
@@ -17,25 +19,109 @@
       "slot": "torso",
       "label": "Plated",
       "sprite": "plated",
-      "unlock": { "type": "wins", "n": 1 }
+      "unlock": { "type": "wins", "n": 3 }
     },
     "torso_vented": {
       "slot": "torso",
       "label": "Vented",
       "sprite": "vented",
-      "unlock": { "type": "wins", "n": 3 }
+      "unlock": { "type": "wins", "n": 5 }
     },
     "torso_reactor": {
       "slot": "torso",
       "label": "Reactor",
       "sprite": "reactor",
-      "unlock": { "type": "wins", "n": 5 }
+      "unlock": { "type": "wins", "n": 10 }
     },
     "torso_chrome": {
       "slot": "torso",
       "label": "Crown",
       "sprite": "chrome",
-      "unlock": { "type": "wins", "n": 10 }
+      "unlock": { "type": "wins", "n": 50 }
+    },
+
+    "decal_plain": {
+      "slot": "decal",
+      "label": "Plain",
+      "sprite": "plain",
+      "unlock": { "type": "default" }
+    },
+    "decal_century": {
+      "slot": "decal",
+      "label": "Century",
+      "sprite": "century",
+      "unlock": { "type": "matches", "n": 100 },
+      "reveal": 10
+    },
+    "decal_shutout": {
+      "slot": "decal",
+      "label": "Shutout",
+      "sprite": "shutout",
+      "unlock": { "type": "perfectWins", "n": 1 },
+      "reveal": 20
+    },
+    "decal_streak": {
+      "slot": "decal",
+      "label": "Streak",
+      "sprite": "streak",
+      "unlock": { "type": "streak", "n": 5 },
+      "reveal": 30
+    },
+    "decal_comeback": {
+      "slot": "decal",
+      "label": "Comeback",
+      "sprite": "comeback",
+      "unlock": { "type": "comebacks", "n": 1 },
+      "reveal": 40
+    },
+
+    "aura_none": {
+      "slot": "aura",
+      "label": "None",
+      "sprite": "none",
+      "unlock": { "type": "default" }
+    },
+    "aura_daily_10": {
+      "slot": "aura",
+      "label": "Ember",
+      "sprite": "ember",
+      "unlock": { "type": "rank", "top": 10, "board": "daily" },
+      "reveal": 50
+    },
+    "aura_daily_3": {
+      "slot": "aura",
+      "label": "Halo",
+      "sprite": "halo",
+      "unlock": { "type": "rank", "top": 3, "board": "daily" },
+      "reveal": 60
+    },
+    "aura_daily_1": {
+      "slot": "aura",
+      "label": "Corona",
+      "sprite": "corona",
+      "unlock": { "type": "rank", "top": 1, "board": "daily" },
+      "reveal": 70
+    },
+    "aura_weekly_10": {
+      "slot": "aura",
+      "label": "Motes",
+      "sprite": "motes",
+      "unlock": { "type": "rank", "top": 10, "board": "weekly" },
+      "reveal": 80
+    },
+    "aura_weekly_3": {
+      "slot": "aura",
+      "label": "Tempest",
+      "sprite": "tempest",
+      "unlock": { "type": "rank", "top": 3, "board": "weekly" },
+      "reveal": 90
+    },
+    "aura_weekly_1": {
+      "slot": "aura",
+      "label": "Sovereign",
+      "sprite": "sovereign",
+      "unlock": { "type": "rank", "top": 1, "board": "weekly" },
+      "reveal": 100
     }
   }
 }

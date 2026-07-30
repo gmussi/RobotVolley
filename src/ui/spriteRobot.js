@@ -11,6 +11,7 @@ import { GLOW } from "../data/theme.js";
 import { drawTankBody, tankBodyRect, tankRoll, tankRollState } from "./tankChassis.js";
 import ROLL from "../assets/robot/anim/tank-roll.json";
 import { spriteFor } from "../data/cosmetics.js";
+import { drawAura } from "./auraDraw.js";
 
 // Two baked colorways — P1 crimson and P2 blue (tools/robot/gen_p2_set.py).
 // Baked rather than tinted at runtime: identical geometry across teams, exact
@@ -510,6 +511,7 @@ export function drawSpriteRobot(ctx, r, floorY) {
   ctx.translate(-cx, -feet);
 
   drawShadow(ctx, r, floorY);
+  drawAura(ctx, r, floorY);
   drawTeamGlow(ctx, r);
 
   const team = side > 0 ? "p2" : "p1";

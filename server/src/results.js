@@ -27,7 +27,7 @@ const MAX_DURATION_MS = 60 * 60 * 1000;
  */
 export function isPlausible(report) {
   if (!report) return false;
-  const { winnerSeat, score, durationMs } = report;
+  const { winnerSeat, score, durationMs, maxDeficit } = report;
   if (winnerSeat !== 0 && winnerSeat !== 1) return false;
   if (!Array.isArray(score) || score.length !== 2) return false;
   const [a, b] = score;
@@ -38,8 +38,19 @@ export function isPlausible(report) {
   if ((a > b ? 0 : 1) !== winnerSeat) return false;
   if (!Number.isFinite(durationMs)) return false;
   if (durationMs < MIN_DURATION_MS || durationMs > MAX_DURATION_MS) return false;
+  // Optional (older clients omit it). The winner's deficit can never exceed
+  // WIN_SCORE - 1: at WIN_SCORE the match was already over. It also cannot
+  // exceed what the loser actually scored.
+  if (maxDeficit !== undefined && maxDeficit !== null) {
+    if (!Number.isInteger(maxDeficit)) return false;
+    if (maxDeficit < 0 || maxDeficit > WIN_SCORE - 1) return false;
+    if (maxDeficit > Math.min(a, b)) return false;
+  }
   return true;
 }
+
+/** Was the winner ever a full match-point behind? Only 0-4 gets you there. */
+export const COMEBACK_DEFICIT = WIN_SCORE - 1;
 
 /** Two reports describe the same match if every claim matches. */
 export function reportsAgree(a, b) {
@@ -70,8 +81,8 @@ export async function reportResult(db, { roomId, accountId, seat, report, seats 
       .prepare(
         `INSERT INTO matches
            (room_id, a_account, b_account, winner_seat, score_a, score_b,
-            duration_ms, reported_by, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+            duration_ms, max_deficit, reported_by, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
       )
       .bind(
         roomId,
@@ -81,6 +92,7 @@ export async function reportResult(db, { roomId, accountId, seat, report, seats 
         report.score[0],
         report.score[1],
         report.durationMs,
+        report.maxDeficit ?? null,
         accountId,
         ts,
       )
@@ -119,12 +131,26 @@ export async function reportResult(db, { roomId, accountId, seat, report, seats 
     return { status: "disputed", reason: "missing_account" };
   }
 
-  await applyOutcome(db, winnerAccount, loserAccount, ts);
+  // Deficit is deliberately outside reportsAgree(): it decides a cosmetic, not
+  // the result. Letting a mismatch reach the disputed branch would cost both
+  // players a dispute strike over a decal, so a disagreement just forfeits the
+  // milestone and the match records normally.
+  const agreedDeficit =
+    existing.max_deficit !== null && existing.max_deficit === (report.maxDeficit ?? null)
+      ? existing.max_deficit
+      : null;
+
+  const unlocks = await applyOutcome(db, winnerAccount, loserAccount, ts, {
+    perfect: Math.min(report.score[0], report.score[1]) === 0,
+    comeback: agreedDeficit !== null && agreedDeficit >= COMEBACK_DEFICIT,
+  });
   await db
-    .prepare(`UPDATE matches SET status = 'recorded', recorded_at = ? WHERE room_id = ?`)
-    .bind(ts, roomId)
+    .prepare(
+      `UPDATE matches SET status = 'recorded', recorded_at = ?, max_deficit = ? WHERE room_id = ?`,
+    )
+    .bind(ts, agreedDeficit, roomId)
     .run();
-  return { status: "recorded" };
+  return { status: "recorded", unlocks };
 }
 
 /**
@@ -169,12 +195,24 @@ export async function recordForfeit(db, { roomId, seats, winnerAccount, loserAcc
     return { status: "already_settled" };
   }
 
-  await applyOutcome(db, winnerAccount, loserAccount, ts);
-  return { status: "recorded" };
+  // No score to reason about, so no scoreline milestones — a walkover is not a
+  // 5-0 and not a comeback.
+  const unlocks = await applyOutcome(db, winnerAccount, loserAccount, ts, {});
+  return { status: "recorded", unlocks };
 }
 
-/** Move stats, Elo, unlocks and both leaderboard periods for one settled match. */
-async function applyOutcome(db, winnerAccount, loserAccount, ts) {
+/**
+ * Move stats, Elo, unlocks and both leaderboard periods for one settled match.
+ *
+ * `flags` carries the scoreline milestones the caller was able to establish:
+ * `perfect` for a 5-0, `comeback` for a win both peers agreed started 0-4. A
+ * forfeit passes neither.
+ *
+ * Returns the cosmetics each account newly owns as a result, keyed by account
+ * id — the post-match reveal announces these, and only the server is in a
+ * position to know them for both players at once.
+ */
+async function applyOutcome(db, winnerAccount, loserAccount, ts, flags = {}) {
   const [winnerStats, loserStats] = await Promise.all([
     getStats(db, winnerAccount),
     getStats(db, loserAccount),
@@ -184,15 +222,25 @@ async function applyOutcome(db, winnerAccount, loserAccount, ts) {
   const points = winPoints(winnerStats.elo ?? START_ELO, loserStats.elo ?? START_ELO);
 
   await db.batch([
+    // best_win_streak is a high-water mark rather than a live counter: unlocks
+    // are never revoked, so the cosmetic has to survive the loss that ends the
+    // run that earned it.
     db
       .prepare(
-        `UPDATE stats SET wins = wins + 1, matches = matches + 1, elo = ?, updated_at = ?
+        `UPDATE stats SET
+           wins = wins + 1, matches = matches + 1, elo = ?,
+           win_streak = win_streak + 1,
+           best_win_streak = MAX(best_win_streak, win_streak + 1),
+           perfect_wins = perfect_wins + ?,
+           comebacks = comebacks + ?,
+           updated_at = ?
          WHERE account_id = ?`,
       )
-      .bind(elo.winner, ts, winnerAccount),
+      .bind(elo.winner, flags.perfect ? 1 : 0, flags.comeback ? 1 : 0, ts, winnerAccount),
     db
       .prepare(
-        `UPDATE stats SET losses = losses + 1, matches = matches + 1, elo = ?, updated_at = ?
+        `UPDATE stats SET losses = losses + 1, matches = matches + 1, elo = ?,
+           win_streak = 0, updated_at = ?
          WHERE account_id = ?`,
       )
       .bind(elo.loser, ts, loserAccount),
@@ -227,6 +275,7 @@ async function applyOutcome(db, winnerAccount, loserAccount, ts) {
   // Recompute unlocks so a cosmetic earned by this win is owned before the
   // client's post-match refresh lands.
   const fresh = await getStats(db, winnerAccount);
-  await syncUnlocks(db, winnerAccount, fresh);
-  await syncUnlocks(db, loserAccount, await getStats(db, loserAccount));
+  const winnerUnlocks = await syncUnlocks(db, winnerAccount, fresh);
+  const loserUnlocks = await syncUnlocks(db, loserAccount, await getStats(db, loserAccount));
+  return { [winnerAccount]: winnerUnlocks, [loserAccount]: loserUnlocks };
 }

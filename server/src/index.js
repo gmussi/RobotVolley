@@ -14,6 +14,7 @@ import { handleGetMe, handlePutLoadout, handlePutName } from "./api/me.js";
 import { handleLeaderboard } from "./api/leaderboard.js";
 import { handleRecentMatches } from "./api/matches.js";
 import { corsHeaders } from "./api/http.js";
+import { settlePeriod } from "./rollover.js";
 
 export { Matchmaker };
 
@@ -70,4 +71,26 @@ export default {
       headers: corsHeaders(request),
     });
   },
+
+  /**
+   * Cron: hand out leaderboard placement cosmetics for the period that just
+   * ended (see rollover.js and the `[triggers]` block in wrangler.toml).
+   *
+   * Both crons run a few minutes past the boundary rather than exactly on it,
+   * so a match settling at 23:59:59.9 has landed before its board is read.
+   *
+   * The weekly trigger fires on a Monday, which is also a daily boundary, so it
+   * settles both — the daily cron will already have done that and find the
+   * period settled, which is exactly the no-op the settlement table exists for.
+   */
+  async scheduled(event, env) {
+    const period = event.cron === WEEKLY_CRON ? "weekly" : "daily";
+    const results = await settlePeriod(env.DB, period, event.scheduledTime ?? Date.now());
+    for (const r of results) {
+      if (r.settled) console.log(`rollover: settled ${r.periodKey}, ${r.awarded} awards`);
+    }
+  },
 };
+
+/** Must match the weekly entry in wrangler.toml's `[triggers]` crons. */
+const WEEKLY_CRON = "10 0 * * 1";

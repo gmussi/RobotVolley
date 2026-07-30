@@ -14,7 +14,7 @@ import {
   canPause, pauseGame, resumeFromPause, pauseSelect, pauseMove,
   pauseFromState, pauseIndex, leaveSubmenu, toMenu,
   onlineOverlay, openOnlineOverlay, closeOnlineOverlay, setOnlineOverlay,
-  readLocalOnlineInput,
+  readLocalOnlineInput, maxDeficit,
 } from "../src/engine/game.js";
 import { codeFor } from "../src/data/controls.js";
 import { HEAD_TYPES } from "../src/data/heads.js";
@@ -848,5 +848,53 @@ describe("online overlay", () => {
     startGame("2p");
     expect(openOnlineOverlay()).toBe(false);
     expect(onlineOverlay).toBeNull();
+  });
+});
+
+describe("comeback tracking", () => {
+  it("records how far behind each seat ever fell", () => {
+    toMenu();
+    startGame("2p");
+    expect(maxDeficit).toEqual([0, 0]);
+
+    for (let i = 0; i < 4; i++) awardPoint(1);
+    // Seat 0 is 0-4 down; seat 1 has never trailed.
+    expect(maxDeficit[0]).toBe(4);
+    expect(maxDeficit[1]).toBe(0);
+  });
+
+  it("keeps the worst moment, not the latest one", () => {
+    toMenu();
+    startGame("2p");
+    awardPoint(1);
+    awardPoint(1);
+    awardPoint(1); // 0-3
+    expect(maxDeficit[0]).toBe(3);
+    awardPoint(0);
+    awardPoint(0);
+    awardPoint(0); // 3-3, level again
+    expect(maxDeficit[0]).toBe(3);
+  });
+
+  it("cannot reach the comeback threshold from a level match", () => {
+    toMenu();
+    startGame("2p");
+    // 4-4 then a win is a 5-4 scoreline that is NOT a comeback. This is the
+    // whole reason the deficit is tracked rather than inferred from the score.
+    for (let i = 0; i < 4; i++) { awardPoint(0); awardPoint(1); }
+    awardPoint(0);
+    expect(score).toEqual([5, 4]);
+    expect(maxDeficit[0]).toBeLessThan(4);
+  });
+
+  it("resets between matches", () => {
+    toMenu();
+    startGame("2p");
+    for (let i = 0; i < 4; i++) awardPoint(1);
+    expect(maxDeficit[0]).toBe(4);
+
+    toMenu();
+    startGame("2p");
+    expect(maxDeficit).toEqual([0, 0]);
   });
 });

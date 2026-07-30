@@ -23,6 +23,15 @@ export const MM = {
   // whole match, so no extra connection is needed.
   MATCH_RESULT: "match_result",
   RESULT_RECORDED: "result_recorded",
+  // Pushed to BOTH seats once a match settles, carrying each side's newly
+  // unlocked cosmetics so the post-match reveal can show who won what.
+  //
+  // RESULT_RECORDED cannot carry this: it answers the peer that just reported,
+  // and the *first* reporter only ever hears "pending" — the match does not
+  // settle until the second report arrives. Only the server sees both sides'
+  // unlocks at once, which also means neither client has to trust the other's
+  // claim about what it earned.
+  RESULT_SETTLED: "result_settled",
   ERROR: "error",
 };
 

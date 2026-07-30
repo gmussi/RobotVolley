@@ -131,6 +131,39 @@ export class Matchmaker {
     if (s) this.send(s.ws, msg);
   }
 
+  /**
+   * Reach a player by account rather than socket id.
+   *
+   * Results are attributed by account (a room record stores seats as account
+   * ids so a report survives a reconnect), but sockets are keyed by player id,
+   * so announcing a settled match has to bridge the two. A player who already
+   * disconnected simply misses it — the launch-time reveal covers them.
+   */
+  sendToAccount(accountId, msg) {
+    if (!accountId) return;
+    for (const [, s] of this.sessions) {
+      if (s.accountId === accountId) this.send(s.ws, msg);
+    }
+  }
+
+  /**
+   * Tell both sides of a settled match what they unlocked. Sent to each seat
+   * independently rather than relayed peer-to-peer, so the claim is the
+   * server's and both clients can show the same thing.
+   */
+  announceSettled(seats, winnerSeat, unlocks) {
+    if (!unlocks) return;
+    const bySeat = seats.map((id) => (id && unlocks[id]?.length ? unlocks[id] : []));
+    if (!bySeat.some((list) => list.length)) return;
+    for (const accountId of seats) {
+      this.sendToAccount(accountId, {
+        type: "result_settled",
+        winnerSeat,
+        unlocks: bySeat,
+      });
+    }
+  }
+
   isAlive(playerId) {
     const s = this.sessions.get(playerId);
     return !!(s && isOpen(s.ws));
@@ -271,6 +304,9 @@ export class Matchmaker {
       loserAccount: quitterAccountId,
     });
     this.sendTo(survivorPlayerId, { type: "result_recorded", status: outcome.status });
+    if (outcome.status === "recorded") {
+      this.announceSettled(seats, seats.indexOf(survivorAccount), outcome.unlocks);
+    }
   }
 
   /** Sweep expired room records; re-arm while any remain. */
@@ -317,9 +353,13 @@ export class Matchmaker {
         winnerSeat: msg.winnerSeat,
         score: msg.score,
         durationMs: msg.durationMs,
+        maxDeficit: msg.maxDeficit,
       },
     });
     this.sendTo(playerId, { type: "result_recorded", status: outcome.status });
+    if (outcome.status === "recorded") {
+      this.announceSettled(record.seats, msg.winnerSeat, outcome.unlocks);
+    }
   }
 
   joinQueue(playerId) {

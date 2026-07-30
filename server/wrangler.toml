@@ -11,6 +11,14 @@ class_name = "Matchmaker"
 tag = "v1"
 new_sqlite_classes = ["Matchmaker"]
 
+# Leaderboard placement cosmetics. Periods are UTC and reset by starting a new
+# key, so these do not roll the boards over — they only award the period that
+# just ended (see src/rollover.js). A few minutes past the boundary so a match
+# settling on the stroke of midnight is counted; the daily entry must stay first
+# because src/index.js identifies the weekly one by its expression.
+[triggers]
+crons = ["5 0 * * *", "10 0 * * 1"]
+
 # Accounts, stats, unlocks and leaderboards. These need cross-player queries,
 # which is why they live in D1 rather than in the Durable Object's storage.
 [[d1_databases]]

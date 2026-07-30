@@ -4,26 +4,41 @@
 import { W, H, FLOOR_Y } from "../data/constants.js";
 import { COLORS, GLOW } from "../data/theme.js";
 import { reducedMotion } from "../data/accessibility.js";
+import { spriteFor } from "../data/cosmetics.js";
+import { drawDecals } from "./decalDraw.js";
 
 /** Static neon overlays — cached so only animated beams redraw each frame. */
 let staticEffectsCache = null;
+/** The decal pair baked into that cache, so a loadout change invalidates it. */
+let cachedDecalKey = null;
 
-function ensureStaticEffectsCache() {
-  if (staticEffectsCache) return staticEffectsCache;
-  const canvas = document.createElement("canvas");
+function ensureStaticEffectsCache(p1Cosmetics, p2Cosmetics) {
+  // Decals are part of the static layer (they never animate), so the cache is
+  // keyed by which pair is painted into it. Without this, the first frame's
+  // decals would persist for the rest of the session — through a loadout change
+  // in the Profile screen, and through the next opponent.
+  const key = `${spriteFor(p1Cosmetics, "decal")}|${spriteFor(p2Cosmetics, "decal")}`;
+  if (staticEffectsCache && cachedDecalKey === key) return staticEffectsCache;
+
+  const canvas = staticEffectsCache ?? document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
   const c = canvas.getContext("2d");
+  c.clearRect(0, 0, W, H);
   drawTeamZoneWash(c);
   drawCenterSpotlight(c);
+  // Under the markings and vignette, so the court lines still read on top of a
+  // busy board and the decal picks up the same edge falloff as everything else.
+  drawDecals(c, p1Cosmetics, p2Cosmetics);
   drawCourtMarkings(c);
   drawVignette(c);
   staticEffectsCache = canvas;
+  cachedDecalKey = key;
   return staticEffectsCache;
 }
 
-export function drawArenaEffects(ctx, timeSec = 0) {
-  ctx.drawImage(ensureStaticEffectsCache(), 0, 0);
+export function drawArenaEffects(ctx, timeSec = 0, p1Cosmetics = null, p2Cosmetics = null) {
+  ctx.drawImage(ensureStaticEffectsCache(p1Cosmetics, p2Cosmetics), 0, 0);
   drawNeonBeams(ctx, timeSec);
 }
 
@@ -113,7 +128,7 @@ function drawVignette(ctx) {
 }
 
 /** Enhanced procedural fallback when no painted assets load. */
-export function drawProceduralArena(ctx) {
+export function drawProceduralArena(ctx, p1Cosmetics = null, p2Cosmetics = null) {
   const g = ctx.createLinearGradient(0, 0, 0, FLOOR_Y);
   g.addColorStop(0, "#070b18");
   g.addColorStop(0.55, "#0d1430");
@@ -142,6 +157,7 @@ export function drawProceduralArena(ctx) {
   ctx.fillStyle = "rgba(255,255,255,0.12)";
   ctx.fillRect(0, FLOOR_Y, W, 4);
 
+  drawDecals(ctx, p1Cosmetics, p2Cosmetics);
   drawCourtMarkings(ctx);
   drawVignette(ctx);
 }
