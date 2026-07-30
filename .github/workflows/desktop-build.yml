@@ -86,13 +86,17 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
       - name: Verify macOS signature + notarization
-        # electron-builder always skips signing on pull_request events (no
-        # secrets, by design — see its own log line "code signing will be
-        # skipped"), which produces an unsigned/ad-hoc-signed app. spctl
-        # rejects that ("code has no resources but signature indicates they
-        # must be present") even though the build itself is fine, so this only
-        # runs when the cert was actually imported — i.e. real pushes to main.
-        if: matrix.os == 'macos-latest' && steps.codesign.outputs.signed == 'true'
+        # electron-builder refuses to sign on `pull_request` events
+        # unconditionally — regardless of whether CSC_LINK/the Apple key are
+        # actually configured (this repo has both). Its own log says so
+        # plainly: "Current build is a part of pull request, code signing
+        # will be skipped... Set env CSC_FOR_PULL_REQUEST to true to force
+        # code signing." That leaves an ad-hoc-signed app that spctl rejects
+        # ("code has no resources but signature indicates they must be
+        # present") even though packaging itself succeeded. Gate on the event
+        # that actually decides it (push), with the secrets check as a second
+        # line of defense in case a push build is ever missing them.
+        if: matrix.os == 'macos-latest' && github.event_name == 'push' && steps.codesign.outputs.signed == 'true'
         run: spctl -a -vvv "release/mac-arm64/Robot Volley.app"
       - name: Smoke tests (macOS only)
         if: matrix.os == 'macos-latest'
