@@ -57,10 +57,12 @@ jobs:
         env:
           APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
       - name: Import code signing certificate (macOS)
+        id: codesign
         if: matrix.os == 'macos-latest'
         run: |
           if [ -z "$CSC_LINK" ]; then
             echo "CSC_LINK not set — building unsigned"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           CERT_PATH="$RUNNER_TEMP/cert.p12"
@@ -71,6 +73,7 @@ jobs:
             echo "Wrote raw CSC_LINK to $CERT_PATH"
           fi
           echo "CSC_LINK=$CERT_PATH" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
       - run: npm run electron:build -- --publish never
@@ -83,7 +86,13 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
       - name: Verify macOS signature + notarization
-        if: matrix.os == 'macos-latest'
+        # electron-builder always skips signing on pull_request events (no
+        # secrets, by design — see its own log line "code signing will be
+        # skipped"), which produces an unsigned/ad-hoc-signed app. spctl
+        # rejects that ("code has no resources but signature indicates they
+        # must be present") even though the build itself is fine, so this only
+        # runs when the cert was actually imported — i.e. real pushes to main.
+        if: matrix.os == 'macos-latest' && steps.codesign.outputs.signed == 'true'
         run: spctl -a -vvv "release/mac-arm64/Robot Volley.app"
       - name: Smoke tests (macOS only)
         if: matrix.os == 'macos-latest'
