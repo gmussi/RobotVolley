@@ -1,23 +1,28 @@
 /**
  * Profile screen — your robot's name and its cosmetics.
  *
- * Four sections (TORSO / HEAD / AURA / SPECIAL), each browsed with ◄ ►. Only
- * TORSO is live; the rest are drawn greyed with COMING SOON. That is driven by
+ * Four sections (TORSO / DECALS / AURA / SPECIAL), each browsed with ◄ ►.
+ * SPECIAL is not live yet and draws greyed with COMING SOON. That is driven by
  * the `enabled` flag in shared/cosmetics.json rather than hardcoded here, so
  * switching one on later is a data change plus its art.
  *
  * Browsing walks the *whole* list, locked entries included — seeing the chrome
- * torso you haven't earned, with "WIN 10 MATCHES" under it, is the point. Only
+ * torso you haven't earned, with "WIN 50 MATCHES" under it, is the point. Only
  * equipping is gated, and the server re-checks that anyway.
+ *
+ * The preview shows a torso and an aura on the robot itself. A decal cannot ride
+ * a robot — it paints half the arena — so it previews as a board at the robot's
+ * feet, which is where it lands in a real match.
  */
 import { W, H } from "../data/constants.js";
-import { SLOTS, itemsForSlot, unlockProgress, getItem } from "../data/cosmetics.js";
+import { SLOTS, itemsForSlot, unlockProgress, getItem, spriteFor } from "../data/cosmetics.js";
 import {
   getProfile, getSyncState, getLoadout, updateLoadout, updateName,
 } from "../progress/profile.js";
 import { NAME_MAX, NAME_MIN, isNameCharValid } from "../data/nameRules.js";
 import { t } from "../i18n/index.js";
 import { drawRobotPreview } from "./robotPreview.js";
+import { drawDecalPlate } from "./decalDraw.js";
 import {
   COLORS, fontDisplay, fontBody,
   drawScrim, drawTitle, drawGlassPanel, drawFooterHint, roundRect,
@@ -34,6 +39,12 @@ function localizedUnlockLabel(itemId) {
       return rule.n === 1 ? t("unlock.win1") : t("unlock.wins", { n: rule.n });
     case "matches":
       return t("unlock.matches", { n: rule.n });
+    case "streak":
+      return t("unlock.streak", { n: rule.n });
+    case "perfectWins":
+      return t("unlock.perfect");
+    case "comebacks":
+      return t("unlock.comeback");
     case "rank":
       return t("unlock.rank", {
         n: rule.top,
@@ -42,6 +53,18 @@ function localizedUnlockLabel(itemId) {
     default:
       return t("unlock.locked");
   }
+}
+
+/**
+ * Unlock state for one item, from this account's point of view.
+ *
+ * The owned set has to be passed in: a leaderboard placement cannot be derived
+ * from stats, so a granted aura reads as locked without it — and the player
+ * would be unable to equip a reward they had genuinely earned.
+ */
+function itemProgress(itemId) {
+  const profile = getProfile();
+  return unlockProgress(itemId, profile.stats, new Set(profile.unlocks));
 }
 
 function cosmeticItemLabel(item) {
@@ -117,7 +140,7 @@ function browse(slotId, delta) {
   browseIndex[slotId] = ((browseIndex[slotId] ?? 0) + delta + n) % n;
 
   const item = items[browseIndex[slotId]];
-  if (!unlockProgress(item.id, getProfile().stats).unlocked) return;
+  if (!itemProgress(item.id).unlocked) return;
   void updateLoadout({ ...getLoadout(), [slotId]: item.id });
 }
 
@@ -309,7 +332,7 @@ function drawSectionRow(ctx, slot, row, x, y, w, focused) {
 
   const item = currentItem(slot.id);
   const items = itemsForSlot(slot.id);
-  const progress = item ? unlockProgress(item.id, getProfile().stats) : { unlocked: false };
+  const progress = item ? itemProgress(item.id) : { unlocked: false };
 
   // Arrows, both live even on a locked item — you can always keep browsing.
   const arrowW = 30;
@@ -367,9 +390,23 @@ export function drawProfileScreen(ctx) {
 
   const margin = 56;
 
-  // Left: the robot wearing whatever is being browsed right now.
+  // Left: the robot wearing whatever is being browsed right now. The aura comes
+  // along for free — drawRobotPreview goes through the normal figure draw.
   const previewCx = margin + 200;
-  drawRobotPreview(ctx, previewLoadout(), previewCx, H * 0.82, 1.35);
+  // Raised from the old 0.82 to make room for the decal board underneath, which
+  // would otherwise land on top of the win/loss line.
+  const feetY = H * 0.76;
+  drawRobotPreview(ctx, previewLoadout(), previewCx, feetY, 1.35);
+
+  // A decal is arena art, not a worn part, so it cannot ride the robot. Showing
+  // it as a board at the robot's feet matches where it actually appears in a
+  // match — the courtside strip below the floor line.
+  const boardW = 300;
+  drawDecalPlate(
+    ctx,
+    spriteFor(previewLoadout(), "decal"),
+    previewCx - boardW / 2, feetY + 6, boardW, 32,
+  );
 
   const stats = getProfile().stats;
   ctx.textAlign = "center";

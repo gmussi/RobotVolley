@@ -33,6 +33,7 @@ import { drawRobotPreview } from "./robotPreview.js";
 import { getProfile, getSyncState } from "../progress/profile.js";
 import { drawProfileScreen } from "./profileScreen.js";
 import { drawLeaderboardScreen } from "./leaderboardScreen.js";
+import { drawMatchUnlocks, drawLaunchUnlock } from "./unlockReveal.js";
 import { colorblindMode } from "../data/accessibility.js";
 import { codeFor } from "../data/controls.js";
 import { usingGamepad } from "../input/device.js";
@@ -83,23 +84,30 @@ export function render() {
   else if (onlineOverlay === "settings") drawSettings(ctx);
   else if (onlineOverlay === "controls") drawControlsScreen(ctx);
   drawTouchControls(ctx);
+  // Last, over everything: a cosmetic granted by the nightly leaderboard
+  // rollover is announced on the next launch, whatever screen that lands on.
+  drawLaunchUnlock(ctx);
 }
 
 function drawArena() {
   const composite = getStadiumComposite();
+  // Each player's decal claims their own half, so the arena needs both
+  // loadouts. P1/P2 already carry sanitized cosmetics (applyRobotCosmetics),
+  // including the remote peer's, so this is the same data the robots draw from.
+  const t = performance.now() * 0.001;
   if (composite) {
     ctx.drawImage(composite, 0, 0, W, H);
-    drawArenaEffects(ctx, performance.now() * 0.001);
+    drawArenaEffects(ctx, t, P1.cosmetics, P2.cosmetics);
     return;
   }
 
   if (arenaBgImage.complete && arenaBgImage.naturalWidth) {
     ctx.drawImage(arenaBgImage, 0, 0, W, H);
-    drawArenaEffects(ctx, performance.now() * 0.001);
+    drawArenaEffects(ctx, t, P1.cosmetics, P2.cosmetics);
     return;
   }
 
-  drawProceduralArena(ctx);
+  drawProceduralArena(ctx, P1.cosmetics, P2.cosmetics);
 }
 
 function drawNet() {
@@ -601,6 +609,8 @@ function drawBanner(vis = state) {
     centerText(ctx, bannerMessage(), winner === 0 ? COLORS.p1 : COLORS.p2, 48, H * 0.38);
     centerText(ctx, `${score[0]} — ${score[1]}`, COLORS.text, 34, H * 0.38 + 52);
     centerText(ctx, t("banner.pressMenu"), COLORS.textMuted, 16, H * 0.38 + 96, false);
+    // Below the score panel, one per half — see drawMatchUnlocks.
+    drawMatchUnlocks(ctx);
   }
 }
 

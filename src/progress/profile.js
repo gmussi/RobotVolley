@@ -18,6 +18,7 @@
 import { getJSON, setJSON } from "../platform/save.js";
 import { apiFetch, isApiConfigured } from "../net/api.js";
 import { defaultLoadout, sanitizeCosmetics } from "../data/cosmetics.js";
+import { reconcileUnlocks } from "../ui/unlockReveal.js";
 
 const CACHE_KEY = "robotvolley_profile_cache";
 
@@ -60,7 +61,12 @@ function blankProfile() {
   return {
     accountId: null,
     displayName: "ROBOT",
-    stats: { wins: 0, losses: 0, matches: 0, elo: 1200 },
+    stats: {
+      wins: 0, losses: 0, matches: 0, elo: 1200,
+      // Milestone counters. Present here so the Profile screen can show
+      // progress toward a decal before the first sync lands.
+      winStreak: 0, bestWinStreak: 0, perfectWins: 0, comebacks: 0,
+    },
     unlocks: [],
     loadout: defaultLoadout(),
     updatedAt: 0,
@@ -150,6 +156,10 @@ export function syncProfile() {
         cache();
       }
       setSyncState("ready");
+      // Leaderboard auras are granted by the nightly rollover, long after the
+      // match that earned them, so a profile sync is the first time this client
+      // can possibly learn about one.
+      reconcileUnlocks(profile.unlocks);
     } else {
       setSyncState("offline");
     }

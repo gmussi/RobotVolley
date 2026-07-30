@@ -96,7 +96,14 @@ export async function findOrCreateAccount(db, provider, uid, suggested, opts = {
 
 export async function getStats(db, accountId) {
   const row = await db.prepare(`SELECT * FROM stats WHERE account_id = ?`).bind(accountId).first();
-  return row ?? { account_id: accountId, wins: 0, losses: 0, matches: 0, elo: 1200, updated_at: 0 };
+  return (
+    row ?? {
+      account_id: accountId,
+      wins: 0, losses: 0, matches: 0, elo: 1200,
+      win_streak: 0, best_win_streak: 0, perfect_wins: 0, comebacks: 0,
+      updated_at: 0,
+    }
+  );
 }
 
 export async function getUnlocks(db, accountId) {
@@ -111,13 +118,21 @@ export async function getUnlocks(db, accountId) {
  * Insert any cosmetics the current stats have earned. Idempotent — existing
  * rows are ignored, and nothing is ever revoked (a rollback of stats must not
  * take a cosmetic away from someone who already saw it unlock).
+ *
+ * Returns the ids that were *newly* granted, which is what the post-match
+ * reveal screen announces. The read has to happen before the write to know
+ * that, so callers who don't care still pay for it — cheap enough against a
+ * handful of rows, and it keeps a single sync path.
  */
 export async function syncUnlocks(db, accountId, stats) {
   const earned = earnedCosmetics(stats);
-  if (!earned.length) return;
+  if (!earned.length) return [];
+  const owned = new Set(await getUnlocks(db, accountId));
+  const fresh = earned.filter((id) => !owned.has(id));
+  if (!fresh.length) return [];
   const ts = now();
   await db.batch(
-    earned.map((cosmeticId) =>
+    fresh.map((cosmeticId) =>
       db
         .prepare(
           `INSERT OR IGNORE INTO account_unlocks (account_id, cosmetic_id, unlocked_at)
@@ -126,6 +141,7 @@ export async function syncUnlocks(db, accountId, stats) {
         .bind(accountId, cosmeticId, ts),
     ),
   );
+  return fresh;
 }
 
 /** Explicit grant, used by leaderboard rollover for `rank`-type rewards. */
@@ -161,6 +177,12 @@ export async function setLoadout(db, accountId, loadout) {
   const clean = sanitizeCosmetics(loadout);
   const owned = new Set(await getUnlocks(db, accountId));
   for (const id of Object.values(clean)) {
+    // A `default` item is unlocked by definition, so trust the rule rather than
+    // the table. Enabling a new slot adds a new default, and every account
+    // created before that slot existed has no row for it — checking ownership
+    // here would lock those players out of saving any loadout at all until
+    // their next match re-synced them.
+    if (getItem(id)?.unlock?.type === "default") continue;
     if (!owned.has(id)) return { ok: false, error: "locked_cosmetic", cosmeticId: id };
   }
   await db
@@ -297,6 +319,13 @@ export async function getProfile(db, accountId) {
       losses: stats.losses,
       matches: stats.matches,
       elo: stats.elo,
+      // Milestone counters. camelCase here, snake_case in the row — the shared
+      // unlock rules read either spelling so both sides can pass their native
+      // shape straight in (see STAT_FIELDS in shared/cosmetics.js).
+      winStreak: stats.win_streak ?? 0,
+      bestWinStreak: stats.best_win_streak ?? 0,
+      perfectWins: stats.perfect_wins ?? 0,
+      comebacks: stats.comebacks ?? 0,
     },
     unlocks,
     loadout,

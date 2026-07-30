@@ -39,10 +39,39 @@ export function defaultLoadout() {
 }
 
 /**
+ * Which stats row field backs each counter-style unlock type.
+ *
+ * Two spellings per entry on purpose: the Worker passes raw D1 rows
+ * (snake_case) straight from `getStats`, while the game passes the `/me`
+ * payload (camelCase). Accepting both is what lets one implementation stay
+ * authoritative on the server and presentational on the client.
+ */
+const STAT_FIELDS = {
+  wins: ["wins"],
+  matches: ["matches"],
+  streak: ["bestWinStreak", "best_win_streak"],
+  perfectWins: ["perfectWins", "perfect_wins"],
+  comebacks: ["comebacks"],
+};
+
+function statValue(stats, type) {
+  for (const field of STAT_FIELDS[type] ?? []) {
+    const v = stats?.[field];
+    if (typeof v === "number") return v;
+  }
+  return 0;
+}
+
+/**
  * Progress toward an item's unlock, given a stats row.
  * Returns { unlocked, have, need } — `need` is 0 for always-available items.
+ *
+ * `owned` is an optional Set of ids the account already holds. It exists for
+ * `rank` rewards, which cannot be derived from stats at all: pass it on the
+ * client so a granted aura reads as unlocked, and omit it on the server so
+ * `earnedCosmetics` never auto-grants one.
  */
-export function unlockProgress(itemId, stats = {}) {
+export function unlockProgress(itemId, stats = {}, owned = null) {
   const item = getItem(itemId);
   if (!item) return { unlocked: false, have: 0, need: 0 };
   const rule = item.unlock ?? { type: "default" };
@@ -51,13 +80,17 @@ export function unlockProgress(itemId, stats = {}) {
     case "default":
       return { unlocked: true, have: 0, need: 0 };
     case "wins":
-      return { unlocked: (stats.wins ?? 0) >= rule.n, have: stats.wins ?? 0, need: rule.n };
     case "matches":
-      return { unlocked: (stats.matches ?? 0) >= rule.n, have: stats.matches ?? 0, need: rule.n };
+    case "streak":
+    case "perfectWins":
+    case "comebacks": {
+      const have = statValue(stats, rule.type);
+      return { unlocked: have >= rule.n, have, need: rule.n };
+    }
     // Rank rewards are granted by the leaderboard rollover job, not derived
-    // from stats — they are only ever unlocked by an explicit grant.
+    // from stats — the only evidence they were earned is the grant itself.
     case "rank":
-      return { unlocked: false, have: 0, need: 0 };
+      return { unlocked: !!owned?.has?.(itemId), have: 0, need: 0 };
     default:
       return { unlocked: false, have: 0, need: 0 };
   }
@@ -74,11 +107,38 @@ export function unlockLabel(itemId) {
       return rule.n === 1 ? "WIN 1 MATCH" : `WIN ${rule.n} MATCHES`;
     case "matches":
       return `PLAY ${rule.n} MATCHES`;
+    case "streak":
+      return `WIN ${rule.n} MATCHES IN A ROW`;
+    case "perfectWins":
+      return `WIN ${rule.n === 1 ? "A MATCH" : `${rule.n} MATCHES`} 5-0`;
+    case "comebacks":
+      return "WIN FROM 0-4 DOWN";
     case "rank":
-      return `TOP ${rule.top} ${String(rule.board).toUpperCase()}`;
+      return `REACH TOP ${rule.top} IN ${String(rule.board).toUpperCase()} LEADERBOARD ONCE`;
     default:
       return "LOCKED";
   }
+}
+
+/**
+ * Of several cosmetics unlocked at once, the one worth showing.
+ *
+ * A rank rollover grants every tier at or below your placement, so finishing
+ * first hands over three auras in one go — the reveal screen shows only the
+ * best of them. Items with no `reveal` rank are never revealed at all.
+ */
+export function pickReveal(ids) {
+  let best = null;
+  let bestRank = -Infinity;
+  for (const id of ids ?? []) {
+    const rank = getItem(id)?.reveal;
+    if (typeof rank !== "number") continue;
+    if (rank > bestRank) {
+      bestRank = rank;
+      best = id;
+    }
+  }
+  return best;
 }
 
 /**

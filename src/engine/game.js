@@ -58,6 +58,18 @@ export let winner = null;
 export let lotteryResults = [null, null];
 export let lotteryTimer = 0;
 export let lotteryTick = 0;
+/**
+ * Largest deficit each seat has faced this match.
+ *
+ * The final scoreline cannot identify a comeback: 5-4 looks the same whether the
+ * winner trailed 0-4 or the match was level at 4-4. Tracking the low-water mark
+ * is the only way to tell, and being a full match-point behind is only reachable
+ * from 0-4 — so the comeback milestone is exactly `maxDeficit === WIN_SCORE - 1`.
+ *
+ * Both peers compute this from the same score sequence and the server only
+ * believes it when the two agree (see server/src/results.js).
+ */
+export const maxDeficit = [0, 0];
 let rallyIndex = 0;
 
 // ---- Stall safety net ----
@@ -566,6 +578,7 @@ export function startGame(mode, opts = {}) {
   stopAttract();
   gameMode = mode;
   score[0] = 0; score[1] = 0;
+  maxDeficit[0] = 0; maxDeficit[1] = 0;
   winner = null;
   banner = null;
   rallyIndex = 0;
@@ -754,9 +767,26 @@ function getSpeedRampBounds() {
   };
 }
 
+/**
+ * Update the deficit high-water marks from the current score.
+ *
+ * Derived from the absolute score rather than from the point that was just
+ * scored, because only the host runs awardPoint — the guest mirrors `score`
+ * straight out of a snapshot. Both peers have to reach the same number or the
+ * server discards the comeback claim as a disagreement, so both call this.
+ * Reading absolute scores makes it idempotent, which is what lets the guest run
+ * it on every snapshot rather than only on transitions.
+ */
+function trackDeficit() {
+  const gap = Math.abs(score[0] - score[1]);
+  const trailer = score[0] < score[1] ? 0 : 1;
+  if (gap > maxDeficit[trailer]) maxDeficit[trailer] = gap;
+}
+
 export function awardPoint(scorer) {
   if (attractActive) { endAttractRally(scorer); return; }
   score[scorer]++;
+  trackDeficit();
   ball.live = false;
   ball.magnetHold = null;
   ball.portalHold = null;
@@ -1649,6 +1679,9 @@ export function applySnapshot(snap) {
   state = snap.state;
   score[0] = snap.score[0];
   score[1] = snap.score[1];
+  // The guest never runs awardPoint, so this is where it observes the score
+  // history the comeback milestone is derived from.
+  trackDeficit();
   servingSide = snap.servingSide;
   serveCharging = snap.serveCharging;
   serveCharge = snap.serveCharge;

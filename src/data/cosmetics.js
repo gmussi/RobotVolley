@@ -18,4 +18,5 @@ export {
   earnedCosmetics,
   sanitizeCosmetics,
   spriteFor,
+  pickReveal,
 } from "../../shared/cosmetics.js";

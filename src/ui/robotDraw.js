@@ -7,6 +7,7 @@ import { HEAD_TYPES } from "../data/heads.js";
 import { COLORS, GLOW, PART_ACCENTS } from "../data/theme.js";
 import { drawSpriteRobot, drawSpritePartPreview, spritesReady } from "./spriteRobot.js";
 import { drawTankBody, tankBodyRect, tankRoll } from "./tankChassis.js";
+import { drawAura } from "./auraDraw.js";
 
 /** Sprite renderer toggle. Default on; disable at runtime with
  *  localStorage.setItem("rv_spriteRobots","0") then reload. */
@@ -468,6 +469,7 @@ function drawRobot(r, floorY) {
   ctx.ellipse(cx, floorY + 6, shW, 8, 0, 0, Math.PI * 2);
   ctx.fill();
 
+  drawAura(ctx, r, floorY);
   drawTeamGlow(r, cx, r.y + r.h / 2);
 
   drawRobotLegs(r, p, col);

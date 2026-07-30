@@ -34,6 +34,7 @@ import {
   readInput, tickServe, tickPhysics,
 } from "./engine/game.js";
 import { initRender, render, setRenderRemainder } from "./ui/render.js";
+import { hasLaunchUnlock, dismissLaunchUnlock } from "./ui/unlockReveal.js";
 import { initViewport, eventToCanvas } from "./ui/viewport.js";
 import { wireDomControls, syncRobotPartsToDom, openLab } from "./ui/customize.js";
 import { initTouchControls } from "./ui/touchControls.js";
@@ -116,6 +117,16 @@ function leaveTitleScreen() {
 window.addEventListener("keydown", (e) => {
   if (e.code in CONTROL || e.code === "Space") e.preventDefault();
   keys.add(e.code);
+
+  // The launch-time unlock reveal is modal over whatever screen is showing, so
+  // it consumes the first real keypress before anything else reacts to it.
+  if (hasLaunchUnlock()) {
+    if (!MODIFIER_CODES.has(e.code)) {
+      dismissLaunchUnlock();
+      playUiConfirm();
+    }
+    return;
+  }
 
   if (state === "title") {
     if (!MODIFIER_CODES.has(e.code)) leaveTitleScreen();
