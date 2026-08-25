@@ -15,6 +15,7 @@ import {
   pauseFromState, pauseIndex, leaveSubmenu, toMenu,
   onlineOverlay, openOnlineOverlay, closeOnlineOverlay, setOnlineOverlay,
   readLocalOnlineInput, maxDeficit,
+  aiControl, tickPhysics, servingSide,
 } from "../src/engine/game.js";
 import { codeFor } from "../src/data/controls.js";
 import { HEAD_TYPES } from "../src/data/heads.js";
@@ -242,6 +243,58 @@ describe("head collisions", () => {
     // "Exactly above the net": clears the near top corner, but only just.
     expect(clearance).toBeGreaterThan(0);
     expect(clearance).toBeLessThan(8);
+  });
+
+  /**
+   * Drop the ball onto the robot from above at `dx` from its centre. Past the
+   * head's half-width that lands on a shoulder / the torso rather than the head.
+   */
+  function dropOnRobot(r, dx, robotVx) {
+    updateRobotParts(r);
+    ball.live = true;
+    ball.magnetHold = null;
+    ball.portalHold = null;
+    ball.smashBy = null;
+    ball.spin = 0;
+    ball.x = r.x + r.w / 2 + dx;
+    ball.y = r.parts.head.y - ball.r + 3;
+    ball.vx = 0;
+    ball.vy = 600;
+    r.vx = robotVx;
+    r.vy = 0;
+    r.onGround = true;
+  }
+
+  it("a running robot sweeps a falling ball along with it, whatever it lands on", () => {
+    // Head, shoulder and torso all count: catching a drop on the shoulder used
+    // to knock the ball straight back down, ignoring the run entirely.
+    for (const dx of [-40, -20, 0, 20, 40]) {
+      const r = makeRobot(-1);
+      dropOnRobot(r, dx, MOVE_SPEED);
+      expect(collideBallRobot(r)).toBe(true);
+      // Swept toward where the robot is running, and popped up rather than
+      // dribbled into the floor.
+      expect(ball.vx).toBeGreaterThan(MOVE_SPEED * 0.4);
+      expect(ball.vy).toBeLessThan(0);
+    }
+  });
+
+  it("sweep direction follows the robot, not the side of the body struck", () => {
+    const r = makeRobot(-1);
+    dropOnRobot(r, -40, -MOVE_SPEED);       // running left, ball on the right
+    collideBallRobot(r);
+    expect(ball.vx).toBeLessThan(0);
+
+    dropOnRobot(r, 40, MOVE_SPEED);         // running right, ball on the left
+    collideBallRobot(r);
+    expect(ball.vx).toBeGreaterThan(0);
+  });
+
+  it("a standing robot does not sweep the ball sideways", () => {
+    const r = makeRobot(-1);
+    dropOnRobot(r, 0, 0);
+    collideBallRobot(r);
+    expect(Math.abs(ball.vx)).toBeLessThan(20);
   });
 
   it("releases magnet hold after carry timer", () => {
@@ -896,5 +949,55 @@ describe("comeback tracking", () => {
     toMenu();
     startGame("2p");
     expect(maxDeficit).toEqual([0, 0]);
+  });
+});
+
+describe("cpu ai", () => {
+  /** Start a 1p match until the CPU (seat 1) is the one serving. */
+  function startCpuServe() {
+    toMenu();
+    for (let i = 0; i < 40 && servingSide < 0; i++) { toMenu(); startGame("1p"); }
+    return robots[1];
+  }
+
+  it("never swings at the ball it has just served", () => {
+    const cpu = startCpuServe();
+    expect(servingSide).toBeGreaterThan(0);
+    // Right after the auto-serve the ball is still sitting in the strike box,
+    // climbing away over the net. Swinging there burns the whole cooldown.
+    for (let i = 0; i < Math.ceil(2 / PHYSICS_STEP); i++) {
+      aiControl(cpu);
+      if (ball.live && ball.vy < 0) expect(cpu.attackHeld).toBe(false);
+      tickServe(PHYSICS_STEP);
+      tickPhysics(PHYSICS_STEP);
+    }
+  });
+
+  it("swings at a ball dropping into reach on its own half", () => {
+    const cpu = startCpuServe();
+    resetPositions();
+    ball.live = true;
+    ball.magnetHold = null;
+    ball.portalHold = null;
+    ball.x = cpu.x + cpu.w / 2 + 20;
+    ball.y = cpu.y - 40;
+    ball.vx = -120;                       // drifting back onto the CPU
+    ball.vy = 200;                        // and coming down
+    aiControl(cpu);
+    expect(cpu.attackHeld).toBe(true);
+  });
+
+  it("holds its swing while the ball is still climbing away", () => {
+    const cpu = startCpuServe();
+    resetPositions();
+    ball.live = true;
+    ball.magnetHold = null;
+    ball.portalHold = null;
+    ball.x = cpu.x + cpu.w / 2;
+    ball.y = cpu.y - 40;
+    ball.vx = -400;
+    ball.vy = -600;
+    aiControl(cpu);
+    expect(cpu.attackHeld).toBe(false);
   });
 });

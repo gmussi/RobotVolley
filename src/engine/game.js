@@ -7,6 +7,7 @@ import {
   SERVE_DIR_X, SERVE_DIR_Y, GROUND_RESTITUTION, AIR_RESTITUTION,
   TOP_FALL_RESTITUTION_GROUND, TOP_FALL_RESTITUTION_AIR, TOP_FALL_MIN_VY,
   TOP_HEAD_MIN_BOUNCE_VY, TOP_HEAD_MAX_UP_FRAC_GROUND, TOP_HEAD_MAX_UP_FRAC_AIR,
+  TOP_FALL_SWEEP_MIN_VX, TOP_FALL_SWEEP_MUL, TOP_FALL_SWEEP_MIN_CARRY,
   HIT_SPEED_GAIN, BALL_MAX_SPEED, NET, ROBOT_W, ROBOT_H, MOVE_SPEED,
   MOVE_ACCEL, JUMP_V, AIR_ACCEL, ARM_OVERHANG, COURT_GAP, HEAD_TOP_OFFSET,
   ROCKET_FLAP_V, ROCKET_MAX_FLAPS, BALL_R, BALL_SPIN_VISUAL_RATE, NET_BOUNCE,
@@ -1300,7 +1301,10 @@ export function collideBallRobot(r, opts = {}) {
   const incomingSpeed = Math.hypot(ball.vx, ball.vy);
   const preVy = ball.vy;
   const isHeadHit = part === "head";
-  const topFall = isHeadHit && ny < -0.4 && preVy > TOP_FALL_MIN_VY;
+  // A ball dropping onto the robot from above — head, shoulder or torso. The
+  // normal test is what makes it "from above", so a shoulder catch deadens and
+  // sweeps exactly like a header instead of dribbling off the side.
+  const topFall = ny < -0.4 && preVy > TOP_FALL_MIN_VY;
 
   let restitution = r.onGround ? GROUND_RESTITUTION : AIR_RESTITUTION;
   if (topFall) {
@@ -1313,22 +1317,29 @@ export function collideBallRobot(r, opts = {}) {
   ball.vy += r.vy * 0.28;
 
   const minBounceVy = TOP_HEAD_MIN_BOUNCE_VY;
+  const offset = (cx - (r.x + r.w / 2)) / (r.w / 2);
 
-  if (isHeadHit) {
-    const offset = (cx - (r.x + r.w / 2)) / (r.w / 2);
+  if (topFall) {
     ball.spin = offset * 6 + r.vx * 0.008;
+    ball.vx += offset * 90;
 
-    if (topFall) {
-      ball.vx += offset * 90;
-      if (Math.abs(r.vx) > 50) ball.vx += r.vx * 0.55;
-
-      const maxUp = Math.max(minBounceVy, preVy * (r.onGround
-        ? TOP_HEAD_MAX_UP_FRAC_GROUND : TOP_HEAD_MAX_UP_FRAC_AIR));
-      if (ball.vy > -minBounceVy) ball.vy = -minBounceVy;
-      else if (ball.vy < -maxUp) ball.vy = -maxUp;
-    } else {
-      ball.vx += offset * 150;
+    // Running under a falling ball carries it: the robot's own motion is the
+    // main way a player aims a drop shot. Without the floor below, an off-centre
+    // contact can cancel the carry out — or send the ball back behind a robot
+    // that is clearly running forward — which reads as the run being ignored.
+    if (Math.abs(r.vx) > TOP_FALL_SWEEP_MIN_VX) {
+      ball.vx += r.vx * TOP_FALL_SWEEP_MUL;
+      const carry = r.vx * TOP_FALL_SWEEP_MIN_CARRY;
+      if (ball.vx * r.vx <= 0 || Math.abs(ball.vx) < Math.abs(carry)) ball.vx = carry;
     }
+
+    const maxUp = Math.max(minBounceVy, preVy * (r.onGround
+      ? TOP_HEAD_MAX_UP_FRAC_GROUND : TOP_HEAD_MAX_UP_FRAC_AIR));
+    if (ball.vy > -minBounceVy) ball.vy = -minBounceVy;
+    else if (ball.vy < -maxUp) ball.vy = -maxUp;
+  } else if (isHeadHit) {
+    ball.spin = offset * 6 + r.vx * 0.008;
+    ball.vx += offset * 150;
   }
 
   const newSpeed = Math.hypot(ball.vx, ball.vy);
@@ -1338,7 +1349,7 @@ export function collideBallRobot(r, opts = {}) {
     ball.vy *= allowed / newSpeed;
   }
 
-  if (isHeadHit && r.onGround && ball.vy > -minBounceVy) {
+  if ((isHeadHit || topFall) && r.onGround && ball.vy > -minBounceVy) {
     ball.vy = -minBounceVy;
   }
 
@@ -1508,8 +1519,20 @@ export function aiControl(r) {
   const onMySide = fromNet > -30;
   r.jumpHeld = ball.live && r.onGround && onMySide && dx < 66 &&
                inReachV && ball.vy > -40;
+
+  // Weapons have a long cooldown, so a swing at a ball that is on its way out
+  // burns it for nothing — most obviously the ball this robot has just served,
+  // which sits right in the strike box for a few frames while climbing away.
+  // Swing only at a ball that is coming down onto this half, and lead the swing
+  // by half the windup so the orb meets the ball instead of trailing it.
+  const lead = (getArmSpec(r).windup ?? 0) * 0.5;
+  const px = ball.x + ball.vx * lead;
+  const py = ball.y + ball.vy * lead + 0.5 * BALL_GRAVITY * lead * lead;
+  const strikeDx = Math.abs(px - center);
+  const closing = (ball.x - center) * ball.vx <= 0 || strikeDx < 60;
   r.attackHeld = ball.live && onMySide && r.attackCooldown <= 0 && !r.attack &&
-                 dx < 140 && ball.y > r.y - 130 && ball.y < r.y + r.h;
+                 ball.vy > -80 && closing &&
+                 strikeDx < 140 && py > r.y - 130 && py < r.y + r.h;
 }
 
 /** Screens where the player's keys drive the UI, never the robots. */

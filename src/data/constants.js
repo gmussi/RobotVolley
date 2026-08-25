@@ -27,6 +27,12 @@ export const TOP_HEAD_MIN_BOUNCE_VY = 400;
 /** Max upward rebound as a fraction of incoming fall speed (head hits). */
 export const TOP_HEAD_MAX_UP_FRAC_GROUND = 0.5;
 export const TOP_HEAD_MAX_UP_FRAC_AIR = 0.65;
+/** Below this the robot counts as standing still and never sweeps the ball. */
+export const TOP_FALL_SWEEP_MIN_VX = 50;
+/** Share of the robot's run added sideways to a ball dropping onto it. */
+export const TOP_FALL_SWEEP_MUL = 0.55;
+/** Floor on that sweep, as a share of the run — a swept ball always leaves forwards. */
+export const TOP_FALL_SWEEP_MIN_CARRY = 0.5;
 export const HIT_SPEED_GAIN = 200;
 export const BALL_MAX_SPEED = 1150;
 
