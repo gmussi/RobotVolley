@@ -1,34 +1,33 @@
 /**
  * Leaderboard auras — the glow a robot wears for having placed on a board.
  *
- * Entirely procedural, with no art of its own. That is not a shortcut: the two
- * team colourways are baked into every sprite by tools/robot/gen_p2_set.py,
- * which only re-shifts the crimson-red family, so a painted aura would need a
- * hand-authored P2 variant to avoid rendering grey for team 2. Deriving the
- * colour from `r.side` instead means both teams work for free and a new tier
- * costs one function.
+ * Entirely procedural, with no art of its own — a painted aura would need a
+ * hand-authored P2 variant to avoid rendering grey for team 2, so every shape
+ * here is drawn from rgb triples instead. Colour now marks *which board*
+ * earned the aura rather than which team is wearing it: daily tiers are red,
+ * weekly tiers are gold, on both sides of the net.
  *
  * Drawn *behind* the robot, in the same pass as the contact shadow and team
  * glow, so it never obscures the parts or the ball.
  *
- * Daily tiers are static; weekly tiers animate. Anything that moves is gated on
- * `reducedMotion` and falls back to its still form — an aura is decoration, and
- * nobody should have to choose between a reward and a comfortable screen.
+ * Each daily tier mirrors the pattern of its weekly counterpart at the same
+ * rank threshold (top 10 / top 3 / top 1) — same shapes, red instead of gold —
+ * so the two boards read as one continuum of reward rather than two designs.
+ * Anything that moves is gated on `reducedMotion` and falls back to its still
+ * form — an aura is decoration, and nobody should have to choose between a
+ * reward and a comfortable screen.
  */
 import { reducedMotion } from "../data/accessibility.js";
 import { spriteFor } from "../data/cosmetics.js";
 
-/** COLORS.accent as an rgb triple — the top tier alone breaks team colour. */
-const GOLD = "255,213,74";
+/** Palettes keyed by board — daily red, weekly gold — independent of team side. */
+const PALETTE = {
+  daily: { core: "255,120,90", edge: "255,70,55", accent: "255,90,60" },
+  weekly: { core: "255,213,74", edge: "255,193,7", accent: "255,213,74" },
+};
 
 /** Where the glow centres on the body, measured up from the soles. */
 const BODY_CY = 58;
-
-function auraColors(r) {
-  return r.side < 0
-    ? { core: "255,140,120", edge: "255,90,95" }
-    : { core: "150,220,255", edge: "41,182,246" };
-}
 
 /** Soft radial body glow — the shared base every tier builds on. */
 function halo(ctx, cx, cy, radius, rgb, alpha) {
@@ -149,6 +148,40 @@ function embers(ctx, cx, cy, radius, rgb, t) {
   ctx.restore();
 }
 
+/** Top-10 tier: a soft halo with orbiting motes — same shape for both boards. */
+function motesShape(ctx, cx, cy, floorY, t, { core, edge }) {
+  halo(ctx, cx, cy, 68, edge, 0.22);
+  motes(ctx, cx, cy, 62, core, t, 9);
+}
+
+/** Top-3 tier: a wider halo plus whipping tendrils (or a still ring when reduced). */
+function tempestShape(ctx, cx, cy, floorY, t, { core, edge }) {
+  halo(ctx, cx, cy, 74, edge, 0.24);
+  if (reducedMotion) groundRing(ctx, cx, floorY, 40, core, 0.5);
+  else tendrils(ctx, cx, cy, 70, core, t);
+  groundRing(ctx, cx, floorY, 40, edge, 0.4);
+}
+
+/** Top-1 tier: rotating ray crown, breathing double halo, and rising embers. */
+function sovereignShape(ctx, cx, cy, floorY, t, { core, edge, accent }) {
+  const pulse = reducedMotion ? 1 : 0.9 + 0.1 * Math.sin(t * 1.8);
+  rays(ctx, cx, cy, 72, accent, t);
+  halo(ctx, cx, cy, 80 * pulse, core, 0.28);
+  halo(ctx, cx, cy, 60, edge, 0.24);
+  if (!reducedMotion) embers(ctx, cx, cy, 66, accent, t);
+  groundRing(ctx, cx, floorY, 44, accent, 0.55, 4);
+}
+
+/** Every aura variant, mapped to its rank-tier shape and its board's palette. */
+const VARIANTS = {
+  ember: { shape: motesShape, board: "daily" },
+  halo: { shape: tempestShape, board: "daily" },
+  corona: { shape: sovereignShape, board: "daily" },
+  motes: { shape: motesShape, board: "weekly" },
+  tempest: { shape: tempestShape, board: "weekly" },
+  sovereign: { shape: sovereignShape, board: "weekly" },
+};
+
 /**
  * Draw the aura equipped in `r.cosmetics`, behind the robot.
  *
@@ -157,56 +190,14 @@ function embers(ctx, cx, cy, radius, rgb, t) {
  */
 export function drawAura(ctx, r, floorY) {
   const variant = spriteFor(r?.cosmetics, "aura");
-  if (!variant || variant === "none") return;
+  const entry = variant && VARIANTS[variant];
+  if (!entry) return;
 
-  const { core, edge } = auraColors(r);
   const cx = r.x + r.w / 2;
   const cy = floorY - BODY_CY;
   const t = reducedMotion ? 0 : performance.now() * 0.001;
 
   ctx.save();
-  switch (variant) {
-    // ---- daily: simple, static -------------------------------------------
-    case "ember":
-      halo(ctx, cx, cy, 62, edge, 0.2);
-      break;
-    case "halo":
-      halo(ctx, cx, cy, 70, edge, 0.26);
-      groundRing(ctx, cx, floorY, 34, edge, 0.4);
-      break;
-    case "corona": {
-      // The one daily tier that moves, and only as a slow breath.
-      const pulse = reducedMotion ? 1 : 0.85 + 0.15 * Math.sin(t * 1.4);
-      halo(ctx, cx, cy, 78 * pulse, core, 0.3);
-      halo(ctx, cx, cy, 58, edge, 0.22);
-      groundRing(ctx, cx, floorY, 38, edge, 0.45);
-      break;
-    }
-
-    // ---- weekly: layered, animated ----------------------------------------
-    case "motes":
-      halo(ctx, cx, cy, 68, edge, 0.22);
-      motes(ctx, cx, cy, 62, core, t, 9);
-      break;
-    case "tempest":
-      halo(ctx, cx, cy, 74, edge, 0.24);
-      if (reducedMotion) groundRing(ctx, cx, floorY, 40, core, 0.5);
-      else tendrils(ctx, cx, cy, 70, core, t);
-      groundRing(ctx, cx, floorY, 40, edge, 0.4);
-      break;
-    case "sovereign": {
-      const pulse = reducedMotion ? 1 : 0.9 + 0.1 * Math.sin(t * 1.8);
-      // Gold rather than team colour: the rarest reward in the game should read
-      // as itself at a glance, not as "red player with a big glow".
-      rays(ctx, cx, cy, 72, GOLD, t);
-      halo(ctx, cx, cy, 80 * pulse, core, 0.28);
-      halo(ctx, cx, cy, 60, edge, 0.24);
-      if (!reducedMotion) embers(ctx, cx, cy, 66, GOLD, t);
-      groundRing(ctx, cx, floorY, 44, GOLD, 0.55, 4);
-      break;
-    }
-    default:
-      break;
-  }
+  entry.shape(ctx, cx, cy, floorY, t, PALETTE[entry.board]);
   ctx.restore();
 }
